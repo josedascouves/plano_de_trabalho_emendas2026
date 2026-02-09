@@ -1233,24 +1233,6 @@ Secretaria de Estado da Saúde de São Paulo`;
             </button>
           </form>
 
-          <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
-            <p className="text-xs text-gray-700 leading-relaxed mb-4">
-              <strong>INFORMAÇÃO IMPORTANTE:</strong> Em atenção às determinações da Portaria GM/MS nº 6.904/2025, que estabelece regras e diretrizes para a transferência de recursos do Fundo Nacional de Saúde (FNS), referentes a emendas parlamentares individuais destinadas ao Sistema Único de Saúde (SUS) no exercício de 2026, informo a Vossa Excelência que as emendas parlamentares precisarão de plano de trabalho.
-            </p>
-            <p className="text-xs text-gray-700 leading-relaxed mb-4">
-              A Secretaria de Estado da Saúde de São Paulo estabelece um modelo a ser preenchido pela entidade.
-            </p>
-            <p className="text-xs text-gray-700 leading-relaxed mb-4">
-              O Fundo Nacional de Saúde (FNS) disponibiliza a <strong>Cartilha 2025 para Apresentação de Propostas ao Ministério da Saúde</strong>, um documento essencial que reúne as principais orientações para elaboração, cadastramento e acompanhamento de propostas voltadas ao financiamento federal na área da saúde.
-            </p>
-            <p className="text-xs text-gray-700 leading-relaxed mb-4 font-semibold">
-              🔗 <a href="https://portalfns.saude.gov.br/cartilha-para-apresentacao-de-propostas-aoministerio-da-saude-de-2025/" target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-700 underline">https://portalfns.saude.gov.br/cartilha-para-apresentacao-de-propostas-aoministerio-da-saude-de-2025/</a>
-            </p>
-            <p className="text-xs text-red-600 font-bold uppercase tracking-widest leading-relaxed">
-              ⚠️ TODOS OS PLANOS DEVERÃO SEGUIR AS REGRAS DA CARTILHA CONFORME ENDEREÇO CITADO ACIMA.
-            </p>
-          </div>
-
           <div className="mt-8 pt-8 border-t border-gray-200 text-center">
             <p className="text-xs text-gray-600 uppercase font-medium tracking-widest leading-relaxed">
               Acesso Restrito - SES/SP<br/> Emendas Parlamentares 2026

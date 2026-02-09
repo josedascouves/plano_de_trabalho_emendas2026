@@ -1,0 +1,2875 @@
+
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import html2pdf from 'html2pdf.js';
+import { 
+  ClipboardCheck, 
+  User as UserIcon, 
+  Map, 
+  Target, 
+  TrendingUp, 
+  DollarSign, 
+  FileText, 
+  ChevronRight, 
+  ChevronLeft,
+  Trash2,
+  CheckCircle2,
+  Building2,
+  ExternalLink,
+  ShieldCheck,
+  Settings2,
+  Stethoscope,
+  Printer,
+  Download,
+  UploadCloud,
+  Send,
+  FileCheck,
+  Loader2,
+  MailCheck,
+  AlertCircle,
+  FileBadge,
+  BookOpen,
+  Lock,
+  UserPlus,
+  LogOut,
+  Users,
+  X,
+  Database,
+  Terminal,
+  BarChart3,
+  Info,
+  ArrowUp
+} from 'lucide-react';
+import { FormState, User } from './types';
+import { 
+  DIRETRIZES, 
+  PROGRAMAS,
+  ACOES_SERVICOS_POR_PROGRAMA,
+  METAS_QUALITATIVAS_OPTIONS, 
+  NATUREZAS_DESPESA 
+} from './constants';
+import { supabase } from './supabase';
+import { InputField } from './components/InputField';
+import { Section } from './components/Section';
+import { StepperProgress } from './components/StepperProgress';
+import { Button, Select, TextArea } from './components/FormElements';
+import { 
+  maskCPF, 
+  validateCPF, 
+  maskCNPJ, 
+  validateCNPJ, 
+  maskCurrency, 
+  maskPhone,
+  maskCNES,
+  validateEmail 
+} from './utils/masks';
+
+const App: React.FC = () => {
+  // Authentication & Session State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [loginInput, setLoginInput] = useState({ email: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  
+  // View Management
+  const [currentView, setCurrentView] = useState<'new' | 'list' | 'dashboard'>('new'); // Toggle entre novo plano e listagem
+  
+  // Admin & User Management
+  const [showUserManagement, setShowUserManagement] = useState(false);
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as const });
+
+  // Plan List & Edit Management
+  const [planosList, setPlanosList] = useState<any[]>([]);
+  const [isLoadingPlanos, setIsLoadingPlanos] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+
+  // Form Progress State
+  const [activeSection, setActiveSection] = useState('info-emenda'); 
+  const [showDocument, setShowDocument] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [sentSuccess, setSentSuccess] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailsDestino, setEmailsDestino] = useState('');
+  const [planoSalvoId, setPlanoSalvoId] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
+  
+  // Help Modal State
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [helpSectionId, setHelpSectionId] = useState<string | null>(null);
+  
+  // Section completion tracking
+  const [sectionStatus, setSectionStatus] = useState<{[key: string]: boolean}>({
+    'info-emenda': false,
+    'beneficiario': false,
+    'alinhamento': false,
+    'metas-quantitativas': false,
+    'metas-qualitativas': false,
+    'execucao-financeira': false,
+    'finalizacao': false
+  });
+
+  const [formData, setFormData] = useState<FormState>({
+    emenda: { parlamentar: '', numero: '', valor: '', valorExtenso: '', programa: 'CUSTEIO MAC – 2E90' },
+    beneficiario: { nome: '', cnes: '', cnpj: '', email: '', telefone: '' },
+    planejamento: { diretrizId: '', objetivoId: '', metaIds: [] },
+    acoesServicos: [],
+    metasQualitativas: [],
+    naturezasDespesa: [],
+    justificativa: ''
+  });
+
+  // Função para obter formData inicial
+  const getInitialFormData = (): FormState => ({
+    emenda: { parlamentar: '', numero: '', valor: '', valorExtenso: '', programa: 'CUSTEIO MAC – 2E90' },
+    beneficiario: { nome: '', cnes: '', cnpj: '', email: '', telefone: '' },
+    planejamento: { diretrizId: '', objetivoId: '', metaIds: [] },
+    acoesServicos: [],
+    metasQualitativas: [],
+    naturezasDespesa: [],
+    justificativa: ''
+  });
+
+  const [currentSelection, setCurrentSelection] = useState<{
+    categoria: string;
+    item: string;
+    metas: string[];
+  }>({ categoria: '', item: '', metas: [''] });
+
+  const [currentMetaQualitativa, setCurrentMetaQualitativa] = useState({ meta: '', valor: '' });
+
+  const [currentNatureza, setCurrentNatureza] = useState({ codigo: '', valor: '' });
+
+  const LOGO_URL_COLORIDA = "/img/logo_colorido.png";  // Versão oficial colorida
+  const LOGO_URL_BRANCA = "/img/logo_branco.png";      // Versão oficial branca para header
+
+  // ======== RBAC - CONTROLE DE ACESSO ========
+  const isAdmin = (): boolean => currentUser?.role === 'admin';
+  
+  const canEditPlan = (planCreatedBy: string): boolean => {
+    if (!currentUser) return false;
+    return isAdmin() || planCreatedBy === currentUser.username;
+  };
+  
+  const canViewPlan = (planCreatedBy: string): boolean => {
+    if (!currentUser) return false;
+    return isAdmin() || planCreatedBy === currentUser.username;
+  };
+
+  // Help Content for each section
+  const helpContent: {[key: string]: {title: string; description: string; tips: string[]}} = {
+    'info-emenda': {
+      title: 'Informações da Emenda',
+      description: 'Registre os dados básicos da emenda parlamentar que você deseja utilizar neste plano de trabalho.',
+      tips: [
+        'Parlamentar: Digite o nome do deputado ou senador que originou a emenda',
+        'Número: Use o número oficial da emenda (ex: 123/2026)',
+        'Valor: Informe o valor total em reais (ex: 100000)',
+        'Programa: Selecione o programa de custeio correspondente'
+      ]
+    },
+    'beneficiario': {
+      title: 'Dados do Beneficiário',
+      description: 'Identifique a instituição ou serviço que se beneficiará dos recursos.',
+      tips: [
+        'Nome: Nome completo do estabelecimento de saúde ou entidade',
+        'CNES: Código Nacional do Estabelecimento de Saúde (8 dígitos)',
+        'CNPJ: Insira o CNPJ da instituição sem pontos ou barras',
+        'E-mail: E-mail de contato válido',
+        'Telefone: Número com DDD (ex: 11999999999)'
+      ]
+    },
+    'alinhamento': {
+      title: 'Alinhamento Estratégico',
+      description: 'Alinhe o seu plano com as diretrizes e objetivos estratégicos da SES-SP.',
+      tips: [
+        'Diretriz: Escolha a diretriz que melhor se alinha com sua proposta',
+        'Objetivo: Selecione o objetivo estratégico relacionado',
+        'Metas: Marque as metas que esta emenda ajudará a cumprir'
+      ]
+    },
+    'metas-quantitativas': {
+      title: 'Metas Quantitativas',
+      description: 'Defina as ações/serviços e suas respectivas execuções financeiras.',
+      tips: [
+        'Grupo de Ação: Selecione a categoria de ação (ex: Consultas, Procedimentos)',
+        'Ação Específica: Escolha a ação específica dentro do grupo',
+        'Valor: Informe o valor monetário alocado para essa ação',
+        'O sistema calcula automaticamente o total das ações'
+      ]
+    },
+    'metas-qualitativas': {
+      title: 'Indicadores Qualitativos',
+      description: 'Defina indicadores de qualidade que serão monitorados durante a execução.',
+      tips: [
+        'Indicador: Selecione um indicador qualitativo relevante',
+        'Valor: Informe o valor alvo (percentual ou quantidade)',
+        'Os indicadores ajudam a medir o sucesso da execução',
+        'Você pode adicionar múltiplos indicadores'
+      ]
+    },
+    'execucao-financeira': {
+      title: 'Execução Financeira',
+      description: 'Classifique os gastos por natureza de despesa conforme a legislação.',
+      tips: [
+        'Natureza de Despesa: Selecione a classificação (ex: Pessoal, Custeio)',
+        'Valor: Informe o valor para essa categoria',
+        'A soma das naturezas deve corresponder ao valor total da emenda',
+        'Siga rigorosamente as normas de despesa pública'
+      ]
+    },
+    'finalizacao': {
+      title: 'Finalização e Justificativa',
+      description: 'Complete o plano com uma justificativa técnica e legal.',
+      tips: [
+        'Descreva os motivos pelos quais escolheu essa alocação de recursos',
+        'Explique como o plano atende às metas da SES-SP',
+        'Cite legislações ou políticas relevantes',
+        'Revise bem todo o plano antes de enviar'
+      ]
+    }
+  };
+  
+  const openHelpModal = (sectionId: string) => {
+    setHelpSectionId(sectionId);
+    setShowHelpModal(true);
+  };
+
+  // Check session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (!profileError && profile) {
+            setCurrentUser({
+              username: session.user.email || '',
+              name: profile.full_name,
+              role: profile.role
+            });
+            setIsAuthenticated(true);
+          } else if (profileError) {
+            console.warn("Perfil não encontrado. O usuário pode existir no Auth mas não na tabela profiles. Rode o script SQL.");
+            // Tenta forçar o usuário a ver a tela de login ou exibe erro se for admin
+            if (session.user.email === 'sessp.css3@gmail.com') {
+               setCurrentUser({
+                username: session.user.email,
+                name: 'Admin Provisório',
+                role: 'admin'
+              });
+              setIsAuthenticated(true);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Erro ao verificar sessão:", e);
+      } finally {
+        setIsLoadingAuth(false);
+      }
+    };
+    checkSession();
+  }, []);
+
+  // Fetch users if admin
+  const prevShowUserManagementRef = useRef(showUserManagement);
+  
+  useEffect(() => {
+    // Only fetch when modal opens (showUserManagement becomes true)
+    if (isAuthenticated && showUserManagement && currentUser?.role === 'admin' && !prevShowUserManagementRef.current) {
+      const fetchUsers = async () => {
+        try {
+          const { data: profiles, error } = await supabase.from('profiles').select('*');
+          
+          if (error) {
+            console.error('Erro ao carregar usuários:', error.message);
+            alert(`⚠ Erro ao carregar usuários: ${error.message}\n\nVerifique as políticas RLS na tabela profiles.`);
+            return;
+          }
+          
+          if (profiles) {
+            setUsersList(profiles.map(p => ({
+              id: p.id,
+              username: p.email || '',
+              email: p.email || '',
+              name: p.full_name,
+              role: p.role,
+              disabled: p.disabled || false
+            })));
+          }
+        } catch (err: any) {
+          console.error('Erro ao buscar usuários:', err);
+        }
+      };
+      fetchUsers();
+    }
+    
+    // Clear list when modal closes (showUserManagement becomes false)
+    if (!showUserManagement && prevShowUserManagementRef.current) {
+      setUsersList([]);
+    }
+    
+    // Update ref
+    prevShowUserManagementRef.current = showUserManagement;
+  }, [isAuthenticated, showUserManagement]);
+
+  // Carrega planos quando muda para view de listagem ou dashboard
+  useEffect(() => {
+    if ((currentView === 'list' || currentView === 'dashboard') && isAuthenticated) {
+      loadPlanos();
+    }
+  }, [currentView, isAuthenticated]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsSending(true);
+
+    try {
+      // Validação básica
+      if (!loginInput.email || !loginInput.password) {
+        throw new Error('E-mail e senha são obrigatórios');
+      }
+
+      if (!validateEmail(loginInput.email)) {
+        throw new Error('E-mail inválido');
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginInput.email,
+        password: loginInput.password
+      });
+
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('E-mail ou senha incorretos');
+        }
+        if (error.message.includes('Email not confirmed')) {
+          throw new Error('E-mail não confirmado. Verifique sua caixa de entrada.');
+        }
+        throw new Error(error.message || 'Erro ao fazer login');
+      }
+
+      if (data.user) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+        
+        if (profileError) {
+          console.error('Erro ao buscar perfil:', profileError);
+          throw new Error('Erro ao carregar perfil do usuário');
+        }
+
+        // Verificar se usuário está desativado
+        if (profile?.disabled) {
+          await supabase.auth.signOut();
+          throw new Error('Este usuário foi desativado. Contate um administrador.');
+        }
+
+        setCurrentUser({
+          username: data.user.email || '',
+          name: profile?.full_name || 'Usuário',
+          role: profile?.role || 'user'
+        });
+        setIsAuthenticated(true);
+        setLoginInput({ email: '', password: '' });
+      }
+    } catch (error: any) {
+      console.error('Erro ao fazer login:', error);
+      setLoginError(error.message || 'Erro ao realizar login. Verifique as credenciais.');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setActiveSection('info-emenda');
+    setSentSuccess(false);
+  };
+
+  // Desativar/Ativar usuário
+  const handleToggleUserDisable = async (userId: string) => {
+    try {
+      const user = usersList.find(u => u.id === userId);
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ disabled: !user.disabled })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      const action = user.disabled ? 'ativado' : 'desativado';
+      alert(`✓ Usuário ${action} com sucesso!`);
+
+      // Recarregar lista
+      const { data: profiles } = await supabase.from('profiles').select('*');
+      if (profiles) {
+        setUsersList(profiles.map(p => ({
+          id: p.id,
+          username: p.email || '',
+          email: p.email || '',
+          name: p.full_name,
+          role: p.role,
+          disabled: p.disabled || false
+        })));
+      }
+    } catch (error: any) {
+      alert(`❌ Erro ao alterar status: ${error.message}`);
+    }
+  };
+
+  // Alterar senha - Enviar email de reset
+  const handleChangePassword = async (userEmail: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(userEmail, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+
+      if (error) throw error;
+      alert(`Email de redefinição de senha enviado para ${userEmail}`);
+    } catch (error: any) {
+      console.error('Erro ao enviar email de reset:', error);
+      alert(`Erro: ${error.message}`);
+    }
+  };
+
+  // Excluir usuário - Delete direto na tabela
+  const handleDeleteUser = async (userId: string, userEmail: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o usuário? Esta ação não pode ser desfeita.`)) return;
+
+    try {
+      // Deletar da tabela profiles
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      alert('✓ Usuário deletado com sucesso!');
+
+      // Recarregar lista
+      const { data: profiles } = await supabase.from('profiles').select('*');
+      if (profiles) {
+        setUsersList(profiles.map(p => ({
+          id: p.id,
+          username: p.email || '',
+          email: p.email || '',
+          name: p.full_name,
+          role: p.role,
+          disabled: p.disabled || false
+        })));
+      }
+    } catch (error: any) {
+      console.error('Erro ao deletar usuário:', error);
+      alert(`❌ Erro ao deletar usuário: ${error.message}`);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSending(true);
+    try {
+      // Validação de email
+      if (!newUser.email || !validateEmail(newUser.email)) {
+        throw new Error('E-mail inválido. Use um formato válido (ex: usuario@example.com)');
+      }
+
+      // Validação de senha
+      if (!newUser.password || newUser.password.length < 6) {
+        throw new Error('Senha deve ter no mínimo 6 caracteres');
+      }
+
+      // Validação de nome
+      if (!newUser.name || newUser.name.trim().length < 3) {
+        throw new Error('Nome deve ter no mínimo 3 caracteres');
+      }
+
+      // Validação de perfil
+      if (!newUser.role) {
+        throw new Error('Perfil do usuário é obrigatório');
+      }
+
+      // 1. Criar usuário no Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: newUser.email,
+        password: newUser.password,
+        options: {
+          data: {
+            full_name: newUser.name,
+            role: newUser.role
+          }
+        }
+      });
+
+      if (authError) {
+        if (authError.message.includes('already registered')) {
+          throw new Error('Este e-mail já está registrado no sistema');
+        }
+        throw new Error(authError.message || 'Erro ao criar usuário');
+      }
+
+      if (!authData.user) throw new Error('Falha ao criar usuário (ID não retornado)');
+
+      // 2. Inserir ou atualizar perfil na tabela profiles (usar UPSERT para evitar conflitos)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert([
+          {
+            id: authData.user.id,
+            email: newUser.email,
+            full_name: newUser.name,
+            role: newUser.role,
+            disabled: false
+          }
+        ], 
+        { onConflict: 'id' });
+
+      if (profileError) {
+        throw new Error(`Erro ao criar perfil: ${profileError.message}`);
+      }
+
+      // Sucesso
+      alert(`✓ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nPerfil: ${newUser.role === 'admin' ? 'Administrador' : 'Usuário Padrão'}`);
+      setNewUser({ email: '', password: '', name: '', role: 'user' });
+      
+      // Recarregar lista de usuários
+      const { data: profiles, error: fetchError } = await supabase.from('profiles').select('*');
+      if (!fetchError && profiles) {
+        setUsersList(profiles.map(p => ({
+          id: p.id,
+          username: p.email || '',
+          email: p.email || '',
+          name: p.full_name,
+          role: p.role,
+          disabled: p.disabled || false
+        })));
+      }
+    } catch (error: any) {
+      console.error('Erro ao registrar usuário:', error);
+      alert(`❌ Erro ao registrar: ${error.message}`);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // CARREGA LISTA DE PLANOS DO SUPABASE
+  const loadPlanos = async () => {
+    setIsLoadingPlanos(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sessão expirada");
+
+      let query = supabase.from('planos_trabalho').select('*');
+
+      // Se não for admin, filtrar apenas pelos planos do usuário
+      if (!isAdmin()) {
+        query = query.eq('created_by', user.id);
+      }
+
+      const { data: planos, error } = await query.order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPlanosList(planos || []);
+    } catch (error: any) {
+      alert(`Erro ao carregar planos: ${error.message}`);
+    } finally {
+      setIsLoadingPlanos(false);
+    }
+  };
+
+  // Carrega um plano específico para editar
+  useEffect(() => {
+    if (editingPlanId) {
+      loadPlanForEditing(editingPlanId);
+    }
+  }, [editingPlanId]);
+
+  const loadPlanForEditing = async (planoId: string) => {
+    try {
+      const { data: plano, error } = await supabase
+        .from('planos_trabalho')
+        .select('*')
+        .eq('id', planoId)
+        .single();
+
+      if (error) throw error;
+      if (plano) {
+        // Preencher formData com os dados do plano
+        setFormData(prev => ({
+          ...prev,
+          emenda: {
+            ...prev.emenda,
+            parlamentar: plano.parlamentar || '',
+            numero: plano.numero_emenda || '',
+            valor: plano.valor_total?.toString() || '0,00',
+            programa: plano.programa || ''
+          },
+          beneficiario: {
+            ...prev.beneficiario,
+            nome: plano.beneficiario_nome || '',
+            cnpj: plano.beneficiario_cnpj || ''
+          },
+          justificativa: plano.justificativa || ''
+        }));
+        setPlanoSalvoId(planoId); // Definir que este é um plano sendo editado
+      }
+    } catch (error: any) {
+      alert(`Erro ao carregar plano para editar: ${error.message}`);
+      setEditingPlanId(null);
+    }
+  };
+
+  // DELETA UM PLANO
+  const deletePlan = async (planoId: string) => {
+    if (!confirm('Tem certeza que deseja deletar este plano? Esta ação não pode ser desfeita.')) return;
+    
+    try {
+      // Deleta PDF do Storage
+      const plano = planosList.find(p => p.id === planoId);
+      if (plano?.pdf_url) {
+        await supabase.storage
+          .from('planos-trabalho-pdfs')
+          .remove([plano.pdf_url]);
+      }
+
+      // Supabase cascata vai deletar as relacionadas automaticamente
+      const { error } = await supabase
+        .from('planos_trabalho')
+        .delete()
+        .eq('id', planoId);
+
+      if (error) throw error;
+      alert('Plano deletado com sucesso!');
+      await loadPlanos();
+    } catch (error: any) {
+      alert(`Erro ao deletar: ${error.message}`);
+    }
+  };
+
+  // EXPORTA PLANOS PARA CSV
+  const exportToCSV = () => {
+    if (planosList.length === 0) {
+      alert('Nenhum plano para exportar');
+      return;
+    }
+
+    const headers = ['ID', 'Parlamentar', 'Nº Emenda', 'Valor Total', 'Programa', 'Beneficiário', 'CNPJ', 'Data Criação'];
+    const rows = planosList.map(p => [
+      p.id,
+      p.parlamentar,
+      p.numero_emenda,
+      p.valor_total || '0,00',
+      p.programa,
+      p.beneficiario_nome,
+      p.beneficiario_cnpj,
+      new Date(p.created_at).toLocaleDateString('pt-BR')
+    ]);
+
+    const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `planos-trabalho-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const parseCurrency = (val: string) => {
+    return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
+  };
+
+  // ======== COMPARAÇÃO DE DADOS PARA EVITAR DUPLICAÇÃO ========
+  const hasDataChanged = async (): Promise<boolean> => {
+    // Se não há plano salvo, não há mudanças a comparar
+    if (!planoSalvoId) {
+      return true; // É novo plano
+    }
+
+    try {
+      // Buscar o plano salvo
+      const { data: plano, error } = await supabase
+        .from('planos_trabalho')
+        .select('*, acoes_servicos(*), metas_qualitativas(*), naturezas_despesa_plano(*)')
+        .eq('id', planoSalvoId)
+        .single();
+
+      if (error || !plano) return true; // Se não encontrar, considerar como novo
+
+      // Comparar dados principales
+      const mainDataSame =
+        plano.parlamentar === formData.emenda.parlamentar &&
+        plano.numero_emenda === formData.emenda.numero &&
+        plano.valor_total === parseCurrency(formData.emenda.valor) &&
+        plano.programa === formData.emenda.programa &&
+        plano.beneficiario_nome === formData.beneficiario.nome &&
+        plano.beneficiario_cnpj === formData.beneficiario.cnpj &&
+        plano.justificativa === formData.justificativa;
+
+      // Comparar quantidades de dados relacionados
+      const acoesSame = plano.acoes_servicos?.length === formData.acoesServicos.length;
+      const metasQualitSame = plano.metas_qualitativas?.length === formData.metasQualitativas.length;
+      const naturezasSame = plano.naturezas_despesa_plano?.length === formData.naturezasDespesa.length;
+
+      // Se tudo é igual, não há mudanças
+      return !(mainDataSame && acoesSame && metasQualitSame && naturezasSame);
+    } catch (error) {
+      console.error("Erro ao comparar dados:", error);
+      return true; // Em caso de erro, considerar como potencialmente novo
+    }
+  };
+
+  // ======== AUTO SAVE ========
+  const handleAutoSave = async () => {
+    if (!isAuthenticated || !currentUser) return;
+
+    setAutoSaveStatus('saving');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Se já existe plano, atualizar. Se não, criar
+      if (planoSalvoId) {
+        // Atualizar plano existente
+        const { error } = await supabase
+          .from('planos_trabalho')
+          .update({
+            parlamentar: formData.emenda.parlamentar,
+            numero_emenda: formData.emenda.numero,
+            valor_total: parseCurrency(formData.emenda.valor),
+            programa: formData.emenda.programa,
+            beneficiario_nome: formData.beneficiario.nome,
+            beneficiario_cnpj: formData.beneficiario.cnpj,
+            justificativa: formData.justificativa,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', planoSalvoId);
+
+        if (error) throw error;
+      } else {
+        // Criar novo plano
+        const { data: plano, error: planoError } = await supabase
+          .from('planos_trabalho')
+          .insert([{
+            parlamentar: formData.emenda.parlamentar,
+            numero_emenda: formData.emenda.numero,
+            valor_total: parseCurrency(formData.emenda.valor),
+            programa: formData.emenda.programa,
+            beneficiario_nome: formData.beneficiario.nome,
+            beneficiario_cnpj: formData.beneficiario.cnpj,
+            justificativa: formData.justificativa,
+            pdf_url: null,
+            created_by: user.id
+          }])
+          .select()
+          .single();
+
+        if (planoError) throw planoError;
+        if (plano) {
+          setPlanoSalvoId(plano.id);
+
+          // Inserir dados relacionados (ações, metas, etc)
+          if (formData.acoesServicos.length > 0) {
+            const acoesData = formData.acoesServicos.map(a => ({
+              plano_id: plano.id,
+              categoria: a.categoria,
+              item: a.item,
+              meta: a.metasQuantitativas[0],
+              valor: parseCurrency(a.valor),
+              created_by: user.id
+            }));
+            await supabase.from('acoes_servicos').insert(acoesData);
+          }
+
+          if (formData.metasQualitativas.length > 0) {
+            const qualData = formData.metasQualitativas.map(q => ({
+              plano_id: plano.id,
+              meta_descricao: q.meta,
+              indicador: q.valor,
+              created_by: user.id
+            }));
+            await supabase.from('metas_qualitativas').insert(qualData);
+          }
+
+          if (formData.naturezasDespesa.length > 0) {
+            const natData = formData.naturezasDespesa.map(n => ({
+              plano_id: plano.id,
+              codigo: n.codigo,
+              valor: parseCurrency(n.valor),
+              created_by: user.id
+            }));
+            await supabase.from('naturezas_despesa_plano').insert(natData);
+          }
+        }
+      }
+
+      setAutoSaveStatus('saved');
+      setLastAutoSaveTime(new Date());
+      
+      // Voltar ao idle após 2 segundos
+      setTimeout(() => setAutoSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error("❌ Erro no autosave:", error);
+      setAutoSaveStatus('idle');
+    }
+  };
+
+  // Auto-save desativado - salvar apenas ao enviar
+  // useEffect(() => {
+  //   const timer = setTimeout(() => {
+  //     if (isAuthenticated && currentView === 'new') {
+  //       handleAutoSave();
+  //     }
+  //   }, 3000); // Salvar 3 segundos após a última mudança
+  //
+  //   return () => clearTimeout(timer);
+  // }, [formData, isAuthenticated, currentView]);
+
+  const handleFinalSend = async () => {
+    setIsSending(true);
+
+    try {
+      console.log("1. Obtendo usuário...");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sessão expirada. Faça login novamente.");
+      console.log("✅ Usuário obtido:", user.id);
+
+      // Verificar se há mudanças antes de salvar
+      if (planoSalvoId) {
+        console.log("⏳ Verificando se há mudanças no plano...");
+        const hasChanges = await hasDataChanged();
+        if (!hasChanges) {
+          alert('⚠️ Nenhuma mudança detectada!\n\nO plano foi salvo com os mesmos dados anteriormente.\nNenhum novo plano será criado.');
+          setIsSending(false);
+          return planoSalvoId; // Retornar ID do plano existente
+        }
+      }
+
+      // 1. Inserir Plano Principal (SEM PDF URL)
+      console.log("2. Inserindo plano principal...");
+      const { data: plano, error: planoError } = await supabase
+        .from('planos_trabalho')
+        .insert([{
+          parlamentar: formData.emenda.parlamentar,
+          numero_emenda: formData.emenda.numero,
+          valor_total: parseCurrency(formData.emenda.valor),
+          programa: formData.emenda.programa,
+          beneficiario_nome: formData.beneficiario.nome,
+          beneficiario_cnpj: formData.beneficiario.cnpj,
+          justificativa: formData.justificativa,
+          pdf_url: null,
+          created_by: user.id
+        }])
+        .select()
+        .single();
+
+      if (planoError) {
+        console.error("❌ Erro ao inserir plano:", planoError);
+        throw planoError;
+      }
+      console.log("✅ Plano criado:", plano.id);
+
+      // 2. Inserir Metas Quantitativas
+      console.log("3. Inserindo metas quantitativas...");
+      if (formData.acoesServicos.length > 0) {
+        const acoesData = formData.acoesServicos.map(a => ({
+          plano_id: plano.id,
+          categoria: a.categoria,
+          item: a.item,
+          meta: a.metasQuantitativas[0],
+          valor: parseCurrency(a.valor),
+          created_by: user.id
+        }));
+        const { error: acoesError } = await supabase.from('acoes_servicos').insert(acoesData);
+        if (acoesError) {
+          console.error("❌ Erro ao inserir ações:", acoesError);
+          throw acoesError;
+        }
+        console.log("✅ Metas quantitativas inseridas");
+      }
+
+      // 3. Inserir Metas Qualitativas
+      console.log("4. Inserindo metas qualitativas...");
+      if (formData.metasQualitativas.length > 0) {
+        const qualData = formData.metasQualitativas.map(q => ({
+          plano_id: plano.id,
+          meta_descricao: q.meta,
+          indicador: q.valor,
+          created_by: user.id
+        }));
+        const { error: qualError } = await supabase.from('metas_qualitativas').insert(qualData);
+        if (qualError) {
+          console.error("❌ Erro ao inserir metas qualitativas:", qualError);
+          throw qualError;
+        }
+        console.log("✅ Metas qualitativas inseridas");
+      }
+
+      // 4. Inserir Naturezas de Despesa
+      console.log("5. Inserindo naturezas de despesa...");
+      if (formData.naturezasDespesa.length > 0) {
+        const natData = formData.naturezasDespesa.map(n => ({
+          plano_id: plano.id,
+          codigo: n.codigo,
+          valor: parseCurrency(n.valor),
+          created_by: user.id
+        }));
+        const { error: natError } = await supabase.from('naturezas_despesa_plano').insert(natData);
+        if (natError) {
+          console.error("❌ Erro ao inserir naturezas:", natError);
+          throw natError;
+        }
+        console.log("✅ Naturezas de despesa inseridas");
+      }
+
+      console.log("✅ DADOS SALVOS COM SUCESSO!");
+      setPlanoSalvoId(plano.id);
+      setShowEmailModal(true);
+      return plano.id; // Retornar ID para uso síncrono
+    } catch (error: any) {
+      console.error("❌ ERRO COMPLETO:", error);
+      const errorMsg = error?.message || error?.toString() || "Erro desconhecido";
+      alert(`⚠️ ERRO:\n\n${errorMsg}\n\nVerifique o console (F12) para mais detalhes.`);
+      return null; // Retornar null em caso de erro
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    // Abrir email para SES-SP
+    handleSendToSES();
+  };
+
+  // Gerar e salvar PDF
+  const handleGeneratePDF = async () => {
+    setIsSending(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sessão expirada. Faça login novamente.");
+
+      // 1. Primeira vez: Salvar plano se ainda não foi salvo
+      let currentPlanoId = planoSalvoId;
+      if (!currentPlanoId) {
+        console.log("Salvando plano antes de gerar PDF...");
+        currentPlanoId = await handleFinalSend();
+        if (!currentPlanoId) throw new Error("Falha ao salvar plano");
+      }
+
+      // 2. Gerar PDF
+      const element = document.getElementById('pdf-document');
+      if (!element) throw new Error("Documento PDF não encontrado");
+
+      const filename = `Plano_Trabalho_${formData.emenda.numero}_${new Date().toISOString().split('T')[0]}.pdf`;
+      
+      const options = {
+        margin: 5,
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' },
+        pagebreak: { avoid: ['tr', '.evitar-quebra'] }
+      };
+
+      // Gerar PDF em memória
+      const pdfBlob = await new Promise<Blob>((resolve, reject) => {
+        html2pdf().set(options).from(element).outputPdf('blob').then((blob: Blob) => {
+          resolve(blob);
+        }).catch(reject);
+      });
+
+      // 3. Fazer download automático
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // 4. Salvar PDF no Supabase Storage
+      console.log("Salvando PDF no Storage...");
+      const pdfPath = `planos/${currentPlanoId}/${filename}`;
+      const { error: uploadError } = await supabase.storage
+        .from('planos-trabalho-pdfs')
+        .upload(pdfPath, pdfBlob);
+
+      if (uploadError) {
+        console.warn("Aviso ao salvar no storage:", uploadError);
+        // Continuar mesmo se falhar o storage (arquivo foi baixado)
+      }
+
+      // 5. Obter URL pública do PDF
+      let pdfUrl = null;
+      if (!uploadError) {
+        const { data } = supabase.storage
+          .from('planos-trabalho-pdfs')
+          .getPublicUrl(pdfPath);
+        pdfUrl = data.publicUrl;
+      }
+
+      // 6. Atualizar plano com URL do PDF
+      console.log("Atualizando plano com PDF URL...");
+      const { error: updateError } = await supabase
+        .from('planos_trabalho')
+        .update({ 
+          pdf_url: pdfUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentPlanoId);
+
+      if (updateError) {
+        console.warn("Aviso ao atualizar plano:", updateError);
+      }
+
+      alert('✅ PDF gerado e salvo com sucesso!\n\nO arquivo foi baixado para seus Downloads e também salvo no Sistema.');
+    } catch (error: any) {
+      console.error("Erro ao gerar PDF:", error);
+      alert(`⚠️ Erro ao gerar PDF:\n\n${error.message}`);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const selectedDiretriz = useMemo(() => 
+    DIRETRIZES.find(d => d.id === formData.planejamento.diretrizId), 
+    [formData.planejamento.diretrizId]
+  );
+
+  const selectedObjetivo = useMemo(() => 
+    selectedDiretriz?.objetivos.find(o => o.id === formData.planejamento.objetivoId),
+    [selectedDiretriz, formData.planejamento.objetivoId]
+  );
+
+  const availableAcoes = useMemo(() => 
+    ACOES_SERVICOS_POR_PROGRAMA[formData.emenda.programa] || [], 
+    [formData.emenda.programa]
+  );
+
+  const updateFormData = (section: keyof FormState, value: any) => {
+    setFormData(prev => ({ ...prev, [section]: value }));
+  };
+
+  // Scroll to section
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const sections = [
+    { id: 'info-emenda', title: 'Identificação da Emenda' },
+    { id: 'beneficiario', title: 'Dados do Beneficiário' },
+    { id: 'alinhamento', title: 'Alinhamento Estratégico' },
+    { id: 'metas-quantitativas', title: 'Metas Quantitativas' },
+    { id: 'metas-qualitativas', title: 'Indicadores Qualitativos' },
+    { id: 'execucao-financeira', title: 'Execução Financeira' },
+    { id: 'finalizacao', title: 'Finalização' }
+  ];
+
+  const confirmAddAcao = () => {
+    if (!currentSelection.categoria || !currentSelection.item) {
+      alert('Por favor, selecione o Grupo de Ação e a Ação Específica.');
+      return;
+    }
+    const newAcao = {
+      categoria: currentSelection.categoria,
+      item: currentSelection.item,
+      metasQuantitativas: [currentSelection.item],
+      valor: ''
+    };
+    setFormData(prev => ({
+      ...prev,
+      acoesServicos: [...prev.acoesServicos, newAcao]
+    }));
+    setCurrentSelection({ categoria: '', item: '', metas: [''] });
+  };
+
+  const removeAcao = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      acoesServicos: prev.acoesServicos.filter((_, i) => i !== index)
+    }));
+  };
+
+  const confirmAddMetaQualitativa = () => {
+    if (!currentMetaQualitativa.meta) {
+      alert('Por favor, selecione um indicador.');
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      metasQualitativas: [...prev.metasQualitativas, { ...currentMetaQualitativa }]
+    }));
+    setCurrentMetaQualitativa({ meta: '', valor: '' });
+  };
+
+  const removeMetaQualitativa = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      metasQualitativas: prev.metasQualitativas.filter((_, i) => i !== index)
+    }));
+  };
+
+  const confirmAddNatureza = () => {
+    if (!currentNatureza.codigo) {
+      alert('Por favor, selecione uma natureza de despesa.');
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      naturezasDespesa: [...prev.naturezasDespesa, { ...currentNatureza }]
+    }));
+    setCurrentNatureza({ codigo: '', valor: '' });
+  };
+
+  const removeNatureza = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      naturezasDespesa: prev.naturezasDespesa.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSendToSES = () => {
+    const subject = `Plano de Trabalho 2026 - Emenda ${formData.emenda.numero}`;
+    const emailBody = `Prezados,
+
+Segue em anexo o Plano de Trabalho 2026 relativo à Emenda Parlamentar nº ${formData.emenda.numero}.
+
+INFORMAÇÕES DO PLANO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Parlamentar: ${formData.emenda.parlamentar}
+Nº Emenda: ${formData.emenda.numero}
+Programa: ${formData.emenda.programa}
+Valor Total: R$ ${formData.emenda.valor}
+Beneficiário: ${formData.beneficiario.nome}
+CNPJ: ${formData.beneficiario.cnpj}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Por favor, anexe o PDF assinado a este email antes de enviar.
+
+Atenciosamente,
+Sistema de Planos de Trabalho
+Secretaria de Estado da Saúde de São Paulo`;
+
+    const mailtoLink = `mailto:gcf-emendasfederais@saude.sp.gov.br?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+    window.location.href = mailtoLink;
+  };
+
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+        <img src={LOGO_URL_BRANCA} alt="Logotipo Oficial" className="h-12 w-auto mb-8 opacity-80" />
+        <div className="text-center space-y-3">
+          <Loader2 className="w-8 h-8 text-gray-400 animate-spin mx-auto" />
+          <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Sincronizando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white">
+          <div className="text-center mb-12">
+            <img src={LOGO_URL_COLORIDA} alt="Logotipo Oficial - Secretaria de Estado da Saúde de São Paulo" className="h-14 w-auto mx-auto mb-6" />
+            <h1 className="text-2xl font-bold text-black uppercase tracking-widest">Plano de Trabalho</h1>
+            <p className="text-xs text-gray-600 font-medium uppercase tracking-widest mt-2">2026 - Secretaria de Estado da Saúde de SP</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <label className="block text-xs font-semibold text-gray-800 mb-2 uppercase tracking-widest">E-mail</label>
+              <input 
+                type="email" 
+                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-red-600 focus:border-red-600 text-black placeholder-gray-500 font-medium"
+                value={loginInput.email}
+                onChange={(e) => setLoginInput({ ...loginInput, email: e.target.value })}
+                placeholder="seu@email.com"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-800 mb-2 uppercase tracking-widest">Senha</label>
+              <input 
+                type="password" 
+                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-red-600 focus:border-red-600 text-black placeholder-gray-500 font-medium"
+                value={loginInput.password}
+                onChange={(e) => setLoginInput({ ...loginInput, password: e.target.value })}
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            {loginError && (
+              <div className="p-3 bg-gray-100 rounded-md border-l-2 border-red-600">
+                <p className="text-xs text-gray-800 font-medium">{loginError}</p>
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={isSending}
+              className="w-full py-3 bg-red-600 text-white font-bold rounded-md hover:bg-red-700 transition-colors uppercase text-xs tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSending ? 'Processando...' : 'Entrar'}
+            </button>
+          </form>
+
+          <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
+            <p className="text-xs text-gray-700 leading-relaxed mb-4">
+              <strong>INFORMAÇÃO IMPORTANTE:</strong> Em atenção às determinações da Portaria GM/MS nº 6.904/2025, que estabelece regras e diretrizes para a transferência de recursos do Fundo Nacional de Saúde (FNS), referentes a emendas parlamentares individuais destinadas ao Sistema Único de Saúde (SUS) no exercício de 2026, informo a Vossa Excelência que as emendas parlamentares precisarão de plano de trabalho.
+            </p>
+            <p className="text-xs text-gray-700 leading-relaxed mb-4">
+              A Secretaria de Estado da Saúde de São Paulo estabelece um modelo a ser preenchido pela entidade.
+            </p>
+            <p className="text-xs text-gray-700 leading-relaxed mb-4">
+              O Fundo Nacional de Saúde (FNS) disponibiliza a <strong>Cartilha 2025 para Apresentação de Propostas ao Ministério da Saúde</strong>, um documento essencial que reúne as principais orientações para elaboração, cadastramento e acompanhamento de propostas voltadas ao financiamento federal na área da saúde.
+            </p>
+            <p className="text-xs text-gray-700 leading-relaxed mb-4 font-semibold">
+              🔗 <a href="https://portalfns.saude.gov.br/cartilha-para-apresentacao-de-propostas-aoministerio-da-saude-de-2025/" target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-700 underline">https://portalfns.saude.gov.br/cartilha-para-apresentacao-de-propostas-aoministerio-da-saude-de-2025/</a>
+            </p>
+            <p className="text-xs text-red-600 font-bold uppercase tracking-widest leading-relaxed">
+              ⚠️ TODOS OS PLANOS DEVERÃO SEGUIR AS REGRAS DA CARTILHA CONFORME ENDEREÇO CITADO ACIMA.
+            </p>
+          </div>
+
+          <div className="mt-8 pt-8 border-t border-gray-200 text-center">
+            <p className="text-xs text-gray-600 uppercase font-medium tracking-widest leading-relaxed">
+              Acesso Restrito - SES/SP<br/> Emendas Parlamentares 2026
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showDocument) {
+    const totalMetas = formData.acoesServicos.reduce((sum, acao) => sum + parseFloat(acao.valor.replace(/\./g, '').replace(',', '.') || 0), 0);
+    
+    return (
+      <div className="min-h-screen bg-gray-100 p-8 print:p-0 print:bg-white">
+        <div id="pdf-document" className="max-w-[210mm] mx-auto bg-white min-h-[297mm] print:min-h-screen print:max-w-full shadow-2xl print:shadow-none">
+          
+          {/* ======== CABEÇALHO INSTITUCIONAL ======== */}
+          <div className="border-b-4 border-red-700 pt-12 px-16 pb-8 print:pt-10 print:px-12 print:pb-6">
+            {/* Linha superior com logo e info */}
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex items-center gap-4">
+                <img src={LOGO_URL_COLORIDA} alt="Governo de São Paulo" className="h-12 w-auto print:h-10" />
+                <div className="text-xs leading-tight">
+                  <p className="font-bold text-gray-900">GOVERNO DO ESTADO DE SÃO PAULO</p>
+                  <p className="text-gray-700 font-semibold">Secretaria de Estado da Saúde</p>
+                </div>
+              </div>
+              <div className="text-right text-xs text-gray-600">
+                <p className="font-semibold">PLANEJAMENTO 2026</p>
+                <p>Emendas Parlamentares</p>
+              </div>
+            </div>
+
+            {/* Título principal */}
+            <div className="text-center border-t border-gray-300 border-b-2 border-red-700 py-6 print:py-4">
+              <h1 className="text-2xl font-black text-gray-900 uppercase tracking-tight print:text-xl mb-1">
+                Plano de Trabalho
+              </h1>
+              <p className="text-xs text-gray-600 font-semibold tracking-wide">
+                Formulação e Execução Orçamentária
+              </p>
+            </div>
+
+            {/* Info protocolo */}
+            <div className="flex justify-between items-center mt-6 print:mt-4">
+              <div className="text-[11px] text-gray-700">
+              </div>
+              <div className="text-[11px] text-gray-700 text-right">
+                <p><span className="font-bold">Data de Emissão:</span> {new Date().toLocaleDateString('pt-BR')}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ======== CORPO DO DOCUMENTO ======== */}
+          <div className="px-16 py-12 print:px-12 print:py-8 text-gray-900 text-sm print:text-[13px] print:leading-relaxed">
+            
+            {/* SEÇÃO 1: IDENTIFICAÇÃO GERAL */}
+            <section className="mb-10 print:mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">01</div>
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Identificação Geral</h2>
+              </div>
+              <div className="border-t border-gray-300 pt-4 pl-11">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-5 print:gap-x-6 print:gap-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Programa de Saúde</label>
+                    <p className="text-sm font-semibold text-gray-900 border-b border-gray-400 pb-1 print:border-b-0">{formData.emenda.programa}</p>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Parlamentar Autor</label>
+                    <p className="text-sm font-semibold text-gray-900 border-b border-gray-400 pb-1 print:border-b-0">{formData.emenda.parlamentar || '—'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Número da Emenda</label>
+                    <p className="text-sm font-semibold text-gray-900 border-b border-gray-400 pb-1 print:border-b-0 font-mono">{formData.emenda.numero || '—'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Dotação Prevista (R$)</label>
+                    <p className="text-sm font-bold text-red-700 border-b-2 border-red-700 pb-1 print:border-b-0 font-mono">{formData.emenda.valor || '0,00'}</p>
+                  </div>
+                </div>
+
+                {/* Entidade Responsável - linha cheia */}
+                <div className="mt-5 print:mt-4">
+                  <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Entidade Responsável</label>
+                  <div className="border-b border-gray-400 pb-1 print:border-b-0">
+                    <p className="text-sm font-semibold text-gray-900">{formData.beneficiario.nome || '—'}</p>
+                    <p className="text-xs text-gray-700 font-mono">CNPJ: {formData.beneficiario.cnpj || '—'}</p>
+                    {formData.beneficiario.cnes && <p className="text-xs text-gray-700 font-mono">CNES: {formData.beneficiario.cnes}</p>}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* SEÇÃO 2: DIRETRIZES, OBJETIVOS E METAS PLANEJADAS */}
+            <section className="mb-10 print:mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">02</div>
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Planejamento Estratégico</h2>
+              </div>
+              <div className="border-t border-gray-300 pt-4 pl-11">
+                <p className="text-xs text-gray-600 mb-4">Diretrizes, objetivos e metas selecionadas</p>
+                
+                {selectedDiretriz ? (
+                  <div className="space-y-4">
+                    {/* Diretriz */}
+                    <div className="border-l-4 border-red-700 pl-4">
+                      <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Diretriz Estratégica</label>
+                      <p className="text-sm font-semibold text-gray-900">{selectedDiretriz.titulo}</p>
+                    </div>
+                    
+                    {/* Objetivo */}
+                    {selectedObjetivo && (
+                      <div className="border-l-4 border-blue-500 pl-4">
+                        <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Objetivo Específico</label>
+                        <p className="text-sm font-semibold text-gray-900">{selectedObjetivo.titulo}</p>
+                      </div>
+                    )}
+                    
+                    {/* Metas */}
+                    {selectedObjetivo && selectedObjetivo.metas && selectedObjetivo.metas.length > 0 && (
+                      <div className="border-l-4 border-green-600 pl-4">
+                        <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-2">Metas Relacionadas</label>
+                        <ul className="space-y-2">
+                          {selectedObjetivo.metas.map((meta, idx) => (
+                            <li key={idx} className="text-xs text-gray-800 flex items-start gap-2">
+                              <span className="text-green-600 font-bold mt-0.5">•</span>
+                              <span>{meta.descricao}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 italic">Nenhuma diretriz selecionada</p>
+                )}
+              </div>
+            </section>
+
+            {/* SEÇÃO 3: METAS QUANTITATIVAS */}
+            <section className="mb-10 print:mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">03</div>
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Metas Quantitativas</h2>
+              </div>
+              <div className="border-t border-gray-300 pt-4 pl-11">
+                <p className="text-xs text-gray-600 mb-4">Ações, serviços e valores detalhados</p>
+                
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-gray-200 print:bg-gray-100">
+                      <th className="border border-gray-400 px-3 py-2 text-left font-black uppercase text-gray-900 text-[10px]">Serviço / Ação</th>
+                      <th className="border border-gray-400 px-3 py-2 text-left font-black uppercase text-gray-900 text-[10px]">Meta Quantitativa</th>
+                      <th className="border border-gray-400 px-3 py-2 text-right font-black uppercase text-gray-900 text-[10px]">Valor (R$)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {formData.acoesServicos.length > 0 ? (
+                      <>
+                        {formData.acoesServicos.map((acao, i) => (
+                          <tr key={i} className="border-b border-gray-300">
+                            <td className="border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">{acao.item}</td>
+                            <td className="border border-gray-300 px-3 py-2 text-xs text-gray-800">{acao.metasQuantitativas[0]}</td>
+                            <td className="border border-gray-300 px-3 py-2 text-right text-xs font-mono font-bold text-gray-900">R$ {acao.valor}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-gray-100 print:bg-white font-bold">
+                          <td colSpan={2} className="border border-gray-400 px-3 py-2 text-right uppercase text-xs font-black text-gray-900">Total Geral:</td>
+                          <td className="border border-red-700 border-l-4 px-3 py-2 text-right font-mono text-sm text-red-700 font-black">R$ {totalMetas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        </tr>
+                      </>
+                    ) : (
+                      <tr>
+                        <td colSpan={3} className="border border-gray-300 px-3 py-4 text-center text-gray-500 italic">Nenhuma meta registrada</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {/* SEÇÃO 4: JUSTIFICATIVA TÉCNICA */}
+            <section className="mb-10 print:mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">04</div>
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Justificativa Técnica</h2>
+              </div>
+              <div className="border-t border-gray-300 pt-4 pl-11">
+                <p className="text-xs text-gray-600 mb-4">Fundamentação estratégica e objetivos</p>
+                <div className="border-l-4 border-red-700 bg-gray-50 print:bg-white pl-4 pr-3 py-3 text-xs leading-relaxed text-gray-900 text-justify whitespace-normal break-words print:max-h-[200px] print:overflow-hidden">
+                  {formData.justificativa || '—'}
+                </div>
+              </div>
+            </section>
+
+            {/* SEÇÃO 5: INDICADORES QUALITATIVOS (se houver) */}
+            {formData.metasQualitativas.length > 0 && (
+              <section className="mb-10 print:mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">05</div>
+                  <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Indicadores Qualitativos</h2>
+                </div>
+                <div className="border-t border-gray-300 pt-4 pl-11">
+                  <p className="text-xs text-gray-600 mb-4">Metas de qualidade e resultado</p>
+                  <div className="space-y-3">
+                    {formData.metasQualitativas.map((meta, i) => (
+                      <div key={i} className="border-l-2 border-gray-400 pl-4 py-2">
+                        <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Indicador</label>
+                        <p className="text-sm font-semibold text-gray-900 mb-2">{meta.meta}</p>
+                        <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Valor</label>
+                        <p className="text-sm font-mono font-bold text-gray-900">{meta.valor}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* ======== RODAPÉ INSTITUCIONAL ======== */}
+          <div className="border-t-2 border-gray-300 px-16 py-8 print:px-12 print:py-6 bg-gray-50 print:bg-white text-xs text-gray-700">
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase text-gray-600 mb-1">Órgão Emissor</p>
+                <p className="font-semibold">Secretaria de Estado da Saúde de São Paulo</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold uppercase text-gray-600 mb-1">Período</p>
+                <p className="font-semibold">2026</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold uppercase text-gray-600 mb-1">Data de Geração</p>
+                <p className="font-mono font-semibold">{new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
+              </div>
+            </div>
+            <div className="border-t border-gray-300 pt-4 text-center text-[10px] text-gray-600">
+              <p className="font-semibold mb-1">Este é um documento oficial gerado pelo Sistema de Planos de Trabalho – Emendas Parlamentares.</p>
+              <p>Documento destinado a arquivamento, auditoria e controle externo.</p>
+            </div>
+          </div>
+
+        </div>
+
+        {/* ======== BOTÕES DE AÇÃO (fora do PDF) ======== */}
+        <div className="flex justify-center gap-4 p-6 bg-gray-100 border-t border-gray-300 flex-wrap">
+          <button 
+            onClick={() => setShowDocument(false)}
+            className="px-6 py-3 bg-white border-2 border-gray-400 text-gray-900 font-bold text-sm uppercase tracking-widest rounded hover:bg-gray-50 hover:border-gray-600 transition-colors"
+          >
+            ← Voltar ao Formulário
+          </button>
+          <button 
+            onClick={() => handleGeneratePDF()}
+            disabled={isSending}
+            className="px-6 py-3 bg-blue-700 text-white font-bold text-sm uppercase tracking-widest rounded hover:bg-blue-800 transition-colors disabled:opacity-50"
+          >
+            {isSending ? "⏳ Gerando..." : "💾 Salvar e Baixar PDF"}
+          </button>
+          <button 
+            onClick={() => window.print()}
+            className="px-6 py-3 bg-red-700 text-white font-bold text-sm uppercase tracking-widest rounded hover:bg-red-800 transition-colors"
+          >
+            🖨️ Imprimir
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+
+      <header className="bg-gray-900 sticky top-0 z-50 border-b-4 border-red-600">
+        <div className="w-full px-6 py-6">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            {/* Logo + Título à esquerda */}
+            <div className="flex items-center gap-4">
+              <img 
+                src="/img/logo_branco.png" 
+                alt="SES-SP" 
+                className="h-20 w-auto" 
+              />
+              <div>
+                <h1 className="text-3xl font-black text-white">Plano de Trabalho</h1>
+                <p className="text-sm text-gray-300">SES - Secretaria de Estado da Saúde</p>
+              </div>
+            </div>
+          
+            {/* Menu à direita */}
+            <div className="flex items-center gap-6">
+              {isAuthenticated && (
+                <div className="hidden lg:flex items-center gap-6">
+                  <button 
+                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); }}
+                    className={`text-sm font-bold uppercase tracking-wide transition-colors ${
+                      currentView === 'new' 
+                        ? 'text-red-400 border-b-2 border-red-500' 
+                        : 'text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    Novo Plano
+                  </button>
+                  <button 
+                    onClick={() => setCurrentView('list')}
+                    className={`text-sm font-bold uppercase tracking-wide transition-colors ${
+                      currentView === 'list' 
+                        ? 'text-red-400 border-b-2 border-red-500' 
+                        : 'text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    Meus Planos
+                  </button>
+                  {isAdmin() && (
+                    <button 
+                      onClick={() => setCurrentView('dashboard')}
+                      className={`text-sm font-bold uppercase tracking-wide transition-colors ${
+                        currentView === 'dashboard' 
+                          ? 'text-red-400 border-b-2 border-red-500' 
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                    >
+                      Dashboard
+                    </button>
+                  )}
+                </div>
+              )}
+              {isAuthenticated && (
+                <div className="flex items-center gap-4 border-l border-gray-600 pl-6">
+                  <div className="text-right text-sm hidden sm:block">
+                    <p className="text-white font-bold">{currentUser?.name}</p>
+                    <p className="text-xs text-gray-400 uppercase">{currentUser?.role}</p>
+                  </div>
+                  {currentUser?.role === 'admin' && (
+                    <button onClick={() => setShowUserManagement(true)} className="p-2 text-gray-300 hover:text-red-400 transition-colors">
+                      <Users className="w-5 h-5" />
+                    </button>
+                  )}
+                  <button onClick={handleLogout} className="p-2 text-gray-300 hover:text-red-400 transition-colors">
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        {/* Container centralizado - realmente centralizado */}
+        <div style={{ maxWidth: '1120px', margin: '0 auto', padding: '2rem 1.5rem' }}>
+          {/* MODAL GERENCIAMENTO DE USUÁRIOS */}
+          {showUserManagement && currentUser?.role === 'admin' && (
+            <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl animate-slideUp flex flex-col max-h-[95vh] overflow-hidden">
+                
+                {/* HEADER FIXO */}
+                <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 px-8 py-6 border-b border-gray-700/50 flex items-center justify-between flex-shrink-0">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-red-600/20">
+                      <Users className="text-red-600 w-7 h-7" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-white">Gestão de Usuários</h2>
+                      <p className="text-xs text-gray-400 font-medium mt-1">Administre usuários e permissões do sistema</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowUserManagement(false)} 
+                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+                    title="Fechar"
+                  >
+                    <X className="w-6 h-6 text-gray-400 hover:text-white" />
+                  </button>
+                </div>
+
+                {/* CONTEÚDO SCROLLÁVEL */}
+                <div className="flex-1 overflow-y-auto">
+                  <div className="p-8 space-y-8">
+
+                    {/* SEÇÃO 1: REGISTRO DE NOVO USUÁRIO */}
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="text-lg font-black text-gray-900 flex items-center gap-3">
+                          <UserPlus className="text-red-600 w-5 h-5" />
+                          Registrar Novo Usuário
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-2">Adicione um novo usuário ao sistema com as permissões necessárias.</p>
+                      </div>
+
+                      <form onSubmit={handleCreateUser} className="space-y-6 bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                        {/* Grid responsivo */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Nome Completo */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-bold text-gray-900">Nome Completo*</label>
+                            <input 
+                              type="text" 
+                              placeholder="Ex: João Silva"
+                              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base transition-all"
+                              value={newUser.name}
+                              onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                              required
+                            />
+                          </div>
+
+                          {/* E-mail */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-bold text-gray-900">E-mail*</label>
+                            <input 
+                              type="email" 
+                              placeholder="usuario@example.com"
+                              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base transition-all"
+                              value={newUser.email}
+                              onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                              required
+                            />
+                          </div>
+
+                          {/* Senha Inicial */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-bold text-gray-900">Senha Inicial*</label>
+                            <input 
+                              type="password" 
+                              placeholder="Mínimo 6 caracteres"
+                              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base transition-all"
+                              value={newUser.password}
+                              onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                              required
+                            />
+                          </div>
+
+                          {/* Perfil do Usuário */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-bold text-gray-900">Perfil do Usuário*</label>
+                            <select 
+                              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base font-medium transition-all"
+                              value={newUser.role}
+                              onChange={(e) => setNewUser({...newUser, role: e.target.value as 'user' | 'admin'})}
+                            >
+                              <option value="">Selecione um perfil</option>
+                              <option value="user">Usuário Padrão</option>
+                              <option value="admin">Administrador SES</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Descrição do Perfil Selecionado */}
+                        {newUser.role && (
+                          <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                            <p className="text-xs font-bold text-blue-900 uppercase tracking-wider">Permissões do Perfil</p>
+                            <p className="text-sm text-blue-800 mt-2 leading-relaxed">
+                              {newUser.role === 'user' 
+                                ? '✓ Criar e gerenciar seus próprios planos de trabalho • ✓ Visualizar relatórios pessoais • ✓ Editar dados básicos da conta'
+                                : '✓ Acesso total ao sistema • ✓ Gerenciar todos os usuários e permissões • ✓ Visualizar relatórios globais • ✓ Configurar sistema'
+                              }
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Botão Registrar - Aparece apenas quando campos obrigatórios preenchidos */}
+                        {newUser.name && newUser.email && newUser.password && newUser.role && (
+                          <button 
+                            type="submit" 
+                            disabled={isSending} 
+                            className="w-full py-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-bold uppercase text-sm tracking-wider hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-3 shadow-lg"
+                          >
+                            {isSending ? (
+                              <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                Registrando...
+                              </>
+                            ) : (
+                              <>
+                                <UserPlus className="w-5 h-5" />
+                                Registrar Novo Usuário
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </form>
+                    </div>
+
+                    {/* DIVISOR */}
+                    <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
+
+                    {/* SEÇÃO 2: LISTA DE USUÁRIOS */}
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-black text-gray-900 flex items-center gap-3">
+                            <Users className="text-gray-600 w-5 h-5" />
+                            Usuários do Sistema
+                          </h3>
+                          <p className="text-sm text-gray-500 mt-2">{usersList.length} usuário{usersList.length !== 1 ? 's' : ''} cadastrado{usersList.length !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+
+                      {/* Lista de Usuários em Cards Modernos */}
+                      <div className="space-y-3">
+                        {usersList && usersList.length > 0 ? (
+                          usersList.map((u, i) => (
+                            <div 
+                              key={i} 
+                              className="group p-6 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200"
+                            >
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-sm">
+                                      {u.name?.charAt(0).toUpperCase() || 'U'}
+                                    </div>
+                                    <div>
+                                      <p className="text-base font-bold text-gray-900">{u.name || 'Sem nome'}</p>
+                                      <p className="text-xs text-gray-500 font-mono">{u.username}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Status Badge + Role Badge */}
+                                <div className="flex items-center gap-2">
+                                  {/* Status Indicator */}
+                                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold ${
+                                    u.disabled 
+                                      ? 'bg-gray-100 text-gray-700' 
+                                      : 'bg-green-100 text-green-700'
+                                  }`}>
+                                    <div className={`w-2 h-2 rounded-full ${u.disabled ? 'bg-gray-400' : 'bg-green-500'}`}></div>
+                                    {u.disabled ? 'Inativo' : 'Ativo'}
+                                  </div>
+
+                                  {/* Role Badge */}
+                                  <div className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+                                    u.role === 'admin'
+                                      ? 'bg-red-100 text-red-700'
+                                      : 'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    {u.role === 'admin' ? 'Admin' : 'Usuário'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* E-mail */}
+                              <p className="text-sm text-gray-600 mb-4 ml-13">{u.email}</p>
+
+                              {/* Ações */}
+                              <div className="flex gap-2 pt-4 border-t border-gray-100">
+                                {/* Ativar/Desativar */}
+                                <button 
+                                  onClick={() => handleToggleUserDisable(u.id)} 
+                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors flex items-center justify-center gap-2"
+                                  title={u.disabled ? "Ativar usuário" : "Desativar usuário"}
+                                >
+                                  <Lock className="w-4 h-4" />
+                                  {u.disabled ? "Ativar" : "Desativar"}
+                                </button>
+
+                                {/* Resetar Senha */}
+                                <button 
+                                  onClick={() => handleChangePassword(u.email)} 
+                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
+                                  title="Enviar email de reset de senha"
+                                >
+                                  <Lock className="w-4 h-4" />
+                                  Resetar Senha
+                                </button>
+
+                                {/* Deletar */}
+                                <button 
+                                  onClick={() => {
+                                    if (window.confirm(`Tem certeza que deseja deletar o usuário ${u.name}?`)) {
+                                      handleDeleteUser(u.id, u.email);
+                                    }
+                                  }}
+                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-red-700 bg-red-100 hover:bg-red-200 transition-colors flex items-center justify-center gap-2"
+                                  title="Deletar usuário permanentemente"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Deletar
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                            <p className="text-base font-bold text-gray-500">Nenhum usuário cadastrado</p>
+                            <p className="text-sm text-gray-400 mt-1">Registre o primeiro usuário acima para começar</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* HELP MODAL */}
+          {showHelpModal && helpSectionId && helpContent[helpSectionId] && (
+            <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl animate-slideUp max-h-[90vh] overflow-y-auto">
+                
+                {/* Header */}
+                <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 border-b border-blue-800/50 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-blue-500/30">
+                      <Info className="text-white w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-white">{helpContent[helpSectionId]?.title}</h2>
+                      <p className="text-blue-100 text-sm mt-1">Clique para aprender como preencher</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowHelpModal(false)} 
+                    className="p-2 hover:bg-blue-500/50 rounded-lg transition-colors"
+                  >
+                    <X className="w-6 h-6 text-white" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-8 space-y-6">
+                  <div>
+                    <p className="text-lg text-gray-700 leading-relaxed font-medium">
+                      {helpContent[helpSectionId]?.description}
+                    </p>
+                  </div>
+
+                  <div className="bg-blue-50 rounded-2xl p-6 border border-blue-200">
+                    <h3 className="text-base font-black text-blue-900 mb-4 flex items-center gap-2">
+                      <ArrowUp className="w-5 h-5" />
+                      Dicas para Preenchimento
+                    </h3>
+                    <ul className="space-y-3">
+                      {helpContent[helpSectionId]?.tips.map((tip, idx) => (
+                        <li key={idx} className="flex gap-3 text-gray-700">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <span className="pt-0.5">{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={() => setShowHelpModal(false)}
+                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold uppercase text-sm tracking-wider hover:bg-blue-700 transition-colors"
+                  >
+                    Entendi, Feche a Ajuda
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW: LISTA DE PLANOS */}
+          {currentView === 'list' && (
+            <div className="space-y-8 animate-fadeIn">
+              <div className="flex justify-between items-center">
+                <h2 className="text-base font-black text-gray-900 uppercase tracking-wider">Meus Planos de Trabalho</h2>
+                <button 
+                  onClick={exportToCSV}
+                  className="flex items-center gap-2 px-8 py-4 bg-green-600 text-white rounded-xl font-bold text-base uppercase tracking-wider hover:bg-green-700 shadow-lg transition-all"
+                >
+                  <Download className="w-5 h-5" /> Exportar CSV
+                </button>
+              </div>
+
+              {isLoadingPlanos ? (
+                <div className="flex justify-center py-20">
+                  <Loader2 className="w-16 h-16 text-red-600 animate-spin" />
+                </div>
+              ) : planosList.length === 0 ? (
+                <div className="text-center py-32 bg-white rounded-2xl border-2 border-dashed border-gray-300">
+                  <ClipboardCheck className="w-24 h-24 mx-auto text-gray-300 mb-6" />
+                  <p className="text-xl text-gray-500 font-bold uppercase">Nenhum plano cadastrado</p>
+                </div>
+              ) : (
+                <div className="grid gap-8">
+                  {planosList.map((plano) => (
+                    <div key={plano.id} className="bg-white p-8 rounded-2xl border-2 border-gray-200 shadow-sm hover:shadow-xl hover:border-red-400 transition-all">
+                      <div className={`grid ${isAdmin() ? 'grid-cols-1 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-4'} gap-6 mb-8`}>
+                        <div>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Parlamentar</p>
+                          <p className="text-xl font-bold text-gray-900">{plano.parlamentar}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Nº Emenda</p>
+                          <p className="text-xl font-bold text-gray-900">{plano.numero_emenda}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Valor Total</p>
+                          <p className="text-2xl font-black text-red-600">R$ {parseFloat(plano.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        </div>
+                        {isAdmin() && (
+                          <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Autor</p>
+                            <p className="text-sm font-bold text-gray-900">{plano.created_by === currentUser?.username ? `${currentUser?.name} (Você)` : plano.created_by}</p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Data</p>
+                          <p className="text-lg font-bold text-gray-900">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</p>
+                        </div>
+                      </div>
+                      <div className="border-t-2 border-gray-100 pt-6 flex gap-6 justify-end flex-wrap">
+                        {canViewPlan(plano.created_by) && (
+                          <button 
+                            onClick={() => window.open(plano.pdf_url, '_blank')}
+                            className="flex items-center gap-2 px-6 py-3 bg-blue-100 text-blue-600 rounded-xl font-bold text-base uppercase tracking-wider hover:bg-blue-200 transition-all"
+                          >
+                            <FileText className="w-5 h-5" /> Ver PDF
+                          </button>
+                        )}
+                        {canEditPlan(plano.created_by) && (
+                          <>
+                            <button 
+                              onClick={() => { setCurrentView('new'); setEditingPlanId(plano.id); setActiveSection('info-emenda'); setSentSuccess(false); }}
+                              className="flex items-center gap-2 px-6 py-3 bg-orange-100 text-orange-600 rounded-xl font-bold text-base uppercase tracking-wider hover:bg-orange-200 transition-all"
+                            >
+                              <Settings2 className="w-5 h-5" /> Editar
+                            </button>
+                            <button 
+                              onClick={() => deletePlan(plano.id)}
+                              className="flex items-center gap-2 px-6 py-3 bg-red-100 text-red-600 rounded-xl font-bold text-base uppercase tracking-wider hover:bg-red-200 transition-all"
+                            >
+                              <Trash2 className="w-5 h-5" /> Deletar
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VIEW: DASHBOARD */}
+          {currentView === 'dashboard' && (
+            !isAdmin() ? (
+              <div className="text-center py-20 bg-red-50 rounded-2xl border-2 border-red-200 p-8">
+                <Lock className="w-20 h-20 text-red-600 mx-auto mb-6" />
+                <h2 className="text-3xl font-bold text-red-900 mb-4">🔒 Acesso Negado</h2>
+                <p className="text-lg text-red-700 mb-6">O Dashboard é exclusivo para administradores.</p>
+                <p className="text-sm text-red-600 mb-8">Contacte um administrador se você acredita que deveria ter acesso.</p>
+                <Button
+                  label="Voltar para Meus Planos"
+                  onClick={() => setCurrentView('list')}
+                  variant="primary"
+                />
+              </div>
+            ) : (
+              <div className="space-y-8 animate-fadeIn">
+                <h2 className="text-base font-black text-gray-900 uppercase tracking-wider text-center">Dashboard - Relatórios e Estatísticas</h2>
+              
+              {isLoadingPlanos ? (
+                <div className="flex justify-center py-20">
+                  <Loader2 className="w-16 h-16 text-red-600 animate-spin" />
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div className="bg-white border border-gray-200 p-6 rounded-lg">
+                      <div className="flex justify-between items-start mb-4">
+                        <FileCheck className="w-5 h-5 text-gray-600" />
+                        <span className="text-3xl font-bold text-black">{planosList.length}</span>
+                      </div>
+                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Planos Cadastrados</p>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 p-6 rounded-lg">
+                      <div className="flex justify-between items-start mb-4">
+                        <DollarSign className="w-5 h-5 text-gray-600" />
+                        <span className="text-2xl font-bold text-gray-900">R$ {(planosList.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0)).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Valor Total</p>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 p-6 rounded-lg">
+                      <div className="flex justify-between items-start mb-4">
+                        <TrendingUp className="w-5 h-5 text-gray-600" />
+                        <span className="text-3xl font-bold text-black">{planosList.length > 0 ? ((planosList.filter(p => p.programa === PROGRAMAS[0]).length / planosList.length) * 100).toFixed(1) : 0}%</span>
+                      </div>
+                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">CUSTEIO MAC</p>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 p-6 rounded-lg">
+                      <div className="flex justify-between items-start mb-4">
+                        <BarChart3 className="w-5 h-5 text-gray-600" />
+                        <span className="text-2xl font-bold text-gray-900">R$ {planosList.length > 0 ? ((planosList.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0) / planosList.length)).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) : 0}</span>
+                      </div>
+                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Valor Médio</p>
+                    </div>
+                  </div>
+
+                    <div className="bg-white border border-gray-200 p-8 rounded-lg mt-8">
+                      <h3 className="text-lg font-bold text-black uppercase tracking-wide mb-6">Resumo por Programa</h3>
+                      <div className="space-y-3">
+                        {PROGRAMAS.map(programa => {
+                          const planosDoPrograma = planosList.filter(p => p.programa === programa);
+                          const valorTotal = planosDoPrograma.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0);
+                          return planosDoPrograma.length > 0 ? (
+                            <div key={programa} className="flex justify-between items-center p-4 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
+                              <div>
+                                <p className="text-sm font-semibold text-black">{programa}</p>
+                                <p className="text-xs text-gray-600 font-medium">{planosDoPrograma.length} plano(s)</p>
+                              </div>
+                              <p className="text-lg font-bold text-red-600">R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                </>
+              )}
+            </div>
+            )
+          )}
+
+          {/* VIEW: NOVO PLANO - ONE PAGE DESIGN */}
+          {currentView === 'new' && (
+            <>
+              <StepperProgress 
+                steps={sections.map((s, i) => {
+                  const shortLabels = ['Emenda', 'Beneficiário', 'Estratégia', 'Metas', 'Indicadores', 'Financeiro', 'Finalizar'];
+                  return {
+                    id: s.id,
+                    label: shortLabels[i] || `Etapa ${i + 1}`,
+                    title: s.title
+                  };
+                })}
+                activeStep={activeSection}
+                onStepClick={scrollToSection}
+                completedSteps={Object.entries(sectionStatus)
+                  .filter(([_, isComplete]) => isComplete)
+                  .map(([id, _]) => id)}
+              />
+              
+              <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2rem 2rem' }}>
+                <div className="space-y-8">
+                {/* SECTION 1: IDENTIFICAÇÃO DA EMENDA */}
+                <Section
+                  id="info-emenda"
+                  title="Identificação da Emenda"
+                  description="Dados básicos da emenda parlamentar"
+                  icon={<FileText className="w-6 h-6" />}
+                  step={1}
+                  totalSteps={7}
+                  isComplete={sectionStatus['info-emenda']}
+                  onHelpClick={() => openHelpModal('info-emenda')}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <Select
+                      label="Programa Orçamentário"
+                      value={formData.emenda.programa}
+                      onChange={(e) => updateFormData('emenda', { ...formData.emenda, programa: e.target.value })}
+                      options={PROGRAMAS.map(p => ({ value: p, label: p }))}
+                      required
+                    />
+                    <InputField
+                      label="Parlamentar Autor"
+                      name="parlamentar"
+                      value={formData.emenda.parlamentar}
+                      onChange={(e) => updateFormData('emenda', { ...formData.emenda, parlamentar: e.target.value })}
+                      placeholder="Ex: Deputado Federal João Silva"
+                      required
+                    />
+                    <InputField
+                      label="Nº da Emenda"
+                      name="numero"
+                      value={formData.emenda.numero}
+                      onChange={(e) => updateFormData('emenda', { ...formData.emenda, numero: e.target.value })}
+                      placeholder="Ex: 12340001"
+                      required
+                    />
+                    <InputField
+                      label="Valor do Recurso (R$)"
+                      name="valor"
+                      type="text"
+                      value={formData.emenda.valor}
+                      onChange={(e) => updateFormData('emenda', { ...formData.emenda, valor: maskCurrency(e.target.value) })}
+                      mask={(val: string) => maskCurrency(val)}
+                      placeholder="R$ 0,00"
+                      required
+                    />
+                  </div>
+                </Section>
+
+                {/* SECTION 2: BENEFICIÁRIO */}
+                <Section
+                  id="beneficiario"
+                  title="Dados do Beneficiário"
+                  description="Informações da unidade beneficiária"
+                  icon={<Building2 className="w-6 h-6" />}
+                  step={2}
+                  totalSteps={7}
+                  isComplete={sectionStatus['beneficiario']}
+                  onHelpClick={() => openHelpModal('beneficiario')}
+                >
+                  <div className="space-y-6">
+                    <InputField
+                      label="Razão Social da Unidade"
+                      name="nome"
+                      value={formData.beneficiario.nome}
+                      onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, nome: e.target.value })}
+                      placeholder="Exemplo: Hospital XYZ"
+                      required
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      <InputField
+                        label="CNPJ"
+                        name="cnpj"
+                        value={formData.beneficiario.cnpj}
+                        onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, cnpj: maskCNPJ(e.target.value) })}
+                        mask={(val: string) => maskCNPJ(val)}
+                        placeholder="XX.XXX.XXX/XXXX-XX"
+                        required
+                      />
+                      <InputField
+                        label="CNES"
+                        name="cnes"
+                        value={formData.beneficiario.cnes}
+                        onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, cnes: maskCNES(e.target.value) })}
+                        mask={(val: string) => maskCNES(val)}
+                        placeholder="Código CNES"
+                      />
+                      <InputField
+                        label="Email"
+                        name="email"
+                        type="email"
+                        value={formData.beneficiario.email}
+                        onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, email: e.target.value })}
+                        placeholder="email@example.com"
+                      />
+                    </div>
+                    <InputField
+                      label="Telefone"
+                      name="telefone"
+                      value={formData.beneficiario.telefone}
+                      onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, telefone: maskPhone(e.target.value) })}
+                      mask={(val: string) => maskPhone(val)}
+                      placeholder="(XX) 9XXXX-XXXX"
+                    />
+                  </div>
+                </Section>
+
+                {/* SECTION 3: ALINHAMENTO ESTRATÉGICO */}
+                <Section
+                  id="alinhamento"
+                  title="Alinhamento Estratégico"
+                  description="Escolha a diretriz, objetivo e metas do Plano Estadual de Saúde"
+                  icon={<Target className="w-6 h-6" />}
+                  step={3}
+                  totalSteps={7}
+                  isComplete={sectionStatus['alinhamento']}
+                  onHelpClick={() => openHelpModal('alinhamento')}
+                >
+                  <div className="space-y-6">
+                    {/* DIRETRIZES */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-4">
+                        <span className="text-red-600">*</span> Diretriz Estratégica
+                      </label>
+                      <div className="grid gap-3">
+                        {DIRETRIZES.map((d) => (
+                          <button
+                            key={d.id}
+                            onClick={() => updateFormData('planejamento', { ...formData.planejamento, diretrizId: d.id, objetivoId: '', metaIds: [] })}
+                            className={`p-4 rounded-lg border-2 text-left transition-all ${
+                              formData.planejamento.diretrizId === d.id
+                                ? 'border-red-600 bg-red-50'
+                                : 'border-gray-200 bg-white hover:border-gray-300'
+                            }`}
+                          >
+                            <span className="text-xs font-bold text-gray-600 block mb-1 uppercase tracking-widest">Diretriz {d.numero}</span>
+                            <p className="text-sm text-gray-800 font-semibold">{d.titulo}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* OBJETIVOS */}
+                    {selectedDiretriz && (
+                      <div className="border-t-2 border-gray-200 pt-6">
+                        <label className="block text-sm font-semibold text-gray-700 mb-4">
+                          <span className="text-red-600">*</span> Objetivo Específico
+                        </label>
+                        <div className="grid gap-3">
+                          {selectedDiretriz.objetivos.map((obj) => (
+                            <button
+                              key={obj.id}
+                              onClick={() => updateFormData('planejamento', { ...formData.planejamento, objetivoId: obj.id, metaIds: [] })}
+                              className={`p-3 rounded-lg border-2 text-left transition-all ${
+                                formData.planejamento.objetivoId === obj.id
+                                  ? 'border-blue-600 bg-blue-100 shadow-md ring-2 ring-blue-300'
+                                  : 'border-blue-200 bg-blue-50 hover:border-blue-400 hover:bg-blue-100'
+                              }`}
+                            >
+                              <p className="text-sm text-gray-800 font-semibold">{obj.titulo}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* METAS */}
+                    {selectedObjetivo && selectedObjetivo.metas.length > 0 && (
+                      <div className="border-t-2 border-gray-200 pt-6">
+                        <label className="block text-sm font-semibold text-gray-700 mb-4">
+                          <span className="text-red-600">*</span> Metas (Selecione uma ou mais)
+                        </label>
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+                          {selectedObjetivo.metas.map((meta) => (
+                            <label
+                              key={meta.id}
+                              className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 cursor-pointer transition-all"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={formData.planejamento.metaIds.includes(meta.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    updateFormData('planejamento', {
+                                      ...formData.planejamento,
+                                      metaIds: [...formData.planejamento.metaIds, meta.id]
+                                    });
+                                  } else {
+                                    updateFormData('planejamento', {
+                                      ...formData.planejamento,
+                                      metaIds: formData.planejamento.metaIds.filter(id => id !== meta.id)
+                                    });
+                                  }
+                                }}
+                                className="w-5 h-5 text-blue-600 rounded cursor-pointer mt-1 flex-shrink-0"
+                              />
+                              <span className="text-sm text-gray-800 leading-relaxed">{meta.descricao}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {formData.planejamento.metaIds.length > 0 && (
+                          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm font-semibold text-blue-900">
+                              ✓ {formData.planejamento.metaIds.length} meta(s) selecionada(s)
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </Section>
+
+                {/* SECTION 4: METAS QUANTITATIVAS */}
+                <Section
+                  id="metas-quantitativas"
+                  title="Metas Quantitativas"
+                  description="Defina as ações de serviço e metas quantitativas"
+                  icon={<Settings2 className="w-6 h-6" />}
+                  step={4}
+                  totalSteps={7}
+                  isComplete={sectionStatus['metas-quantitativas']}
+                  onHelpClick={() => openHelpModal('metas-quantitativas')}
+                >
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Select
+                          label="Grupo de Ação"
+                          value={currentSelection.categoria}
+                          onChange={(e) => setCurrentSelection({ ...currentSelection, categoria: e.target.value, item: '', metas: [''] })}
+                          options={availableAcoes.map(cat => ({ value: cat.categoria, label: cat.categoria }))}
+                        />
+                        <Select
+                          label="Ação Específica"
+                          value={currentSelection.item}
+                          onChange={(e) => setCurrentSelection({ ...currentSelection, item: e.target.value })}
+                          options={availableAcoes.find(c => c.categoria === currentSelection.categoria)?.itens.map(item => ({ value: item, label: item })) || []}
+                          disabled={!currentSelection.categoria}
+                        />
+                      </div>
+
+                      {currentSelection.categoria && currentSelection.item && (
+                        <div className="border-t pt-4 btn-fade-in">
+                          <Button
+                            label="+ Adicionar Meta"
+                            onClick={confirmAddAcao}
+                            variant="primary"
+                            size="md"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {formData.acoesServicos.length > 0 && (
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-green-600" /> Metas Adicionadas ({formData.acoesServicos.length})
+                        </h4>
+                        {formData.acoesServicos.map((acao, idx) => (
+                          <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-900">{acao.item}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <InputField
+                                label="Valor"
+                                name={`valor-${idx}`}
+                                type="text"
+                                value={acao.valor}
+                                onChange={(e) => {
+                                  const newAcoes = [...formData.acoesServicos];
+                                  newAcoes[idx].valor = maskCurrency(e.target.value);
+                                  updateFormData('acoesServicos', newAcoes);
+                                }}
+                                mask={(val: string) => maskCurrency(val)}
+                                placeholder="R$ 0,00"
+                                className="w-40"
+                              />
+                              <button
+                                onClick={() => removeAcao(idx)}
+                                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        {/* Sumário Total Metas Quantitativas */}
+                        <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-6">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-xs text-green-600 font-bold uppercase tracking-widest mb-2">Total Metas Quantitativas</p>
+                              <p className="text-2xl font-bold text-gray-900">
+                                {new Intl.NumberFormat('pt-BR', {
+                                  style: 'currency',
+                                  currency: 'BRL'
+                                }).format(
+                                  formData.acoesServicos.reduce((sum, item) => {
+                                    const value = parseFloat(item.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                    return sum + value;
+                                  }, 0)
+                                )}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-2">Valor do Recurso</p>
+                              <p className="text-2xl font-bold text-blue-600">
+                                {new Intl.NumberFormat('pt-BR', {
+                                  style: 'currency',
+                                  currency: 'BRL'
+                                }).format(parseFloat(formData.emenda.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </Section>
+
+                {/* SECTION 5: INDICADORES QUALITATIVOS */}
+                <Section
+                  id="metas-qualitativas"
+                  title="Indicadores Qualitativos"
+                  description="Adicione indicadores qualitativos complementares"
+                  icon={<BarChart3 className="w-6 h-6" />}
+                  step={5}
+                  totalSteps={7}
+                  isComplete={sectionStatus['metas-qualitativas']}
+                  onHelpClick={() => openHelpModal('metas-qualitativas')}
+                >
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        <div className="md:col-span-8">
+                          <Select
+                            label="Indicador"
+                            value={currentMetaQualitativa.meta}
+                            onChange={(e) => setCurrentMetaQualitativa({ ...currentMetaQualitativa, meta: e.target.value })}
+                            options={METAS_QUALITATIVAS_OPTIONS.map(o => ({ value: o, label: o }))}
+                            hideBottomMargin={true}
+                          />
+                        </div>
+                        <div className="md:col-span-4">
+                          <div className="flex flex-col h-full">
+                            <label className="text-sm font-bold text-gray-900 mb-2">Valor</label>
+                            <input
+                              type="text"
+                              name="qual-temp-valor"
+                              value={currentMetaQualitativa.valor}
+                              onChange={(e) => setCurrentMetaQualitativa({ ...currentMetaQualitativa, valor: e.target.value })}
+                              placeholder="0,00%"
+                              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base transition-all"
+                            />
+                          </div>
+                        </div>
+                        <div className="md:col-span-1"></div>
+                      </div>
+
+                      {currentMetaQualitativa.meta && currentMetaQualitativa.valor && (
+                        <div className="border-t pt-4 btn-fade-in">
+                          <Button
+                            label="+ Adicionar Indicador"
+                            onClick={confirmAddMetaQualitativa}
+                            variant="primary"
+                            size="md"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {formData.metasQualitativas.length > 0 ? (
+                      <div className="space-y-4">
+                        {formData.metasQualitativas.map((item, idx) => (
+                          <div 
+                            key={idx} 
+                            className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-gradient-to-br from-gray-50 to-white p-5 rounded-xl border border-gray-200 hover:border-red-200 transition-colors duration-200"
+                          >
+                            <div className="md:col-span-8">
+                              <Select
+                                label="Indicador"
+                                value={item.meta}
+                                onChange={(e) => {
+                                  const newMetas = [...formData.metasQualitativas];
+                                  newMetas[idx].meta = e.target.value;
+                                  updateFormData('metasQualitativas', newMetas);
+                                }}
+                                options={METAS_QUALITATIVAS_OPTIONS.map(o => ({ value: o, label: o }))}
+                                hideBottomMargin={true}
+                              />
+                            </div>
+                            <div className="md:col-span-3">
+                              <InputField
+                                label="Valor"
+                                name={`qual-valor-${idx}`}
+                                value={item.valor}
+                                onChange={(e) => {
+                                  const newMetas = [...formData.metasQualitativas];
+                                  newMetas[idx].valor = e.target.value;
+                                  updateFormData('metasQualitativas', newMetas);
+                                }}
+                                placeholder="0,00%"
+                                hideBottomMargin={true}
+                              />
+                            </div>
+                            <div className="md:col-span-1 flex justify-center">
+                              <button
+                                onClick={() => removeMetaQualitativa(idx)}
+                                className="p-3 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                                title="Remover indicador"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl">
+                        <BarChart3 className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-400 font-medium">Nenhum indicador adicionado</p>
+                        <p className="text-xs text-gray-300">Clique no botão acima para começar</p>
+                      </div>
+                    )}
+                  </div>
+                </Section>
+
+                {/* SECTION 6: EXECUÇÃO FINANCEIRA */}
+                <Section
+                  id="execucao-financeira"
+                  title="Execução Financeira"
+                  description="Classifique os gastos por natureza de despesa"
+                  icon={<DollarSign className="w-6 h-6" />}
+                  step={6}
+                  totalSteps={7}
+                  isComplete={sectionStatus['execucao-financeira']}
+                  onHelpClick={() => openHelpModal('execucao-financeira')}
+                >
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        <div className="md:col-span-8">
+                          <Select
+                            label="Natureza de Despesa"
+                            value={currentNatureza.codigo}
+                            onChange={(e) => setCurrentNatureza({ ...currentNatureza, codigo: e.target.value })}
+                            options={NATUREZAS_DESPESA.map(o => ({ value: o.codigo, label: `${o.codigo} - ${o.descricao}` }))}
+                            hideBottomMargin={true}
+                          />
+                        </div>
+                        <div className="md:col-span-4">
+                          <div className="flex flex-col h-full">
+                            <label className="text-sm font-bold text-gray-900 mb-2">Valor</label>
+                            <input
+                              type="text"
+                              name="nat-temp-valor"
+                              value={currentNatureza.valor}
+                              onChange={(e) => setCurrentNatureza({ ...currentNatureza, valor: maskCurrency(e.target.value) })}
+                              placeholder="R$ 0,00"
+                              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base transition-all"
+                            />
+                          </div>
+                        </div>
+                        <div className="md:col-span-1"></div>
+                      </div>
+
+                      {currentNatureza.codigo && currentNatureza.valor && (
+                        <div className="border-t pt-4 btn-fade-in">
+                          <Button
+                            label="+ Adicionar Natureza de Despesa"
+                            onClick={confirmAddNatureza}
+                            variant="primary"
+                            size="md"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {formData.naturezasDespesa.length > 0 ? (
+                      <div className="space-y-4">
+                        {formData.naturezasDespesa.map((item, idx) => (
+                          <div 
+                            key={idx} 
+                            className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-gradient-to-br from-gray-50 to-white p-5 rounded-xl border border-gray-200 hover:border-red-200 transition-colors duration-200"
+                          >
+                            <div className="md:col-span-8">
+                              <Select
+                                label="Natureza de Despesa"
+                                value={item.codigo}
+                                onChange={(e) => {
+                                  const newNaturezas = [...formData.naturezasDespesa];
+                                  newNaturezas[idx].codigo = e.target.value;
+                                  updateFormData('naturezasDespesa', newNaturezas);
+                                }}
+                                options={NATUREZAS_DESPESA.map(o => ({ value: o.codigo, label: `${o.codigo} - ${o.descricao}` }))}
+                                hideBottomMargin={true}
+                              />
+                            </div>
+                            <div className="md:col-span-3">
+                              <InputField
+                                label="Valor"
+                                name={`nat-valor-${idx}`}
+                                type="text"
+                                value={item.valor}
+                                onChange={(e) => {
+                                  const newNaturezas = [...formData.naturezasDespesa];
+                                  newNaturezas[idx].valor = maskCurrency(e.target.value);
+                                  updateFormData('naturezasDespesa', newNaturezas);
+                                }}
+                                mask={(val: string) => maskCurrency(val)}
+                                placeholder="R$ 0,00"
+                                hideBottomMargin={true}
+                              />
+                            </div>
+                            <div className="md:col-span-1 flex justify-center">
+                              <button
+                                onClick={() => removeNatureza(idx)}
+                                className="p-3 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                                title="Remover natureza de despesa"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Sumário de totais com validação */}
+                        <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-6">
+                          {(() => {
+                            const totalMetas = formData.acoesServicos.reduce((sum, item) => {
+                              const value = parseFloat(item.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                              return sum + value;
+                            }, 0);
+                            const totalDespesas = formData.naturezasDespesa.reduce((sum, item) => {
+                              const value = parseFloat(item.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                              return sum + value;
+                            }, 0);
+                            const diferenca = totalMetas - totalDespesas;
+                            const isPending = diferenca !== 0;
+                            
+                            return (
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <p className="text-xs text-red-600 font-bold uppercase tracking-widest mb-2">Total Metas Quantitativas</p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                      {new Intl.NumberFormat('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                      }).format(totalMetas)}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-red-600 font-bold uppercase tracking-widest mb-2">Total Planejado</p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                      {new Intl.NumberFormat('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                      }).format(totalDespesas)}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-red-600 font-bold uppercase tracking-widest mb-2">Diferença</p>
+                                    <p className={`text-2xl font-bold ${
+                                      diferenca === 0 ? 'text-green-600' : 'text-orange-600'
+                                    }`}>
+                                      {new Intl.NumberFormat('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                      }).format(Math.abs(diferenca))}
+                                    </p>
+                                  </div>
+                                </div>
+                                {isPending && (
+                                  <div className="bg-orange-100 border border-orange-300 rounded-lg p-3 flex items-start gap-2">
+                                    <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                                    <p className="text-sm text-orange-700 font-medium">
+                                      {diferenca > 0 
+                                        ? `Falta distribuir R$ ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(diferenca)} nas naturezas de despesa`
+                                        : `Você distribuiu R$ ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(diferenca))} a mais que o total de metas`
+                                      }
+                                    </p>
+                                  </div>
+                                )}
+                                {diferenca === 0 && formData.naturezasDespesa.length > 0 && (
+                                  <div className="bg-green-100 border border-green-300 rounded-lg p-3 flex items-start gap-2">
+                                    <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                                    <p className="text-sm text-green-700 font-medium">
+                                      Distribuição de despesas balanceada! ✓
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl">
+                        <DollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-400 font-medium">Nenhuma natureza de despesa adicionada</p>
+                        <p className="text-xs text-gray-300">Clique no botão acima para começar</p>
+                      </div>
+                    )}
+                  </div>
+                </Section>
+
+                {/* SECTION 7: FINALIZAÇÃO */}
+                <Section
+                  id="finalizacao"
+                  title="Finalização"
+                  description="Revise, gere PDF, assine e envie para a SES-SP"
+                  icon={<FileCheck className="w-6 h-6" />}
+                  step={7}
+                  totalSteps={7}
+                  isComplete={sectionStatus['finalizacao']}
+                  onHelpClick={() => openHelpModal('finalizacao')}
+                >
+                  {!sentSuccess ? (
+                    <div className="space-y-6">
+                      <TextArea
+                        label="Justificativa Técnica"
+                        value={formData.justificativa}
+                        onChange={(e) => updateFormData('justificativa', e.target.value)}
+                        placeholder="Descreva a justificativa técnica do plano de trabalho..."
+                        rows={5}
+                        maxLength={2000}
+                        required
+                      />
+
+                      {/* INSTRUÇÕES DE ENVIO */}
+                      <div className="bg-amber-50 p-6 rounded-lg border-2 border-amber-200 space-y-4">
+                        <h4 className="font-bold text-amber-900 uppercase tracking-wide flex items-center gap-2">
+                          <AlertCircle className="w-5 h-5" /> Próximos Passos
+                        </h4>
+                        <ol className="space-y-3 text-sm text-amber-900">
+                          <li className="flex gap-3">
+                            <span className="font-bold bg-amber-200 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">1</span>
+                            <span><strong>Gere o PDF:</strong> Clique em "Visualizar e Baixar PDF" abaixo</span>
+                          </li>
+                          <li className="flex gap-3">
+                            <span className="font-bold bg-amber-200 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">2</span>
+                            <span><strong>Assine o PDF:</strong> Abra o arquivo em seu computador e assine digitalmente (ou imprima e escaneie assinado)</span>
+                          </li>
+                          <li className="flex gap-3">
+                            <span className="font-bold bg-amber-200 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">3</span>
+                            <span><strong>Envie para SES-SP:</strong> Clique em "Enviar para SES-SP" e preencha com o PDF assinado</span>
+                          </li>
+                          <li className="flex gap-3">
+                            <span className="font-bold bg-amber-200 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">4</span>
+                            <span><strong>Email receptor:</strong> gcf-emendasfederais@saude.sp.gov.br</span>
+                          </li>
+                        </ol>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
+                          <h4 className="text-sm font-bold text-blue-900 mb-4 flex items-center gap-2">
+                            <Download className="w-5 h-5" /> Gerar PDF
+                          </h4>
+                          <Button
+                            label={isSending ? "⏳ Gerando..." : "📥 Visualizar e Baixar PDF"}
+                            onClick={() => {
+                              if (!planoSalvoId) {
+                                const save = confirm('O plano ainda não foi salvo. Deseja salvar agora e gerar o PDF?');
+                                if (save) {
+                                  handleFinalSend().then(() => {
+                                    setShowDocument(true);
+                                    setTimeout(() => handleGeneratePDF(), 1000);
+                                  });
+                                }
+                              } else {
+                                setShowDocument(true);
+                                setTimeout(() => handleGeneratePDF(), 1000);
+                              }
+                            }}
+                            variant="primary"
+                            disabled={isSending}
+                            fullWidth
+                          />
+                          <p className="text-xs text-blue-700 mt-3 text-center">✅ O plano será salvo e o PDF será gerado</p>
+                        </div>
+
+                        <div className="bg-red-50 p-6 rounded-lg border-2 border-red-200">
+                          <h4 className="text-sm font-bold text-red-900 mb-4 flex items-center gap-2">
+                            <Send className="w-5 h-5" /> Enviar para SES-SP
+                          </h4>
+                          <Button
+                            label="📧 Enviar Assinado"
+                            onClick={handleSendToSES}
+                            variant="primary"
+                            fullWidth
+                          />
+                          <p className="text-xs text-red-700 mt-3 text-center">Abre seu email para anexar o PDF assinado</p>
+                        </div>
+                      </div>
+
+                      {/* AUTO SAVE STATUS */}
+                      <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                        <div className="flex items-center justify-center gap-2 text-sm">
+                          {autoSaveStatus === 'saving' && (
+                            <>
+                              <Loader2 className="w-4 h-4 text-green-600 animate-spin" />
+                              <span className="text-green-700 font-semibold">Salvando automaticamente...</span>
+                            </>
+                          )}
+                          {autoSaveStatus === 'saved' && (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 text-green-600" />
+                              <span className="text-green-700 font-semibold">✓ Salvo com sucesso</span>
+                              {lastAutoSaveTime && (
+                                <span className="text-xs text-green-600">às {lastAutoSaveTime.toLocaleTimeString('pt-BR')}</span>
+                              )}
+                            </>
+                          )}
+                          {autoSaveStatus === 'idle' && lastAutoSaveTime && (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 text-green-600" />
+                              <span className="text-green-700 font-semibold">Seu plano é salvo automaticamente</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-green-50 rounded-lg border-2 border-green-200 space-y-4">
+                      <div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center mx-auto">
+                        <MailCheck className="w-10 h-10 text-white" />
+                      </div>
+                      <h3 className="text-2xl font-bold text-green-900">Plano Salvo com Sucesso! ✅</h3>
+                      <p className="text-sm text-green-700">Seu plano foi registrado no banco de dados da SES-SP.</p>
+                      <div className="bg-white p-4 rounded-lg border border-green-300 space-y-2">
+                        <p className="text-xs text-gray-600"><strong>Próximo Passo:</strong></p>
+                        <p className="text-sm font-semibold text-gray-900">Envie o PDF assinado para:</p>
+                        <p className="font-mono text-red-600 font-bold">gcf-emendasfederais@saude.sp.gov.br</p>
+                      </div>
+                      <Button
+                        label="📧 Abrir Email"
+                        onClick={handleSendToSES}
+                        variant="primary"
+                      />
+                      <Button
+                        label="Novo Cadastro"
+                        onClick={() => window.location.reload()}
+                        variant="secondary"
+                      />
+                    </div>
+                  )}
+                </Section>
+
+                {/* STICKY BACK TO TOP BUTTON */}
+                {activeSection !== 'info-emenda' && (
+                  <button
+                    onClick={() => scrollToSection('info-emenda')}
+                    className="fixed bottom-8 right-8 p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-all"
+                    title="Voltar ao topo"
+                  >
+                    <ArrowUp className="w-6 h-6" />
+                  </button>
+                )}
+              </div>
+            </div>
+            </>
+          )}
+        </div>
+      </main>
+
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;

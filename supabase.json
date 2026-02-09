@@ -1,0 +1,11 @@
+{
+  "projectId": "tlpmspfnswaxwqzmwski",
+  "supabaseUrl": "https://tlpmspfnswaxwqzmwski.supabase.co",
+  "functions": [
+    {
+      "slug": "manage-users",
+      "excludePattern": [],
+      "importMapPath": ""
+    }
+  ]
+}

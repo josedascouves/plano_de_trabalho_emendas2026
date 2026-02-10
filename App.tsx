@@ -60,7 +60,9 @@ import {
   maskCurrency, 
   maskPhone,
   maskCNES,
-  validateEmail 
+  validateEmail,
+  maskPercentage,
+  formatPercentageDisplay
 } from './utils/masks';
 
 const App: React.FC = () => {
@@ -598,6 +600,39 @@ const App: React.FC = () => {
     }
   }, [editingPlanId]);
 
+  // Monitorar mudanças no formData e atualizar sectionStatus automaticamente
+  useEffect(() => {
+    setSectionStatus(prev => ({
+      ...prev,
+      // Seção 1: Emenda - completa se todos os campos obrigatórios estão preenchidos
+      'info-emenda': !!(
+        formData.emenda.parlamentar?.trim() &&
+        formData.emenda.numero?.trim() &&
+        formData.emenda.valor?.trim() &&
+        formData.emenda.valor !== '0,00' &&
+        formData.emenda.programa?.trim()
+      ),
+      // Seção 2: Beneficiário - completa se nome e cnpj preenchidos
+      'beneficiario': !!(
+        formData.beneficiario.nome?.trim() &&
+        formData.beneficiario.cnpj?.trim()
+      ),
+      // Seção 3: Alinhamento - completa se diretriz e objetivo selecionados
+      'alinhamento': !!(
+        formData.planejamento.diretrizId &&
+        formData.planejamento.objetivoId
+      ),
+      // Seção 4: Metas Quantitativas - completa se houver pelo menos uma ação
+      'metas-quantitativas': formData.acoesServicos.length > 0,
+      // Seção 5: Indicadores Qualitativos - completa se houver pelo menos um indicador
+      'metas-qualitativas': formData.metasQualitativas.length > 0,
+      // Seção 6: Execução Financeira - completa se houver pelo menos uma natureza
+      'execucao-financeira': formData.naturezasDespesa.length > 0,
+      // Seção 7: Finalização - completa se justificativa preenchida
+      'finalizacao': !!formData.justificativa?.trim()
+    }));
+  }, [formData]);
+
   const loadPlanForEditing = async (planoId: string) => {
     try {
       const { data: plano, error } = await supabase
@@ -953,10 +988,59 @@ const App: React.FC = () => {
     handleSendToSES();
   };
 
+  // Validação de campos obrigatórios
+  const validateRequiredFields = (): { isValid: boolean; missingFields: string[] } => {
+    const missingFields: string[] = [];
+
+    // IDENTIFICAÇÃO GERAL - obrigatório
+    if (!formData.emenda.parlamentar?.trim()) missingFields.push('Parlamentar Autor');
+    if (!formData.emenda.numero?.trim()) missingFields.push('Número da Emenda');
+    if (!formData.emenda.valor?.trim() || formData.emenda.valor === '0,00') missingFields.push('Valor da Emenda');
+    if (!formData.emenda.programa?.trim()) missingFields.push('Programa de Saúde');
+
+    // DADOS DO BENEFICIÁRIO - obrigatório
+    if (!formData.beneficiario.nome?.trim()) missingFields.push('Nome do Beneficiário');
+    if (!formData.beneficiario.cnpj?.trim()) missingFields.push('CNPJ do Beneficiário');
+
+    // ALINHAMENTO ESTRATÉGICO - obrigatório
+    if (!formData.planejamento.diretrizId) missingFields.push('Diretriz Estratégica');
+    if (!formData.planejamento.objetivoId) missingFields.push('Objetivo Específico');
+
+    // METAS QUANTITATIVAS - obrigatório (pelo menos um item)
+    if (formData.acoesServicos.length === 0) missingFields.push('Metas Quantitativas (adicione pelo menos uma ação/serviço)');
+
+    // INDICADORES QUALITATIVOS - obrigatório (pelo menos um item)
+    if (formData.metasQualitativas.length === 0) missingFields.push('Indicadores Qualitativos (adicione pelo menos um indicador)');
+
+    // EXECUÇÃO FINANCEIRA - obrigatório (pelo menos um item)
+    if (formData.naturezasDespesa.length === 0) missingFields.push('Execução Financeira - Natureza de Despesa (adicione pelo menos uma despesa)');
+
+    // JUSTIFICATIVA TÉCNICA - obrigatório
+    if (!formData.justificativa?.trim()) missingFields.push('Justificativa Técnica');
+
+    return {
+      isValid: missingFields.length === 0,
+      missingFields
+    };
+  };
+
   // Gerar e salvar PDF
   const handleGeneratePDF = async () => {
     setIsSending(true);
     try {
+      // Validar campos obrigatórios
+      const validation = validateRequiredFields();
+      if (!validation.isValid) {
+        const missingList = validation.missingFields.map((field, idx) => `${idx + 1}. ${field}`).join('\n');
+        alert(
+          `⚠️ NÃO É POSSÍVEL GERAR PDF!\n\n` +
+          `Os campos obrigatórios abaixo devem ser preenchidos:\n\n${missingList}\n\n` +
+          `Por favor, complete todos os campos indicados antes de salvar o PDF.`
+        );
+        setIsSending(false);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sessão expirada. Faça login novamente.");
 
@@ -977,9 +1061,9 @@ const App: React.FC = () => {
       const options = {
         margin: 5,
         filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
+        image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: { scale: 2 },
-        jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' },
+        jsPDF: { orientation: 'portrait' as const, unit: 'mm', format: 'a4' },
         pagebreak: { avoid: ['tr', '.evitar-quebra'] }
       };
 
@@ -1073,13 +1157,13 @@ const App: React.FC = () => {
   };
 
   const sections = [
-    { id: 'info-emenda', title: 'Identificação da Emenda' },
-    { id: 'beneficiario', title: 'Dados do Beneficiário' },
-    { id: 'alinhamento', title: 'Alinhamento Estratégico' },
-    { id: 'metas-quantitativas', title: 'Metas Quantitativas' },
-    { id: 'metas-qualitativas', title: 'Indicadores Qualitativos' },
-    { id: 'execucao-financeira', title: 'Execução Financeira' },
-    { id: 'finalizacao', title: 'Finalização' }
+    { id: 'info-emenda', title: 'Emenda Identificação' },
+    { id: 'beneficiario', title: 'Beneficiário Dados' },
+    { id: 'alinhamento', title: 'Estratégia Alinhamento' },
+    { id: 'metas-quantitativas', title: 'Metas Metas' },
+    { id: 'metas-qualitativas', title: 'Indicadores Indicadores' },
+    { id: 'execucao-financeira', title: 'Financeiro Execução' },
+    { id: 'finalizacao', title: 'Finalizar Finalização' }
   ];
 
   const confirmAddAcao = () => {
@@ -1188,9 +1272,11 @@ Secretaria de Estado da Saúde de São Paulo`;
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md bg-white">
           <div className="text-center mb-12">
-            <img src={LOGO_URL_COLORIDA} alt="Logotipo Oficial - Secretaria de Estado da Saúde de São Paulo" className="h-14 w-auto mx-auto mb-6" />
-            <h1 className="text-2xl font-bold text-black uppercase tracking-widest">Plano de Trabalho</h1>
-            <p className="text-xs text-gray-600 font-medium uppercase tracking-widest mt-2">2026 - Secretaria de Estado da Saúde de SP</p>
+            <img src={LOGO_URL_COLORIDA} alt="Logotipo Oficial - Secretaria de Estado da Saúde de São Paulo" className="h-18 w-auto mx-auto mb-8" />
+            <h1 className="text-3xl font-black text-red-700 uppercase tracking-widest mb-3 leading-tight">Plano de Trabalho</h1>
+            <div className="border-t-4 border-red-700 pt-4">
+              <p className="text-sm font-bold text-gray-800 uppercase tracking-widest">Emendas Parlamentares 2026</p>
+            </div>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -1198,7 +1284,7 @@ Secretaria de Estado da Saúde de São Paulo`;
               <label className="block text-xs font-semibold text-gray-800 mb-2 uppercase tracking-widest">E-mail</label>
               <input 
                 type="email" 
-                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-red-600 focus:border-red-600 text-black placeholder-gray-500 font-medium"
+                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 text-black placeholder-gray-500 font-medium"
                 value={loginInput.email}
                 onChange={(e) => setLoginInput({ ...loginInput, email: e.target.value })}
                 placeholder="seu@email.com"
@@ -1210,7 +1296,7 @@ Secretaria de Estado da Saúde de São Paulo`;
               <label className="block text-xs font-semibold text-gray-800 mb-2 uppercase tracking-widest">Senha</label>
               <input 
                 type="password" 
-                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-red-600 focus:border-red-600 text-black placeholder-gray-500 font-medium"
+                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 text-black placeholder-gray-500 font-medium"
                 value={loginInput.password}
                 onChange={(e) => setLoginInput({ ...loginInput, password: e.target.value })}
                 placeholder="••••••••"
@@ -1219,23 +1305,27 @@ Secretaria de Estado da Saúde de São Paulo`;
             </div>
 
             {loginError && (
-              <div className="p-3 bg-gray-100 rounded-md border-l-2 border-red-600">
-                <p className="text-xs text-gray-800 font-medium">{loginError}</p>
+              <div className="p-3 bg-red-50 rounded-md border-l-4 border-red-600">
+                <p className="text-xs text-red-800 font-semibold">{loginError}</p>
               </div>
             )}
 
             <button 
               type="submit" 
               disabled={isSending}
-              className="w-full py-3 bg-red-600 text-white font-bold rounded-md hover:bg-red-700 transition-colors uppercase text-xs tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-red-600 text-white font-bold rounded-md hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all uppercase text-sm tracking-widest disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
             >
-              {isSending ? 'Processando...' : 'Entrar'}
+              {isSending ? '⏳ Processando...' : '🔐 Entrar'}
             </button>
           </form>
 
-          <div className="mt-8 pt-8 border-t border-gray-200 text-center">
-            <p className="text-xs text-gray-600 uppercase font-medium tracking-widest leading-relaxed">
-              Acesso Restrito - SES/SP<br/> Emendas Parlamentares 2026
+          <div className="mt-8 pt-8 border-t-2 border-red-700 text-center space-y-3">
+            <p className="text-xs text-gray-700 uppercase font-bold tracking-widest leading-relaxed">
+              Acesso Restrito
+            </p>
+            <p className="text-[11px] text-gray-600 leading-relaxed">
+              Sistema de Gestão de Planos de Trabalho<br/>
+              Emendas Parlamentares 2026
             </p>
           </div>
         </div>
@@ -1253,33 +1343,24 @@ Secretaria de Estado da Saúde de São Paulo`;
           {/* ======== CABEÇALHO INSTITUCIONAL ======== */}
           <div className="border-b-4 border-red-700 pt-12 px-16 pb-8 print:pt-10 print:px-12 print:pb-6">
             {/* Linha superior com logo e info */}
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex items-center gap-4">
-                <img src={LOGO_URL_COLORIDA} alt="Governo de São Paulo" className="h-12 w-auto print:h-10" />
-                <div className="text-xs leading-tight">
-                  <p className="font-bold text-gray-900">GOVERNO DO ESTADO DE SÃO PAULO</p>
-                  <p className="text-gray-700 font-semibold">Secretaria de Estado da Saúde</p>
-                </div>
-              </div>
-              <div className="text-right text-xs text-gray-600">
-                <p className="font-semibold">PLANEJAMENTO 2026</p>
-                <p>Emendas Parlamentares</p>
-              </div>
+            <div className="flex justify-center items-center mb-6">
+              <img src={LOGO_URL_COLORIDA} alt="Governo de São Paulo" className="h-20 w-auto print:h-16" />
             </div>
 
-            {/* Título principal */}
-            <div className="text-center border-t border-gray-300 border-b-2 border-red-700 py-6 print:py-4">
-              <h1 className="text-2xl font-black text-gray-900 uppercase tracking-tight print:text-xl mb-1">
+            {/* Título principal expandido */}
+            <div className="text-center border-t-2 border-gray-300 border-b-4 border-red-700 py-8 print:py-6">
+              <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight print:text-2xl mb-2 leading-tight">
                 Plano de Trabalho
               </h1>
-              <p className="text-xs text-gray-600 font-semibold tracking-wide">
-                Formulação e Execução Orçamentária
-              </p>
+              <h2 className="text-lg font-bold text-red-700 uppercase tracking-widest print:text-base">
+                Emenda Parlamentar 2026
+              </h2>
             </div>
 
             {/* Info protocolo */}
             <div className="flex justify-between items-center mt-6 print:mt-4">
               <div className="text-[11px] text-gray-700">
+                <p><span className="font-bold">Sistema:</span> Plano de Trabalho - SES/SP</p>
               </div>
               <div className="text-[11px] text-gray-700 text-right">
                 <p><span className="font-bold">Data de Emissão:</span> {new Date().toLocaleDateString('pt-BR')}</p>
@@ -1430,49 +1511,101 @@ Secretaria de Estado da Saúde de São Paulo`;
               </div>
             </section>
 
-            {/* SEÇÃO 5: INDICADORES QUALITATIVOS (se houver) */}
-            {formData.metasQualitativas.length > 0 && (
+            {/* SEÇÃO 5: INDICADORES QUALITATIVOS */}
+            <section className="mb-10 print:mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">05</div>
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Indicadores Qualitativos</h2>
+              </div>
+              <div className="border-t border-gray-300 pt-4 pl-11">
+                <p className="text-xs text-gray-600 mb-4">Indicadores de qualidade e acompanhamento</p>
+                
+                {formData.metasQualitativas.length > 0 ? (
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-200 print:bg-gray-100">
+                        <th className="border border-gray-400 px-3 py-2 text-left font-black uppercase text-gray-900 text-[10px]">Indicador de Qualidade</th>
+                        <th className="border border-gray-400 px-3 py-2 text-left font-black uppercase text-gray-900 text-[10px]">Meta / Descrição</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.metasQualitativas.map((meta, i) => (
+                        <tr key={i} className="border-b border-gray-300">
+                          <td className="border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">{meta.meta}</td>
+                          <td className="border border-gray-300 px-3 py-2 text-xs text-gray-800">{meta.valor}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="text-xs text-gray-500 italic">Nenhum indicador qualitativo registrado</p>
+                )}
+              </div>
+            </section>
+            {formData.naturezasDespesa.length > 0 && (
               <section className="mb-10 print:mb-8">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">05</div>
-                  <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Indicadores Qualitativos</h2>
+                  <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">06</div>
+                  <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Execução Financeira</h2>
                 </div>
                 <div className="border-t border-gray-300 pt-4 pl-11">
-                  <p className="text-xs text-gray-600 mb-4">Metas de qualidade e resultado</p>
-                  <div className="space-y-3">
-                    {formData.metasQualitativas.map((meta, i) => (
-                      <div key={i} className="border-l-2 border-gray-400 pl-4 py-2">
-                        <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Indicador</label>
-                        <p className="text-sm font-semibold text-gray-900 mb-2">{meta.meta}</p>
-                        <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-1">Valor</label>
-                        <p className="text-sm font-mono font-bold text-gray-900">{meta.valor}</p>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-xs text-gray-600 mb-6">Classificação e distribuição de despesas por natureza</p>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-200 print:bg-gray-100">
+                        <th className="border border-gray-400 px-3 py-2 text-left font-black uppercase text-gray-900 text-[10px]">Natureza de Despesa</th>
+                        <th className="border border-gray-400 px-3 py-2 text-right font-black uppercase text-gray-900 text-[10px]">Valor (R$)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.naturezasDespesa.map((despesa, i) => (
+                        <tr key={i} className="border-b border-gray-300 hover:bg-gray-50 print:hover:bg-white">
+                          <td className="border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">{despesa.codigo} - {NATUREZAS_DESPESA.find(n => n.codigo === despesa.codigo)?.descricao}</td>
+                          <td className="border border-gray-300 px-3 py-2 text-right text-xs font-mono font-bold">R$ {despesa.valor}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-gray-100 print:bg-white font-bold">
+                        <td className="border border-gray-400 px-3 py-2 text-right uppercase text-xs font-black text-gray-900">Total Planejado:</td>
+                        <td className="border border-red-700 border-l-4 px-3 py-2 text-right font-mono text-sm text-red-700 font-black">
+                          R$ {formData.naturezasDespesa.reduce((sum, item) => {
+                            const value = parseFloat(item.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                            return sum + value;
+                          }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </section>
             )}
           </div>
 
           {/* ======== RODAPÉ INSTITUCIONAL ======== */}
-          <div className="border-t-2 border-gray-300 px-16 py-8 print:px-12 print:py-6 bg-gray-50 print:bg-white text-xs text-gray-700">
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <div>
-                <p className="text-[10px] font-bold uppercase text-gray-600 mb-1">Órgão Emissor</p>
-                <p className="font-semibold">Secretaria de Estado da Saúde de São Paulo</p>
+          <div className="border-t-4 border-red-700 px-16 py-8 print:px-12 print:py-6 bg-gradient-to-b from-gray-50 to-white print:bg-white text-xs text-gray-700">
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-white print:bg-white border border-gray-200 print:border-gray-300 p-3 rounded-lg print:rounded-none">
+                <p className="text-[10px] font-black uppercase text-gray-600 mb-2 tracking-widest">Órgão Emissor</p>
+                <p className="font-bold text-gray-900 text-xs">Secretaria de Estado da Saúde</p>
+                <p className="text-[10px] text-gray-600">SES - São Paulo</p>
               </div>
-              <div className="text-center">
-                <p className="text-[10px] font-bold uppercase text-gray-600 mb-1">Período</p>
-                <p className="font-semibold">2026</p>
+              <div className="bg-white print:bg-white border border-gray-200 print:border-gray-300 p-3 rounded-lg print:rounded-none text-center">
+                <p className="text-[10px] font-black uppercase text-gray-600 mb-2 tracking-widest">Período</p>
+                <p className="font-bold text-red-700 text-lg">2026</p>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] font-bold uppercase text-gray-600 mb-1">Data de Geração</p>
-                <p className="font-mono font-semibold">{new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
+              <div className="bg-white print:bg-white border border-gray-200 print:border-gray-300 p-3 rounded-lg print:rounded-none text-right">
+                <p className="text-[10px] font-black uppercase text-gray-600 mb-2 tracking-widest">Gerado em</p>
+                <p className="font-mono text-gray-900 text-xs">{new Date().toLocaleDateString('pt-BR')}</p>
+                <p className="font-mono text-gray-700 text-[10px]">{new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
               </div>
             </div>
-            <div className="border-t border-gray-300 pt-4 text-center text-[10px] text-gray-600">
-              <p className="font-semibold mb-1">Este é um documento oficial gerado pelo Sistema de Planos de Trabalho – Emendas Parlamentares.</p>
-              <p>Documento destinado a arquivamento, auditoria e controle externo.</p>
+            <div className="border-t-2 border-gray-300 pt-6 mt-6 text-center">
+              <p className="text-[10px] font-bold text-gray-700 mb-2 uppercase tracking-widest">DOCUMENTO OFICIAL - PLANO DE TRABALHO</p>
+              <p className="text-[9px] text-gray-600 leading-relaxed">
+                Documento oficial da Secretaria de Estado da Saúde de São Paulo, gerado pelo Sistema de Gestão de Planos de Trabalho.
+              </p>
+              <p className="text-[9px] text-gray-600 mt-2">
+                Destinado a arquivamento, auditoria, controle externo e conformidade com as determinações da Portaria GM/MS nº 6.904/2025.
+              </p>
             </div>
           </div>
 
@@ -2423,16 +2556,17 @@ Secretaria de Estado da Saúde de São Paulo`;
                           />
                         </div>
                         <div className="md:col-span-4">
-                          <div className="flex flex-col h-full">
-                            <label className="text-sm font-bold text-gray-900 mb-2">Valor</label>
-                            <input
-                              type="text"
+                          <div className="relative">
+                            <InputField
+                              label="Valor"
                               name="qual-temp-valor"
+                              type="text"
                               value={currentMetaQualitativa.valor}
-                              onChange={(e) => setCurrentMetaQualitativa({ ...currentMetaQualitativa, valor: e.target.value })}
-                              placeholder="0,00%"
-                              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base transition-all"
+                              onChange={(e) => setCurrentMetaQualitativa({ ...currentMetaQualitativa, valor: maskPercentage(e.target.value) })}
+                              placeholder="0"
+                              hideBottomMargin={true}
                             />
+                            <span className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium pointer-events-none" style={{ marginTop: '1.5rem' }}>%</span>
                           </div>
                         </div>
                         <div className="md:col-span-1"></div>
@@ -2471,18 +2605,22 @@ Secretaria de Estado da Saúde de São Paulo`;
                               />
                             </div>
                             <div className="md:col-span-3">
-                              <InputField
-                                label="Valor"
-                                name={`qual-valor-${idx}`}
-                                value={item.valor}
-                                onChange={(e) => {
-                                  const newMetas = [...formData.metasQualitativas];
-                                  newMetas[idx].valor = e.target.value;
-                                  updateFormData('metasQualitativas', newMetas);
-                                }}
-                                placeholder="0,00%"
-                                hideBottomMargin={true}
-                              />
+                              <div className="relative">
+                                <InputField
+                                  label="Valor"
+                                  name={`qual-valor-${idx}`}
+                                  type="text"
+                                  value={item.valor}
+                                  onChange={(e) => {
+                                    const newMetas = [...formData.metasQualitativas];
+                                    newMetas[idx].valor = maskPercentage(e.target.value);
+                                    updateFormData('metasQualitativas', newMetas);
+                                  }}
+                                  placeholder="0"
+                                  hideBottomMargin={true}
+                                />
+                                <span className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium pointer-events-none" style={{ marginTop: '1.5rem' }}>%</span>
+                              </div>
                             </div>
                             <div className="md:col-span-1 flex justify-center">
                               <button
@@ -2530,17 +2668,16 @@ Secretaria de Estado da Saúde de São Paulo`;
                           />
                         </div>
                         <div className="md:col-span-4">
-                          <div className="flex flex-col h-full">
-                            <label className="text-sm font-bold text-gray-900 mb-2">Valor</label>
-                            <input
-                              type="text"
-                              name="nat-temp-valor"
-                              value={currentNatureza.valor}
-                              onChange={(e) => setCurrentNatureza({ ...currentNatureza, valor: maskCurrency(e.target.value) })}
-                              placeholder="R$ 0,00"
-                              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base transition-all"
-                            />
-                          </div>
+                          <InputField
+                            label="Valor"
+                            name="nat-temp-valor"
+                            type="text"
+                            value={currentNatureza.valor}
+                            onChange={(e) => setCurrentNatureza({ ...currentNatureza, valor: maskCurrency(e.target.value) })}
+                            mask={(val: string) => maskCurrency(val)}
+                            placeholder="R$ 0,00"
+                            hideBottomMargin={true}
+                          />
                         </div>
                         <div className="md:col-span-1"></div>
                       </div>

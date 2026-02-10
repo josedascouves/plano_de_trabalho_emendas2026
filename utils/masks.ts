@@ -123,6 +123,42 @@ export const maskNumber = (value: string): string => {
   return cleaned.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 };
 
+// Porcentagem: 0 a 100 (mantém apenas números no state, sem % ou vírgula)
+export const maskPercentage = (value: string): string => {
+  // Remove TODOS os caracteres que não são número, incluindo %, , etc
+  let cleaned = value.replace(/\D/g, '');
+  
+  // Se vazio, retorna vazio
+  if (!cleaned) return '';
+  
+  // Limita a máximo 3 dígitos (para permitir até 100)
+  cleaned = cleaned.slice(0, 3);
+  
+  // Converte para número
+  let numValue = parseInt(cleaned, 10);
+  
+  // Se passou de 100, limita para 100
+  if (numValue > 100) {
+    numValue = 100;
+  }
+  
+  // Retorna apenas como número string (sem formatação visual)
+  // A formatação com % será adicionada apenas na exibição
+  return String(numValue);
+};
+
+export const formatPercentageDisplay = (value: string): string => {
+  // Para exibição: adiciona a formatação visual com vírgula e %
+  if (!value) return '0,00%';
+  const num = parseInt(value, 10);
+  return num.toFixed(2).replace('.', ',') + '%';
+};
+
+export const unmaskPercentage = (value: string): number => {
+  const cleaned = value.replace(/\D/g, '');
+  return parseInt(cleaned, 10) || 0;
+};
+
 export default {
   maskCPF,
   validateCPF,
@@ -134,4 +170,6 @@ export default {
   maskPhone,
   maskCNES,
   maskNumber,
+  maskPercentage,
+  unmaskPercentage,
 };

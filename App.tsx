@@ -37,7 +37,8 @@ import {
   Terminal,
   BarChart3,
   Info,
-  ArrowUp
+  ArrowUp,
+  AlertTriangle
 } from 'lucide-react';
 import { FormState, User } from './types';
 import { 
@@ -79,12 +80,22 @@ const App: React.FC = () => {
   // Admin & User Management
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [usersList, setUsersList] = useState<any[]>([]);
-  const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as const });
+  const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as const, cnes: '' });
 
   // Plan List & Edit Management
   const [planosList, setPlanosList] = useState<any[]>([]);
   const [isLoadingPlanos, setIsLoadingPlanos] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [selectedPlanos, setSelectedPlanos] = useState<Set<string>>(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+
+  // Filtros de Planos
+  const [filtros, setFiltros] = useState({
+    cnes: '',
+    parlamentar: '',
+    emenda: '',
+    cnpj: ''
+  });
 
   // Form Progress State
   const [activeSection, setActiveSection] = useState('info-emenda'); 
@@ -96,6 +107,8 @@ const App: React.FC = () => {
   const [planoSalvoId, setPlanoSalvoId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
+  const [formHasChanges, setFormHasChanges] = useState(false);
+  const [lastSavedFormData, setLastSavedFormData] = useState<FormState | null>(null);
   
   // Help Modal State
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -119,18 +132,20 @@ const App: React.FC = () => {
     acoesServicos: [],
     metasQualitativas: [],
     naturezasDespesa: [],
-    justificativa: ''
+    justificativa: '',
+    responsavelAssinatura: ''
   });
 
   // Função para obter formData inicial
   const getInitialFormData = (): FormState => ({
-    emenda: { parlamentar: '', numero: '', valor: '', valorExtenso: '', programa: 'CUSTEIO MAC – 2E90' },
-    beneficiario: { nome: '', cnes: '', cnpj: '', email: '', telefone: '' },
+    emenda: { parlamentar: '', numero: '', valor: '', valorExtenso: '', programa: '' },
+    beneficiario: { nome: '', cnes: currentUser?.cnes || '', cnpj: '', email: '', telefone: '' },
     planejamento: { diretrizId: '', objetivoId: '', metaIds: [] },
     acoesServicos: [],
     metasQualitativas: [],
     naturezasDespesa: [],
-    justificativa: ''
+    justificativa: '',
+    responsavelAssinatura: ''
   });
 
   const [currentSelection, setCurrentSelection] = useState<{
@@ -223,9 +238,10 @@ const App: React.FC = () => {
     },
     'finalizacao': {
       title: 'Finalização e Justificativa',
-      description: 'Complete o plano com uma justificativa técnica e legal.',
+      description: 'Complete o plano com uma justificativa técnica e identifique o responsável pela assinatura.',
       tips: [
-        'Descreva os motivos pelos quais escolheu essa alocação de recursos',
+        'Responsável pela Assinatura: Informe o nome completo da pessoa que assinará o documento',
+        'Justificativa Técnica: Descreva os motivos pelos quais escolheu essa alocação de recursos',
         'Explique como o plano atende às metas da SES-SP',
         'Cite legislações ou políticas relevantes',
         'Revise bem todo o plano antes de enviar'
@@ -302,6 +318,7 @@ const App: React.FC = () => {
               email: p.email || '',
               name: p.full_name,
               role: p.role,
+              cnes: p.cnes || '',
               disabled: p.disabled || false
             })));
           }
@@ -327,6 +344,30 @@ const App: React.FC = () => {
       loadPlanos();
     }
   }, [currentView, isAuthenticated]);
+
+  // Auto-fill CNES when user logs in or form is initialized
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.cnes && formData.beneficiario.cnes !== currentUser.cnes) {
+      updateFormData('beneficiario', { 
+        ...formData.beneficiario, 
+        cnes: currentUser.cnes 
+      });
+    }
+  }, [isAuthenticated, currentUser?.cnes]);
+
+  // Track form changes - melhorado para detectar mudanças reais
+  useEffect(() => {
+    if (lastSavedFormData) {
+      // Normalizar ambos os dados antes de comparar (remover espaçamento extra)
+      const currentJson = JSON.stringify(formData);
+      const savedJson = JSON.stringify(lastSavedFormData);
+      const hasChanged = currentJson !== savedJson;
+      setFormHasChanges(hasChanged);
+    } else {
+      // Se não há dados salvos anteriormente, é um novo plano - permitir salvar
+      setFormHasChanges(false);
+    }
+  }, [formData, lastSavedFormData]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -379,7 +420,8 @@ const App: React.FC = () => {
         setCurrentUser({
           username: data.user.email || '',
           name: profile?.full_name || 'Usuário',
-          role: profile?.role || 'user'
+          role: profile?.role || 'user',
+          cnes: profile?.cnes || ''
         });
         setIsAuthenticated(true);
         setLoginInput({ email: '', password: '' });
@@ -425,6 +467,7 @@ const App: React.FC = () => {
           email: p.email || '',
           name: p.full_name,
           role: p.role,
+          cnes: p.cnes || '',
           disabled: p.disabled || false
         })));
       }
@@ -472,6 +515,7 @@ const App: React.FC = () => {
           email: p.email || '',
           name: p.full_name,
           role: p.role,
+          cnes: p.cnes || '',
           disabled: p.disabled || false
         })));
       }
@@ -505,6 +549,11 @@ const App: React.FC = () => {
         throw new Error('Perfil do usuário é obrigatório');
       }
 
+      // Validação de CNES
+      if (!newUser.cnes || newUser.cnes.trim().length === 0) {
+        throw new Error('CNES da instituição é obrigatório');
+      }
+
       // 1. Criar usuário no Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUser.email,
@@ -512,7 +561,8 @@ const App: React.FC = () => {
         options: {
           data: {
             full_name: newUser.name,
-            role: newUser.role
+            role: newUser.role,
+            cnes: newUser.cnes.trim()
           }
         }
       });
@@ -535,6 +585,7 @@ const App: React.FC = () => {
             email: newUser.email,
             full_name: newUser.name,
             role: newUser.role,
+            cnes: newUser.cnes.trim(),
             disabled: false
           }
         ], 
@@ -545,8 +596,8 @@ const App: React.FC = () => {
       }
 
       // Sucesso
-      alert(`✓ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nPerfil: ${newUser.role === 'admin' ? 'Administrador' : 'Usuário Padrão'}`);
-      setNewUser({ email: '', password: '', name: '', role: 'user' });
+      alert(`✓ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nCNES: ${newUser.cnes}\nPerfil: ${newUser.role === 'admin' ? 'Administrador' : 'Usuário Padrão'}`);
+      setNewUser({ email: '', password: '', name: '', role: 'user', cnes: '' });
       
       // Recarregar lista de usuários
       const { data: profiles, error: fetchError } = await supabase.from('profiles').select('*');
@@ -557,6 +608,7 @@ const App: React.FC = () => {
           email: p.email || '',
           name: p.full_name,
           role: p.role,
+          cnes: p.cnes || '',
           disabled: p.disabled || false
         })));
       }
@@ -628,52 +680,123 @@ const App: React.FC = () => {
       'metas-qualitativas': formData.metasQualitativas.length > 0,
       // Seção 6: Execução Financeira - completa se houver pelo menos uma natureza
       'execucao-financeira': formData.naturezasDespesa.length > 0,
-      // Seção 7: Finalização - completa se justificativa preenchida
-      'finalizacao': !!formData.justificativa?.trim()
+      // Seção 7: Finalização - completa se justificativa e responsável preenchidos
+      'finalizacao': !!formData.justificativa?.trim() && !!formData.responsavelAssinatura?.trim()
     }));
   }, [formData]);
 
   const loadPlanForEditing = async (planoId: string) => {
     try {
-      const { data: plano, error } = await supabase
+      // 1. Buscar plano principal
+      const { data: plano, error: planoError } = await supabase
         .from('planos_trabalho')
         .select('*')
         .eq('id', planoId)
         .single();
 
-      if (error) throw error;
-      if (plano) {
-        // Preencher formData com os dados do plano
-        setFormData(prev => ({
-          ...prev,
-          emenda: {
-            ...prev.emenda,
-            parlamentar: plano.parlamentar || '',
-            numero: plano.numero_emenda || '',
-            valor: plano.valor_total?.toString() || '0,00',
-            programa: plano.programa || ''
-          },
-          beneficiario: {
-            ...prev.beneficiario,
-            nome: plano.beneficiario_nome || '',
-            cnpj: plano.beneficiario_cnpj || ''
-          },
-          justificativa: plano.justificativa || ''
-        }));
-        setPlanoSalvoId(planoId); // Definir que este é um plano sendo editado
-      }
+      if (planoError) throw planoError;
+      if (!plano) throw new Error('Plano não encontrado');
+
+      // 2. Buscar metas quantitativas
+      const { data: acoes } = await supabase
+        .from('acoes_servicos')
+        .select('*')
+        .eq('plano_id', planoId);
+
+      // 3. Buscar metas qualitativas
+      const { data: metas } = await supabase
+        .from('metas_qualitativas')
+        .select('*')
+        .eq('plano_id', planoId);
+
+      // 4. Buscar naturezas de despesa
+      const { data: naturezas } = await supabase
+        .from('naturezas_despesa_plano')
+        .select('*')
+        .eq('plano_id', planoId);
+
+      // 5. Montar formData completo com todos os dados
+      const loadedFormData: FormState = {
+        emenda: {
+          parlamentar: plano.parlamentar || '',
+          numero: plano.numero_emenda || '',
+          valor: plano.valor_total?.toString() || '0,00',
+          valorExtenso: '',
+          programa: plano.programa || ''
+        },
+        beneficiario: {
+          nome: plano.beneficiario_nome || '',
+          cnes: plano.cnes || '',
+          cnpj: plano.beneficiario_cnpj || '',
+          email: '',
+          telefone: ''
+        },
+        planejamento: {
+          diretrizId: '',
+          objetivoId: '',
+          metaIds: []
+        },
+        acoesServicos: (acoes || []).map(a => ({
+          categoria: a.categoria || '',
+          item: a.item || '',
+          metasQuantitativas: [a.meta || ''],
+          valor: a.valor?.toString() || '0,00'
+        })),
+        metasQualitativas: (metas || []).map(m => ({
+          meta: m.meta_descricao || '',
+          valor: m.indicador?.toString() || '0'
+        })),
+        naturezasDespesa: (naturezas || []).map(n => ({
+          codigo: n.codigo || '',
+          valor: n.valor?.toString() || '0,00'
+        })),
+        justificativa: plano.justificativa || '',
+        responsavelAssinatura: plano.responsavel_assinatura || ''
+      };
+      
+      setFormData(loadedFormData);
+      setPlanoSalvoId(planoId);
+      const savedCopy = JSON.parse(JSON.stringify(loadedFormData));
+      setLastSavedFormData(savedCopy);
+      setFormHasChanges(false);
+      console.log(`✅ Plano ${planoId} carregado completamente com todos os dados para edição.`);
     } catch (error: any) {
       alert(`Erro ao carregar plano para editar: ${error.message}`);
       setEditingPlanId(null);
     }
   };
 
-  // DELETA UM PLANO
+  // DELETA UM PLANO (requer senha de admin)
   const deletePlan = async (planoId: string) => {
     if (!confirm('Tem certeza que deseja deletar este plano? Esta ação não pode ser desfeita.')) return;
     
+    // Verificar se é admin
+    if (!isAdmin()) {
+      alert('⚠️ Apenas administradores podem deletar planos.');
+      return;
+    }
+
+    // Solicitar senha de admin
+    const adminPassword = prompt('🔐 Digite a senha do administrador para confirmar a exclusão:');
+    if (!adminPassword) return;
+
     try {
-      // Deleta PDF do Storage
+      // Validar senha verificando com a API
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessão expirada');
+
+      // Tentar fazer login novamente com a senha fornecida para validar
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email || '',
+        password: adminPassword
+      });
+
+      if (authError) {
+        alert('❌ Senha de administrador incorreta.');
+        return;
+      }
+
+      // Senha correta, proceed com delete
       const plano = planosList.find(p => p.id === planoId);
       if (plano?.pdf_url) {
         await supabase.storage
@@ -681,45 +804,159 @@ const App: React.FC = () => {
           .remove([plano.pdf_url]);
       }
 
-      // Supabase cascata vai deletar as relacionadas automaticamente
       const { error } = await supabase
         .from('planos_trabalho')
         .delete()
         .eq('id', planoId);
 
       if (error) throw error;
-      alert('Plano deletado com sucesso!');
+      alert('✅ Plano deletado com sucesso!');
       await loadPlanos();
     } catch (error: any) {
+      console.error('Erro ao deletar:', error);
       alert(`Erro ao deletar: ${error.message}`);
     }
   };
 
-  // EXPORTA PLANOS PARA CSV
-  const exportToCSV = () => {
+  // DELETAR VÁRIOS PLANOS (bulk delete com senha de admin)
+  const bulkDeletePlanos = async () => {
+    if (selectedPlanos.size === 0) {
+      alert('Selecione planos para deletar');
+      return;
+    }
+
+    const confirmDelete = confirm(`Tem certeza que deseja deletar ${selectedPlanos.size} plano(s)? Esta ação não pode ser desfeita.`);
+    if (!confirmDelete) return;
+
+    // Solicitar senha de admin
+    const adminPassword = prompt('🔐 Digite a senha do administrador para confirmar a exclusão em massa:');
+    if (!adminPassword) return;
+
+    try {
+      // Validar senha
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessão expirada');
+
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email || '',
+        password: adminPassword
+      });
+
+      if (authError) {
+        alert('❌ Senha de administrador incorreta.');
+        return;
+      }
+
+      // Deletar PDFs e registros
+      for (const planoId of selectedPlanos) {
+        const plano = planosList.find(p => p.id === planoId);
+        if (plano?.pdf_url) {
+          await supabase.storage
+            .from('planos-trabalho-pdfs')
+            .remove([plano.pdf_url]);
+        }
+
+        const { error } = await supabase
+          .from('planos_trabalho')
+          .delete()
+          .eq('id', planoId);
+
+        if (error) throw error;
+      }
+
+      alert(`✅ ${selectedPlanos.size} plano(s) deletado(s) com sucesso!`);
+      setSelectedPlanos(new Set());
+      setShowBulkDeleteModal(false);
+      await loadPlanos();
+    } catch (error: any) {
+      console.error('Erro ao deletar:', error);
+      alert(`Erro ao deletar: ${error.message}`);
+    }
+  };
+
+  // EXPORTA PLANOS PARA CSV COM TODOS OS DADOS
+  const exportToCSV = async () => {
     if (planosList.length === 0) {
       alert('Nenhum plano para exportar');
       return;
     }
 
-    const headers = ['ID', 'Parlamentar', 'Nº Emenda', 'Valor Total', 'Programa', 'Beneficiário', 'CNPJ', 'Data Criação'];
-    const rows = planosList.map(p => [
-      p.id,
-      p.parlamentar,
-      p.numero_emenda,
-      p.valor_total || '0,00',
-      p.programa,
-      p.beneficiario_nome,
-      p.beneficiario_cnpj,
-      new Date(p.created_at).toLocaleDateString('pt-BR')
-    ]);
+    try {
+      // Buscar dados completos de cada plano
+      const fullPlanos = await Promise.all(
+        planosList.map(async (p) => {
+          // Buscar metas quantitativas
+          const { data: acoes } = await supabase
+            .from('acoes_servicos')
+            .select('*')
+            .eq('plano_id', p.id);
+          
+          // Buscar metas qualitativas
+          const { data: metas } = await supabase
+            .from('metas_qualitativas')
+            .select('*')
+            .eq('plano_id', p.id);
+          
+          // Buscar naturezas de despesa
+          const { data: naturezas } = await supabase
+            .from('naturezas_despesa_plano')
+            .select('*')
+            .eq('plano_id', p.id);
+          
+          return {
+            ...p,
+            acoes: acoes || [],
+            metas: metas || [],
+            naturezas: naturezas || []
+          };
+        })
+      );
 
-    const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `planos-trabalho-${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+      // Criar CSV com todos os dados
+      const headers = [
+        'ID',
+        'Parlamentar',
+        'Nº Emenda',
+        'Valor Total',
+        'Programa',
+        'Beneficiário',
+        'CNES',
+        'CNPJ',
+        'Justificativa',
+        'Metas Quantitativas (JSON)',
+        'Indicadores Qualitativos (JSON)',
+        'Naturezas de Despesa (JSON)',
+        'Data Criação',
+        'Data Atualização'
+      ];
+
+      const rows = fullPlanos.map(p => [
+        p.id,
+        p.parlamentar,
+        p.numero_emenda,
+        p.valor_total || '0,00',
+        p.programa,
+        p.beneficiario_nome,
+        p.cnes || '',
+        p.beneficiario_cnpj,
+        p.justificativa?.replace(/"/g, '""') || '',
+        JSON.stringify(p.acoes || []),
+        JSON.stringify(p.metas || []),
+        JSON.stringify(p.naturezas || []),
+        new Date(p.created_at).toLocaleDateString('pt-BR'),
+        p.updated_at ? new Date(p.updated_at).toLocaleDateString('pt-BR') : '—'
+      ]);
+
+      const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `planos-trabalho-completo-${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      alert('✅ CSV com todos os dados exportado com sucesso!');
+    } catch (error: any) {
+      alert(`Erro ao exportar CSV: ${error.message}`);
+    }
   };
 
   const parseCurrency = (val: string) => {
@@ -787,7 +1024,9 @@ const App: React.FC = () => {
             programa: formData.emenda.programa,
             beneficiario_nome: formData.beneficiario.nome,
             beneficiario_cnpj: formData.beneficiario.cnpj,
+            cnes: formData.beneficiario.cnes || null,
             justificativa: formData.justificativa,
+            responsavel_assinatura: formData.responsavelAssinatura,
             updated_at: new Date().toISOString()
           })
           .eq('id', planoSalvoId);
@@ -804,7 +1043,9 @@ const App: React.FC = () => {
             programa: formData.emenda.programa,
             beneficiario_nome: formData.beneficiario.nome,
             beneficiario_cnpj: formData.beneficiario.cnpj,
+            cnes: formData.beneficiario.cnes || null,
             justificativa: formData.justificativa,
+            responsavel_assinatura: formData.responsavelAssinatura,
             pdf_url: null,
             created_by: user.id
           }])
@@ -873,23 +1114,95 @@ const App: React.FC = () => {
   // }, [formData, isAuthenticated, currentView]);
 
   const handleFinalSend = async () => {
+    // Proteção contra duplo clique/envio
+    if (isSending) {
+      console.log("⚠️ Operação já em andamento, ignorando clique");
+      return null;
+    }
+
     setIsSending(true);
 
     try {
+      // VALIDAÇÃO: Total de Naturezas de Despesa não pode ultrapassar Total de Metas Quantitativas
+      const totalMetasQuantitativas = formData.acoesServicos.reduce((sum, acao) => sum + parseCurrency(acao.valor), 0);
+      const totalDespesas = formData.naturezasDespesa.reduce((sum, despesa) => sum + parseCurrency(despesa.valor), 0);
+      
+      if (totalDespesas > totalMetasQuantitativas) {
+        const diferenca = (totalDespesas - totalMetasQuantitativas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        alert(`⚠️ ERRO DE VALIDAÇÃO!\n\nO total de Naturezas de Despesa (R$ ${totalDespesas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) ultrapassa o Total de Metas Quantitativas (R$ ${totalMetasQuantitativas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) em R$ ${diferenca}.\n\nAjuste os valores de despesa antes de salvar.`);
+        setIsSending(false);
+        return null;
+      }
+
+      // VALIDAÇÃO 2: Se já tem plano salvo E não há mudanças = não fazer nada
+      if (planoSalvoId && lastSavedFormData) {
+        const currentJson = JSON.stringify(formData);
+        const savedJson = JSON.stringify(lastSavedFormData);
+        if (currentJson === savedJson) {
+          alert('⚠️ Nenhuma mudança detectada!\n\nO plano não foi alterado desde o último salvamento.');
+          setIsSending(false);
+          return planoSalvoId;
+        }
+      }
+
       console.log("1. Obtendo usuário...");
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sessão expirada. Faça login novamente.");
       console.log("✅ Usuário obtido:", user.id);
 
-      // Verificar se há mudanças antes de salvar
-      if (planoSalvoId) {
-        console.log("⏳ Verificando se há mudanças no plano...");
-        const hasChanges = await hasDataChanged();
-        if (!hasChanges) {
-          alert('⚠️ Nenhuma mudança detectada!\n\nO plano foi salvo com os mesmos dados anteriormente.\nNenhum novo plano será criado.');
-          setIsSending(false);
-          return planoSalvoId; // Retornar ID do plano existente
+      // VERIFICAR SE JÁ EXISTE PLANO NO BANCO - EVITAR DUPLICAÇÃO
+      let existingPlanoId = planoSalvoId;
+      
+      if (!existingPlanoId) {
+        // Verificar no banco se já existe plano com esta emenda
+        const { data: existingPlano, error: checkError } = await supabase
+          .from('planos_trabalho')
+          .select('id')
+          .eq('numero_emenda', formData.emenda.numero)
+          .eq('created_by', user.id)
+          .single();
+
+        if (checkError?.code === 'PGRST116') {
+          // Não encontrou nada - é novo plano
+          console.log("✅ É um novo plano (não existe emenda com este número)");
+        } else if (checkError && checkError.code !== 'PGRST116') {
+          // Erro real
+          throw checkError;
+        } else if (existingPlano) {
+          // Encontrou plano existente!
+          console.log(`✅ Plano existente encontrado: ${existingPlano.id}`);
+          existingPlanoId = existingPlano.id;
+          setPlanoSalvoId(existingPlano.id); // Sincronizar state
         }
+      }
+
+      // VERIFICAR SE JÁ EXISTE PLANO SALVO - NÃO CRIAR DUPLICADO
+      if (existingPlanoId) {
+        console.log(`⚠️ Plano ${existingPlanoId} já existe. Atualizando dados...`);
+        // Aqui só atualiza o plano existente, não cria novo
+        const { error: updateError } = await supabase
+          .from('planos_trabalho')
+          .update({
+            parlamentar: formData.emenda.parlamentar,
+            numero_emenda: formData.emenda.numero,
+            valor_total: parseCurrency(formData.emenda.valor),
+            programa: formData.emenda.programa,
+            beneficiario_nome: formData.beneficiario.nome,
+            beneficiario_cnpj: formData.beneficiario.cnpj,
+            cnes: formData.beneficiario.cnes || null,
+            justificativa: formData.justificativa,
+            responsavel_assinatura: formData.responsavelAssinatura,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingPlanoId);
+
+        if (updateError) throw updateError;
+        
+        console.log("✅ Plano atualizado");
+        setLastSavedFormData(JSON.parse(JSON.stringify(formData)));
+        setFormHasChanges(false);
+        setIsSending(false);
+        return existingPlanoId;
       }
 
       // 1. Inserir Plano Principal (SEM PDF URL)
@@ -903,7 +1216,9 @@ const App: React.FC = () => {
           programa: formData.emenda.programa,
           beneficiario_nome: formData.beneficiario.nome,
           beneficiario_cnpj: formData.beneficiario.cnpj,
+          cnes: formData.beneficiario.cnes || null,
           justificativa: formData.justificativa,
+          responsavel_assinatura: formData.responsavelAssinatura,
           pdf_url: null,
           created_by: user.id
         }])
@@ -971,6 +1286,12 @@ const App: React.FC = () => {
 
       console.log("✅ DADOS SALVOS COM SUCESSO!");
       setPlanoSalvoId(plano.id);
+      // Atualizar lastSavedFormData após salvar com sucesso
+      const savedCopy = JSON.parse(JSON.stringify(formData));
+      setLastSavedFormData(savedCopy);
+      // Resetar flag de mudanças após sucesso
+      setFormHasChanges(false);
+      console.log(`📌 Plano ${plano.id} salvo. lastSavedFormData atualizado.`);
       setShowEmailModal(true);
       return plano.id; // Retornar ID para uso síncrono
     } catch (error: any) {
@@ -1018,6 +1339,9 @@ const App: React.FC = () => {
     // JUSTIFICATIVA TÉCNICA - obrigatório
     if (!formData.justificativa?.trim()) missingFields.push('Justificativa Técnica');
 
+    // RESPONSÁVEL PELA ASSINATURA - obrigatório
+    if (!formData.responsavelAssinatura?.trim()) missingFields.push('Responsável pela Assinatura');
+
     return {
       isValid: missingFields.length === 0,
       missingFields
@@ -1026,9 +1350,26 @@ const App: React.FC = () => {
 
   // Gerar e salvar PDF
   const handleGeneratePDF = async () => {
+    // Proteção contra duplo clique/envio
+    if (isSending) {
+      console.log("⚠️ Operação já em andamento, ignorando clique");
+      return;
+    }
+
     setIsSending(true);
     try {
-      // Validar campos obrigatórios
+      // VALIDAÇÃO 1: Total de Naturezas de Despesa não pode ultrapassar Total de Metas Quantitativas
+      const totalMetasQuantitativas = formData.acoesServicos.reduce((sum, acao) => sum + parseCurrency(acao.valor), 0);
+      const totalDespesas = formData.naturezasDespesa.reduce((sum, despesa) => sum + parseCurrency(despesa.valor), 0);
+      
+      if (totalDespesas > totalMetasQuantitativas) {
+        const diferenca = (totalDespesas - totalMetasQuantitativas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        alert(`⚠️ ERRO DE VALIDAÇÃO!\n\nO total de Naturezas de Despesa (R$ ${totalDespesas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) ultrapassa o Total de Metas Quantitativas (R$ ${totalMetasQuantitativas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) em R$ ${diferenca}.\n\nNÃO É POSSÍVEL GERAR PDF!\n\nAjuste os valores de despesa antes de tentar novamente.`);
+        setIsSending(false);
+        return;
+      }
+
+      // VALIDAÇÃO 2: Validar campos obrigatórios
       const validation = validateRequiredFields();
       if (!validation.isValid) {
         const missingList = validation.missingFields.map((field, idx) => `${idx + 1}. ${field}`).join('\n');
@@ -1372,7 +1713,7 @@ Secretaria de Estado da Saúde de São Paulo`;
           <div className="px-16 py-12 print:px-12 print:py-8 text-gray-900 text-sm print:text-[13px] print:leading-relaxed">
             
             {/* SEÇÃO 1: IDENTIFICAÇÃO GERAL */}
-            <section className="mb-10 print:mb-8">
+            <section className="mb-10 print:mb-8 break-inside-avoid">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">01</div>
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Identificação Geral</h2>
@@ -1410,7 +1751,7 @@ Secretaria de Estado da Saúde de São Paulo`;
             </section>
 
             {/* SEÇÃO 2: DIRETRIZES, OBJETIVOS E METAS PLANEJADAS */}
-            <section className="mb-10 print:mb-8">
+            <section className="mb-10 print:mb-8 break-inside-avoid">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">02</div>
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Planejamento Estratégico</h2>
@@ -1456,7 +1797,7 @@ Secretaria de Estado da Saúde de São Paulo`;
             </section>
 
             {/* SEÇÃO 3: METAS QUANTITATIVAS */}
-            <section className="mb-10 print:mb-8">
+            <section className="mb-10 print:mb-8 break-inside-avoid">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">03</div>
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Metas Quantitativas</h2>
@@ -1498,7 +1839,7 @@ Secretaria de Estado da Saúde de São Paulo`;
             </section>
 
             {/* SEÇÃO 4: JUSTIFICATIVA TÉCNICA */}
-            <section className="mb-10 print:mb-8">
+            <section className="mb-10 print:mb-8 break-inside-avoid">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">04</div>
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Justificativa Técnica</h2>
@@ -1512,7 +1853,7 @@ Secretaria de Estado da Saúde de São Paulo`;
             </section>
 
             {/* SEÇÃO 5: INDICADORES QUALITATIVOS */}
-            <section className="mb-10 print:mb-8">
+            <section className="mb-10 print:mb-8 break-inside-avoid">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">05</div>
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Indicadores Qualitativos</h2>
@@ -1532,7 +1873,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                       {formData.metasQualitativas.map((meta, i) => (
                         <tr key={i} className="border-b border-gray-300">
                           <td className="border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">{meta.meta}</td>
-                          <td className="border border-gray-300 px-3 py-2 text-xs text-gray-800">{meta.valor}</td>
+                          <td className="border border-gray-300 px-3 py-2 text-xs text-gray-800">{meta.valor}%</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1543,7 +1884,7 @@ Secretaria de Estado da Saúde de São Paulo`;
               </div>
             </section>
             {formData.naturezasDespesa.length > 0 && (
-              <section className="mb-10 print:mb-8">
+              <section className="mb-10 print:mb-8 break-inside-avoid">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">06</div>
                   <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Execução Financeira</h2>
@@ -1580,6 +1921,37 @@ Secretaria de Estado da Saúde de São Paulo`;
             )}
           </div>
 
+          {/* ======== SEÇÃO 7: ASSINATURA ======== */}
+          <div className="px-16 py-12 print:px-12 print:py-8">
+          <section className="mb-10 print:mb-8 break-inside-avoid">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">07</div>
+              <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Responsável pela Assinatura</h2>
+            </div>
+            <div className="border-t border-gray-300 pt-4 pl-11">
+              <div className="space-y-8">
+                {/* Espaço para assinatura */}
+                <div className="text-center">
+                  <div className="mb-2 h-16 border-b-2 border-gray-800 print:border-gray-600"></div>
+                  <p className="text-xs font-bold text-gray-700 uppercase">Assinatura</p>
+                </div>
+
+                {/* Nome e Data */}
+                <div className="grid grid-cols-2 gap-8">
+                  <div>
+                    <p className="text-xs text-gray-600 font-bold mb-2">RESPONSÁVEL:</p>
+                    <p className="text-sm font-semibold text-gray-900 border-b border-gray-400 pb-2">{formData.responsavelAssinatura}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 font-bold mb-2">DATA:</p>
+                    <p className="text-sm font-semibold text-gray-900 border-b border-gray-400 pb-2">____ / ____ / ______</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          </div>
+
           {/* ======== RODAPÉ INSTITUCIONAL ======== */}
           <div className="border-t-4 border-red-700 px-16 py-8 print:px-12 print:py-6 bg-gradient-to-b from-gray-50 to-white print:bg-white text-xs text-gray-700">
             <div className="grid grid-cols-3 gap-4 mb-6">
@@ -1612,7 +1984,7 @@ Secretaria de Estado da Saúde de São Paulo`;
         </div>
 
         {/* ======== BOTÕES DE AÇÃO (fora do PDF) ======== */}
-        <div className="flex justify-center gap-4 p-6 bg-gray-100 border-t border-gray-300 flex-wrap">
+        <div className="flex justify-center gap-4 p-6 bg-gray-100 border-t border-gray-300 flex-wrap print:hidden">
           <button 
             onClick={() => setShowDocument(false)}
             className="px-6 py-3 bg-white border-2 border-gray-400 text-gray-900 font-bold text-sm uppercase tracking-widest rounded hover:bg-gray-50 hover:border-gray-600 transition-colors"
@@ -1661,7 +2033,7 @@ Secretaria de Estado da Saúde de São Paulo`;
               {isAuthenticated && (
                 <div className="hidden lg:flex items-center gap-6">
                   <button 
-                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); }}
+                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); }}
                     className={`text-sm font-bold uppercase tracking-wide transition-colors ${
                       currentView === 'new' 
                         ? 'text-red-400 border-b-2 border-red-500' 
@@ -1786,6 +2158,21 @@ Secretaria de Estado da Saúde de São Paulo`;
                             />
                           </div>
 
+                          {/* CNES da Instituição */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-bold text-gray-900">CNES da Instituição*</label>
+                            <input 
+                              type="text" 
+                              placeholder="Ex: 1234567"
+                              maxLength={7}
+                              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base transition-all"
+                              value={newUser.cnes}
+                              onChange={(e) => setNewUser({...newUser, cnes: e.target.value.replace(/\D/g, '').slice(0, 7)})}
+                              required
+                            />
+                            <p className="text-xs text-gray-500">7 dígitos - será associado automaticamente ao usuário</p>
+                          </div>
+
                           {/* Senha Inicial */}
                           <div className="space-y-2">
                             <label className="text-sm font-bold text-gray-900">Senha Inicial*</label>
@@ -1828,7 +2215,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                         )}
 
                         {/* Botão Registrar - Aparece apenas quando campos obrigatórios preenchidos */}
-                        {newUser.name && newUser.email && newUser.password && newUser.role && (
+                        {newUser.name && newUser.email && newUser.password && newUser.role && newUser.cnes && (
                           <button 
                             type="submit" 
                             disabled={isSending} 
@@ -1911,6 +2298,13 @@ Secretaria de Estado da Saúde de São Paulo`;
 
                               {/* E-mail */}
                               <p className="text-sm text-gray-600 mb-4 ml-13">{u.email}</p>
+
+                              {/* CNES */}
+                              {u.cnes && (
+                                <p className="text-sm text-gray-600 mb-4 ml-13 font-mono">
+                                  <span className="font-bold text-gray-700">CNES:</span> {u.cnes}
+                                </p>
+                              )}
 
                               {/* Ações */}
                               <div className="flex gap-2 pt-4 border-t border-gray-100">
@@ -2026,18 +2420,163 @@ Secretaria de Estado da Saúde de São Paulo`;
             </div>
           )}
 
+          {/* BULK DELETE MODAL */}
+          {showBulkDeleteModal && (
+            <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-slideUp">
+                <div className="bg-gradient-to-r from-red-600 to-red-700 px-8 py-6 border-b border-red-800/50 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-red-500/30">
+                      <AlertTriangle className="text-white w-6 h-6" />
+                    </div>
+                    <h2 className="text-2xl font-black text-white">Deletar Planos</h2>
+                  </div>
+                  <button 
+                    onClick={() => setShowBulkDeleteModal(false)} 
+                    className="p-2 hover:bg-red-500/50 rounded-lg transition-colors"
+                  >
+                    <X className="w-6 h-6 text-white" />
+                  </button>
+                </div>
+
+                <div className="p-8 space-y-6">
+                  <div>
+                    <p className="text-lg text-gray-700 leading-relaxed font-medium">
+                      Você está prestes a deletar <span className="font-black text-red-600">{selectedPlanos.size}</span> plano(s). 
+                      Esta ação é permanente e não pode ser desfeita.
+                    </p>
+                  </div>
+
+                  <div className="bg-red-50 rounded-2xl p-6 border border-red-200">
+                    <p className="text-sm text-gray-700 font-bold">Planos selecionados:</p>
+                    <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                      {Array.from(selectedPlanos).map(planoId => {
+                        const plano = planosList.find(p => p.id === planoId);
+                        return (
+                          <div key={planoId} className="text-sm text-gray-600 bg-white p-2 rounded border border-red-200">
+                            Emenda {plano?.numero_emenda} - {plano?.beneficiario_nome}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowBulkDeleteModal(false)}
+                      className="flex-1 py-3 bg-gray-200 text-gray-800 rounded-xl font-bold uppercase text-sm tracking-wider hover:bg-gray-300 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={bulkDeletePlanos}
+                      className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold uppercase text-sm tracking-wider hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" /> Deletar {selectedPlanos.size}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* VIEW: LISTA DE PLANOS */}
           {currentView === 'list' && (
-            <div className="space-y-8 animate-fadeIn">
-              <div className="flex justify-between items-center">
-                <h2 className="text-base font-black text-gray-900 uppercase tracking-wider">Meus Planos de Trabalho</h2>
-                <button 
-                  onClick={exportToCSV}
-                  className="flex items-center gap-2 px-8 py-4 bg-green-600 text-white rounded-xl font-bold text-base uppercase tracking-wider hover:bg-green-700 shadow-lg transition-all"
-                >
-                  <Download className="w-5 h-5" /> Exportar CSV
-                </button>
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-base font-black text-gray-900 uppercase tracking-wider">Meus Planos de Trabalho</h2>
+                  {planosList.length > 0 && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      📊 Total de {planosList.length} plano(s) • Valor Total: <span className="font-black text-red-600">R$ {planosList.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</span>
+                    </p>
+                  )}
+                </div>
+                {isAdmin() && (
+                  <button 
+                    onClick={exportToCSV}
+                    className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-green-700 shadow-lg transition-all"
+                  >
+                    <Download className="w-4 h-4" /> Exportar CSV
+                  </button>
+                )}
               </div>
+
+              {/* SELEÇÃO E BULK DELETE - Admin */}
+              {isAdmin() && (
+                <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedPlanos.size === planosList.length && planosList.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPlanos(new Set(planosList.map(p => p.id)));
+                          } else {
+                            setSelectedPlanos(new Set());
+                          }
+                        }}
+                        className="w-5 h-5 accent-amber-600"
+                      />
+                      <span className="font-bold text-sm text-amber-900">Selecionar Todos ({planosList.length})</span>
+                    </label>
+                    {selectedPlanos.size > 0 && (
+                      <button
+                        onClick={() => setShowBulkDeleteModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-red-700 transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" /> Deletar {selectedPlanos.size} Selecionado(s)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* FILTROS - Compactos */}
+              {isAdmin() && (
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest">🔍 Filtros de Pesquisa</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <input
+                      type="text"
+                      placeholder="CNES"
+                      value={filtros.cnes}
+                      onChange={(e) => setFiltros({...filtros, cnes: e.target.value})}
+                      className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Parlamentar"
+                      value={filtros.parlamentar}
+                      onChange={(e) => setFiltros({...filtros, parlamentar: e.target.value})}
+                      className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Emenda"
+                      value={filtros.emenda}
+                      onChange={(e) => setFiltros({...filtros, emenda: e.target.value})}
+                      className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600"
+                    />
+                    <input
+                      type="text"
+                      placeholder="CNPJ"
+                      value={filtros.cnpj}
+                      onChange={(e) => setFiltros({...filtros, cnpj: e.target.value})}
+                      className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600"
+                    />
+                  </div>
+                  {(filtros.cnes || filtros.parlamentar || filtros.emenda || filtros.cnpj) && (
+                    <button
+                      onClick={() => setFiltros({ cnes: '', parlamentar: '', emenda: '', cnpj: '' })}
+                      className="text-xs font-bold text-red-600 hover:text-red-700 uppercase tracking-widest"
+                    >
+                      ✕ Limpar Filtros
+                    </button>
+                  )}
+                </div>
+              )}
 
               {isLoadingPlanos ? (
                 <div className="flex justify-center py-20">
@@ -2049,61 +2588,113 @@ Secretaria de Estado da Saúde de São Paulo`;
                   <p className="text-xl text-gray-500 font-bold uppercase">Nenhum plano cadastrado</p>
                 </div>
               ) : (
-                <div className="grid gap-8">
-                  {planosList.map((plano) => (
-                    <div key={plano.id} className="bg-white p-8 rounded-2xl border-2 border-gray-200 shadow-sm hover:shadow-xl hover:border-red-400 transition-all">
-                      <div className={`grid ${isAdmin() ? 'grid-cols-1 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-4'} gap-6 mb-8`}>
-                        <div>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Parlamentar</p>
-                          <p className="text-xl font-bold text-gray-900">{plano.parlamentar}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Nº Emenda</p>
-                          <p className="text-xl font-bold text-gray-900">{plano.numero_emenda}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Valor Total</p>
-                          <p className="text-2xl font-black text-red-600">R$ {parseFloat(plano.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                        </div>
-                        {isAdmin() && (
-                          <div>
-                            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Autor</p>
-                            <p className="text-sm font-bold text-gray-900">{plano.created_by === currentUser?.username ? `${currentUser?.name} (Você)` : plano.created_by}</p>
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Data</p>
-                          <p className="text-lg font-bold text-gray-900">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</p>
-                        </div>
-                      </div>
-                      <div className="border-t-2 border-gray-100 pt-6 flex gap-6 justify-end flex-wrap">
-                        {canViewPlan(plano.created_by) && (
-                          <button 
-                            onClick={() => window.open(plano.pdf_url, '_blank')}
-                            className="flex items-center gap-2 px-6 py-3 bg-blue-100 text-blue-600 rounded-xl font-bold text-base uppercase tracking-wider hover:bg-blue-200 transition-all"
-                          >
-                            <FileText className="w-5 h-5" /> Ver PDF
-                          </button>
-                        )}
-                        {canEditPlan(plano.created_by) && (
-                          <>
-                            <button 
-                              onClick={() => { setCurrentView('new'); setEditingPlanId(plano.id); setActiveSection('info-emenda'); setSentSuccess(false); }}
-                              className="flex items-center gap-2 px-6 py-3 bg-orange-100 text-orange-600 rounded-xl font-bold text-base uppercase tracking-wider hover:bg-orange-200 transition-all"
-                            >
-                              <Settings2 className="w-5 h-5" /> Editar
-                            </button>
-                            <button 
-                              onClick={() => deletePlan(plano.id)}
-                              className="flex items-center gap-2 px-6 py-3 bg-red-100 text-red-600 rounded-xl font-bold text-base uppercase tracking-wider hover:bg-red-200 transition-all"
-                            >
-                              <Trash2 className="w-5 h-5" /> Deletar
-                            </button>
-                          </>
-                        )}
-                      </div>
+                <div className="space-y-3">
+                  {planosList
+                    .filter(plano => {
+                      if (filtros.cnes && !plano.cnes?.toLowerCase().includes(filtros.cnes.toLowerCase())) return false;
+                      if (filtros.parlamentar && !plano.parlamentar?.toLowerCase().includes(filtros.parlamentar.toLowerCase())) return false;
+                      if (filtros.emenda && !plano.numero_emenda?.toLowerCase().includes(filtros.emenda.toLowerCase())) return false;
+                      if (filtros.cnpj && !plano.beneficiario_cnpj?.toLowerCase().includes(filtros.cnpj.toLowerCase())) return false;
+                      return true;
+                    })
+                    .length === 0 ? (
+                    <div className="text-center py-16 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                      <p className="text-sm text-gray-600 font-bold">Nenhum plano encontrado com os filtros aplicados</p>
                     </div>
-                  ))}
+                  ) : (
+                    <>
+                      {(() => {
+                        const filteredPlanos = planosList.filter(plano => {
+                          if (filtros.cnes && !plano.cnes?.toLowerCase().includes(filtros.cnes.toLowerCase())) return false;
+                          if (filtros.parlamentar && !plano.parlamentar?.toLowerCase().includes(filtros.parlamentar.toLowerCase())) return false;
+                          if (filtros.emenda && !plano.numero_emenda?.toLowerCase().includes(filtros.emenda.toLowerCase())) return false;
+                          if (filtros.cnpj && !plano.beneficiario_cnpj?.toLowerCase().includes(filtros.cnpj.toLowerCase())) return false;
+                          return true;
+                        });
+                        const totalValue = filteredPlanos.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0);
+                        return (
+                          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200 mb-4">
+                            <p className="text-xs text-gray-700 font-bold mb-2">📊 {filteredPlanos.length} plano(s) encontrado(s)</p>
+                            <p className="text-sm font-black text-blue-600">Valor Total: R$ {totalValue.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</p>
+                          </div>
+                        );
+                      })()}
+                      {planosList
+                        .filter(plano => {
+                          if (filtros.cnes && !plano.cnes?.toLowerCase().includes(filtros.cnes.toLowerCase())) return false;
+                          if (filtros.parlamentar && !plano.parlamentar?.toLowerCase().includes(filtros.parlamentar.toLowerCase())) return false;
+                          if (filtros.emenda && !plano.numero_emenda?.toLowerCase().includes(filtros.emenda.toLowerCase())) return false;
+                          if (filtros.cnpj && !plano.beneficiario_cnpj?.toLowerCase().includes(filtros.cnpj.toLowerCase())) return false;
+                          return true;
+                        })
+                        .map((plano) => (
+                        <div key={plano.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-red-400 transition-all">
+                          <div className="flex items-start gap-3 mb-3">
+                            {isAdmin() && (
+                              <input
+                                type="checkbox"
+                                checked={selectedPlanos.has(plano.id)}
+                                onChange={(e) => {
+                                  const newSelected = new Set(selectedPlanos);
+                                  if (e.target.checked) {
+                                    newSelected.add(plano.id);
+                                  } else {
+                                    newSelected.delete(plano.id);
+                                  }
+                                  setSelectedPlanos(newSelected);
+                                }}
+                                className="w-5 h-5 accent-amber-600 mt-0.5 flex-shrink-0"
+                              />
+                            )}
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 flex-1">
+                              <div>
+                                <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Parlamentar</p>
+                                <p className="text-sm font-bold text-gray-900 truncate">{plano.parlamentar}</p>
+                              </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Emenda</p>
+                              <p className="text-sm font-bold text-gray-900 truncate">{plano.numero_emenda}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Valor</p>
+                              <p className="text-sm font-black text-red-600">R$ {parseFloat(plano.valor_total).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">CNES</p>
+                              <p className="text-sm font-bold text-gray-900 truncate font-mono">{plano.cnes || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">CNPJ</p>
+                              <p className="text-sm font-bold text-gray-900 truncate font-mono">{plano.beneficiario_cnpj || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Data</p>
+                              <p className="text-sm font-bold text-gray-900">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</p>
+                            </div>
+                            </div>
+                          </div>
+                          <div className="border-t border-gray-100 pt-2 flex gap-2 justify-end flex-wrap">
+                            {canEditPlan(plano.created_by) && (
+                              <>
+                                <button 
+                                  onClick={() => { setCurrentView('new'); setEditingPlanId(plano.id); setActiveSection('info-emenda'); setSentSuccess(false); }}
+                                  className="flex items-center gap-1 px-3 py-2 bg-orange-100 text-orange-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-orange-200 transition-all"
+                                >
+                                  <Settings2 className="w-4 h-4" /> Editar
+                                </button>
+                                <button 
+                                  onClick={() => deletePlan(plano.id)}
+                                  className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-red-200 transition-all"
+                                >
+                                  <Trash2 className="w-4 h-4" /> Deletar
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -2228,7 +2819,10 @@ Secretaria de Estado da Saúde de São Paulo`;
                       label="Programa Orçamentário"
                       value={formData.emenda.programa}
                       onChange={(e) => updateFormData('emenda', { ...formData.emenda, programa: e.target.value })}
-                      options={PROGRAMAS.map(p => ({ value: p, label: p }))}
+                      options={[
+                        { value: '', label: 'Selecione um Programa' },
+                        ...PROGRAMAS.map(p => ({ value: p, label: p }))
+                      ]}
                       required
                     />
                     <InputField
@@ -2297,6 +2891,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                         onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, cnes: maskCNES(e.target.value) })}
                         mask={(val: string) => maskCNES(val)}
                         placeholder="Código CNES"
+                        readOnly={currentUser?.cnes ? true : false}
                       />
                       <InputField
                         label="Email"
@@ -2481,6 +3076,18 @@ Secretaria de Estado da Saúde de São Paulo`;
                                 type="text"
                                 value={acao.valor}
                                 onChange={(e) => {
+                                  const recursoValue = parseFloat(formData.emenda.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                  const totalMetas = formData.acoesServicos.reduce((sum, item, i) => {
+                                    if (i === idx) return sum + parseFloat(e.target.value.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                    const value = parseFloat(item.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                    return sum + value;
+                                  }, 0);
+                                  
+                                  if (totalMetas > recursoValue) {
+                                    alert(`⚠️ Atenção!\n\nO valor total das Metas Quantitativas não pode ultrapassar o Valor do Recurso (R$ ${recursoValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+                                    return;
+                                  }
+                                  
                                   const newAcoes = [...formData.acoesServicos];
                                   newAcoes[idx].valor = maskCurrency(e.target.value);
                                   updateFormData('acoesServicos', newAcoes);
@@ -2721,6 +3328,18 @@ Secretaria de Estado da Saúde de São Paulo`;
                                 type="text"
                                 value={item.valor}
                                 onChange={(e) => {
+                                  const recursoValue = parseFloat(formData.emenda.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                  const totalDespesas = formData.naturezasDespesa.reduce((sum, nat, i) => {
+                                    if (i === idx) return sum + parseFloat(e.target.value.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                    const value = parseFloat(nat.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                    return sum + value;
+                                  }, 0);
+                                  
+                                  if (totalDespesas > recursoValue) {
+                                    alert(`⚠️ Atenção!\n\nO valor total da Execução Financeira não pode ultrapassar o Valor do Recurso (R$ ${recursoValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+                                    return;
+                                  }
+                                  
                                   const newNaturezas = [...formData.naturezasDespesa];
                                   newNaturezas[idx].valor = maskCurrency(e.target.value);
                                   updateFormData('naturezasDespesa', newNaturezas);
@@ -2842,7 +3461,14 @@ Secretaria de Estado da Saúde de São Paulo`;
                         onChange={(e) => updateFormData('justificativa', e.target.value)}
                         placeholder="Descreva a justificativa técnica do plano de trabalho..."
                         rows={5}
-                        maxLength={2000}
+                        required
+                      />
+
+                      <InputField
+                        label="Responsável pela Assinatura"
+                        value={formData.responsavelAssinatura}
+                        onChange={(e) => updateFormData('responsavelAssinatura', e.target.value)}
+                        placeholder="Nome completo da pessoa responsável..."
                         required
                       />
 
@@ -2878,14 +3504,16 @@ Secretaria de Estado da Saúde de São Paulo`;
                           </h4>
                           <Button
                             label={isSending ? "⏳ Gerando..." : "📥 Visualizar e Baixar PDF"}
-                            onClick={() => {
+                            onClick={async () => {
+                              if (isSending) return; // Proteger contra duplo clique
                               if (!planoSalvoId) {
                                 const save = confirm('O plano ainda não foi salvo. Deseja salvar agora e gerar o PDF?');
                                 if (save) {
-                                  handleFinalSend().then(() => {
+                                  const savedId = await handleFinalSend();
+                                  if (savedId) {
                                     setShowDocument(true);
                                     setTimeout(() => handleGeneratePDF(), 1000);
-                                  });
+                                  }
                                 }
                               } else {
                                 setShowDocument(true);

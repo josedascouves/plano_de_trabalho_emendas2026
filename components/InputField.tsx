@@ -16,6 +16,7 @@ interface InputFieldProps {
   maxLength?: number;
   success?: boolean;
   hideBottomMargin?: boolean;
+  readOnly?: boolean;
 }
 
 export const InputField: React.FC<InputFieldProps> = ({
@@ -33,6 +34,7 @@ export const InputField: React.FC<InputFieldProps> = ({
   maxLength,
   success = false,
   hideBottomMargin = false,
+  readOnly = false,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
 
@@ -77,6 +79,7 @@ export const InputField: React.FC<InputFieldProps> = ({
           onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
           disabled={disabled}
+          readOnly={readOnly}
           maxLength={maxLength}
           aria-label={label}
           aria-required={required}
@@ -97,6 +100,7 @@ export const InputField: React.FC<InputFieldProps> = ({
                     : 'border-gray-300 bg-white focus:border-red-600 focus:ring-red-100'
             }
             ${disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : ''}
+            ${readOnly ? 'bg-gray-50 text-gray-700 border-gray-300 cursor-default' : ''}
           `}
         />
 

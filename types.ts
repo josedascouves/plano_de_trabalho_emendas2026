@@ -32,6 +32,7 @@ export interface User {
   password?: string;
   role: 'admin' | 'user';
   name: string;
+  cnes?: string;
 }
 
 export interface FormState {
@@ -69,4 +70,5 @@ export interface FormState {
     valor: string;
   }>;
   justificativa: string;
+  responsavelAssinatura: string;
 }

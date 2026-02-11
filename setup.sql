@@ -33,9 +33,11 @@ CREATE TABLE public.planos_trabalho (
   programa TEXT,
   beneficiario_nome TEXT,
   beneficiario_cnpj TEXT,
+  cnes TEXT,
   justificativa TEXT,
   pdf_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   created_by UUID REFERENCES auth.users NOT NULL
 );
 

@@ -434,7 +434,9 @@ export const DIRETRIZES: Diretriz[] = [
 
 export const PROGRAMAS = [
   "CUSTEIO MAC – 2E90",
-  "PMAE COMPONENTE CIRURGIA - (PNRF/MUTIRÃO)"
+  "PMAE COMPONENTE CIRURGIA - (PNRF/MUTIRÃO)",
+  "CUSTEIO DA MÉDIA E ALTA COMPLEXIDADE - PORTARIA 10.169 - PARCELA SUPLEMENTAR",
+  "PROGRAMA AGORA TEM ESPECIALISTA"
 ];
 
 export const ACOES_SERVICOS_POR_PROGRAMA: Record<string, AcaoServico[]> = {
@@ -505,6 +507,118 @@ export const ACOES_SERVICOS_POR_PROGRAMA: Record<string, AcaoServico[]> = {
       categoria: 'OFERTAS DE CUIDADOS INTEGRADOS - OCI',
       itens: ['OCI em Cardiologia', 'OCI em Ginecologia', 'OCI em Oftalmologia', 'OCI em Oncologia', 'OCI em Ortopedia', 'OCI em Otorrinolaringologia']
     }
+  ],
+  "CUSTEIO DA MÉDIA E ALTA COMPLEXIDADE - PORTARIA 10.169 - PARCELA SUPLEMENTAR": [
+    {
+      categoria: 'III - REDE ALYNE',
+      itens: [
+        'Casa da Gestante, Bebê e Puerpéra (CGBP)',
+        'Centro de Parto Normal (CPN)',
+        'Parto e Nascimento Alto Risco',
+        'Parto e Nascimento Baixo Risco',
+        'Pré-Natal de Alto Risco',
+        'Seguimento do RN e Criança de Risco',
+        'Unidades Neonatais'
+      ]
+    },
+    {
+      categoria: 'IV - POLÍTICA NACIONAL DE PREVENÇÃO E CONTROLE DE CÂNCER',
+      itens: [
+        'Anatomia Patológica - Anticorpos para Imunoistoquímica',
+        'Anatomia Patológica - Reagentes em Geral',
+        'Cirurgia Oncológica - Material para Cirurgia Videolaparoscópica',
+        'Medicina Nuclear - Diagnóstico em Oncologia',
+        'Medicina Nuclear - Radiofármacos',
+        'Medicina Nuclear - Teranóstico',
+        'Quimioterapia - Custeio para Infusão',
+        'Quimioterapia - Custeio para Quimioterápicos e Agentes Antineoplásicos Padronizados na CONITEC',
+        'Radiointervenção - Material para Drenagem Biliar Percutânea',
+        'Radiointervenção - Material para Nefrostomia',
+        'Radiointervenção - Material para Radioablação',
+        'Radioterapia - Custeio de Procedimentos em Radioterapia',
+        'Radioterapia - Custeio para o Transporte Sanitário',
+        'Radioterapia - Tratamento Fora de Domicílio',
+        'Reabilitação – Próteses'
+      ]
+    },
+    {
+      categoria: 'VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE',
+      itens: [
+        'Alta Complexidade',
+        'Atenção Domiciliar',
+        'Central de Regulação',
+        'Média Complexidade',
+        'Outros - Apresentar Justificativa',
+        'Pessoa com Deficiência',
+        'Rede Materna Infantil',
+        'Rede de Urgência',
+        'SAMU',
+        'Saúde Mental',
+        'Saúde do Trabalhador',
+        'Unidade Coronariana',
+        'Unidade de Cuidados Prolongados',
+        'Unidade de Terapia Intensiva'
+      ]
+    }
+  ],
+  "PROGRAMA AGORA TEM ESPECIALISTA": [
+    {
+      categoria: 'I - PROGRAMA AGORA TEM ESPECIALISTA - COMPONENTE AMBULATORIAL',
+      itens: [
+        'OCI em Cardiologia',
+        'OCI em Ginecologia',
+        'OCI em Oftalmologia',
+        'OCI em Oncologia',
+        'OCI em Ortopedia',
+        'OCI em Otorrinolaringologia'
+      ]
+    },
+    {
+      categoria: 'II - PROGRAMA AGORA TEM ESPECIALISTA - COMPONENTE CIRÚRGICO',
+      itens: [
+        'Cardiologia - Alta Complexidade',
+        'Cardiologia - Média Complexidade',
+        'Ginecologia - Alta Complexidade',
+        'Ginecologia - Baixa Complexidade',
+        'Ginecologia - Média Complexidade',
+        'Oftalmologia - Alta Complexidade',
+        'Oftalmologia - Baixa Complexidade',
+        'Oftalmologia - Média Complexidade',
+        'Oncologia - Alta Complexidade',
+        'Oncologia - Baixa Complexidade',
+        'Oncologia - Média Complexidade',
+        'Oncologia ou Outros - Alta Complexidade',
+        'Oncologia ou Outros - Média Complexidade',
+        'Ortopédia - Alta Complexidade',
+        'Ortopédia - Baixa Complexidade',
+        'Ortopédia - Média Complexidade',
+        'Otorrinolaringologia - Alta Complexidade',
+        'Otorrinolaringologia - Baixa Complexidade',
+        'Otorrinolaringologia - Média Complexidade',
+        'Outras Cirurgias - Alta Complexidade',
+        'Outras Cirurgias - Baixa Complexidade',
+        'Outras Cirurgias - Média Complexidade'
+      ]
+    },
+    {
+      categoria: 'VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE',
+      itens: [
+        'Alta Complexidade',
+        'Atenção Domiciliar',
+        'Central de Regulação',
+        'Média Complexidade',
+        'Outros - Apresentar Justificativa',
+        'Pessoa com Deficiência',
+        'Rede Materna Infantil',
+        'Rede de Urgência',
+        'SAMU',
+        'Saúde Mental',
+        'Saúde do Trabalhador',
+        'Unidade Coronariana',
+        'Unidade de Cuidados Prolongados',
+        'Unidade de Terapia Intensiva'
+      ]
+    }
   ]
 };
 
@@ -522,10 +636,13 @@ export const METAS_QUALITATIVAS_OPTIONS = [
 ];
 
 export const NATUREZAS_DESPESA: NaturezaDespesa[] = [
+  { codigo: '339004', descricao: 'CONTRATACAO POR TEMPO DETERMINADO - PES.CIVIL' },
+  { codigo: '339092', descricao: 'DESPESAS DE EXERCICIOS ANTERIORES' },
   { codigo: '339037', descricao: 'LOCACAO DE MAO-DE-OBRA' },
   { codigo: '339030', descricao: 'MATERIAL DE CONSUMO' },
   { codigo: '339039', descricao: 'OUTROS SERVICOS DE TERCEIROS-PESSOA JURIDICA' },
   { codigo: '339033', descricao: 'PASSAGENS E DESPESAS COM LOCOMOÇÃO' },
   { codigo: '339040', descricao: 'SERVICOS DE TECNOLOGIA DA INFORMACAO E COMUNICACAO - PESSOA JURIDICA' },
-  { codigo: '339092', descricao: 'DESPESAS DE EXERCICIOS ANTERIORES' }
+  { codigo: '335043', descricao: 'SUBVENCOES SOCIAIS' },
+  { codigo: '335085', descricao: 'TRANSFERENCIAS POR MEIO DE CONTRATO DE GESTAO' }
 ];

@@ -1,6 +1,5 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import html2pdf from 'html2pdf.js';
 import { 
   ClipboardCheck, 
   User as UserIcon, 
@@ -1393,77 +1392,16 @@ const App: React.FC = () => {
         if (!currentPlanoId) throw new Error("Falha ao salvar plano");
       }
 
-      // 2. Gerar PDF
-      const element = document.getElementById('pdf-document');
-      if (!element) throw new Error("Documento PDF não encontrado");
+      // 2. Abrir diálogo de impressão (navegador respeitará quebras naturalmente)
+      console.log("Abrindo diálogo de impressão...");
+      setTimeout(() => {
+        window.print();
+      }, 500);
 
-      const filename = `Plano_Trabalho_${formData.emenda.numero}_${new Date().toISOString().split('T')[0]}.pdf`;
-      
-      const options = {
-        margin: 5,
-        filename: filename,
-        image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { orientation: 'portrait' as const, unit: 'mm', format: 'a4' },
-        pagebreak: { avoid: ['tr', '.evitar-quebra'] }
-      };
-
-      // Gerar PDF em memória
-      const pdfBlob = await new Promise<Blob>((resolve, reject) => {
-        html2pdf().set(options).from(element).outputPdf('blob').then((blob: Blob) => {
-          resolve(blob);
-        }).catch(reject);
-      });
-
-      // 3. Fazer download automático
-      const url = URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      // 4. Salvar PDF no Supabase Storage
-      console.log("Salvando PDF no Storage...");
-      const pdfPath = `planos/${currentPlanoId}/${filename}`;
-      const { error: uploadError } = await supabase.storage
-        .from('planos-trabalho-pdfs')
-        .upload(pdfPath, pdfBlob);
-
-      if (uploadError) {
-        console.warn("Aviso ao salvar no storage:", uploadError);
-        // Continuar mesmo se falhar o storage (arquivo foi baixado)
-      }
-
-      // 5. Obter URL pública do PDF
-      let pdfUrl = null;
-      if (!uploadError) {
-        const { data } = supabase.storage
-          .from('planos-trabalho-pdfs')
-          .getPublicUrl(pdfPath);
-        pdfUrl = data.publicUrl;
-      }
-
-      // 6. Atualizar plano com URL do PDF
-      console.log("Atualizando plano com PDF URL...");
-      const { error: updateError } = await supabase
-        .from('planos_trabalho')
-        .update({ 
-          pdf_url: pdfUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', currentPlanoId);
-
-      if (updateError) {
-        console.warn("Aviso ao atualizar plano:", updateError);
-      }
-
-      alert('✅ PDF gerado e salvo com sucesso!\n\nO arquivo foi baixado para seus Downloads e também salvo no Sistema.');
+      alert('✅ Plano salvo com sucesso!\n\nAgora você pode salvar como PDF ou imprimir através da janela de impressão que se abriu.');
     } catch (error: any) {
-      console.error("Erro ao gerar PDF:", error);
-      alert(`⚠️ Erro ao gerar PDF:\n\n${error.message}`);
+      console.error("Erro ao salvar plano:", error);
+      alert(`⚠️ Erro ao salvar plano:\n\n${error.message}`);
     } finally {
       setIsSending(false);
     }
@@ -1996,13 +1934,7 @@ Secretaria de Estado da Saúde de São Paulo`;
             disabled={isSending}
             className="px-6 py-3 bg-blue-700 text-white font-bold text-sm uppercase tracking-widest rounded hover:bg-blue-800 transition-colors disabled:opacity-50"
           >
-            {isSending ? "⏳ Gerando..." : "💾 Salvar e Baixar PDF"}
-          </button>
-          <button 
-            onClick={() => window.print()}
-            className="px-6 py-3 bg-red-700 text-white font-bold text-sm uppercase tracking-widest rounded hover:bg-red-800 transition-colors"
-          >
-            🖨️ Imprimir
+            {isSending ? "⏳ Salvando..." : "🖨️ Visualizar e Salvar como PDF"}
           </button>
         </div>
       </div>

@@ -1509,7 +1509,7 @@ const App: React.FC = () => {
   };
 
   const handleSendToSES = () => {
-    const subject = `Plano de Trabalho 2026 - Emenda ${formData.emenda.numero}`;
+    const subject = `Plano de Trabalho 2026 - Emenda ${formData.emenda.numero} - CNES ${formData.beneficiario.cnes || 'N/A'}`;
     const emailBody = `Prezados,
 
 Segue em anexo o Plano de Trabalho 2026 relativo à Emenda Parlamentar nº ${formData.emenda.numero}.
@@ -1522,6 +1522,7 @@ Programa: ${formData.emenda.programa}
 Valor Total: R$ ${formData.emenda.valor}
 Beneficiário: ${formData.beneficiario.nome}
 CNPJ: ${formData.beneficiario.cnpj}
+CNES: ${formData.beneficiario.cnes}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Por favor, anexe o PDF assinado a este email antes de enviar.

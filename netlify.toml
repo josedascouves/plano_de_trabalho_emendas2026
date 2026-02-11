@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "supabase/functions"
+
+[context.production]
+  command = "npm run build"
+  publish = "dist"

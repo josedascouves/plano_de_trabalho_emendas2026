@@ -1778,14 +1778,14 @@ Secretaria de Estado da Saúde de São Paulo`;
             </section>
 
             {/* SEÇÃO 4: JUSTIFICATIVA TÉCNICA */}
-            <section className="mb-10 print:mb-8 break-inside-avoid">
+            <section className="mb-10 print:mb-8">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">04</div>
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Justificativa Técnica</h2>
               </div>
               <div className="border-t border-gray-300 pt-4 pl-11">
                 <p className="text-xs text-gray-600 mb-4">Fundamentação estratégica e objetivos</p>
-                <div className="border-l-4 border-red-700 bg-gray-50 print:bg-white pl-4 pr-3 py-3 text-xs leading-relaxed text-gray-900 text-justify whitespace-normal break-words print:max-h-[200px] print:overflow-hidden">
+                <div className="border-l-4 border-red-700 bg-gray-50 print:bg-white pl-4 pr-3 py-3 text-xs leading-relaxed text-gray-900 text-justify whitespace-pre-wrap break-words">
                   {formData.justificativa || '—'}
                 </div>
               </div>
@@ -1861,29 +1861,29 @@ Secretaria de Estado da Saúde de São Paulo`;
           </div>
 
           {/* ======== SEÇÃO 7: ASSINATURA ======== */}
-          <div className="px-16 py-12 print:px-12 print:py-8">
-          <section className="mb-10 print:mb-8 break-inside-avoid">
+          <div className="px-16 py-12 print:px-12 print:py-8 print:page-break-before-avoid" style={{pageBreakInside: 'avoid'}}>
+          <section className="mb-10 print:mb-8" style={{pageBreakInside: 'avoid'}}>
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">07</div>
               <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Responsável pela Assinatura</h2>
             </div>
             <div className="border-t border-gray-300 pt-4 pl-11">
-              <div className="space-y-8">
+              <div className="space-y-12 print:space-y-10">
                 {/* Espaço para assinatura */}
                 <div className="text-center">
-                  <div className="mb-2 h-16 border-b-2 border-gray-800 print:border-gray-600"></div>
-                  <p className="text-xs font-bold text-gray-700 uppercase">Assinatura</p>
+                  <div className="mb-3 h-20 border-b-2 border-gray-800 print:border-gray-600 print:h-16"></div>
+                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest">Assinatura</p>
                 </div>
 
                 {/* Nome e Data */}
-                <div className="grid grid-cols-2 gap-8">
+                <div className="grid grid-cols-2 gap-12 print:gap-8">
                   <div>
-                    <p className="text-xs text-gray-600 font-bold mb-2">RESPONSÁVEL:</p>
-                    <p className="text-sm font-semibold text-gray-900 border-b border-gray-400 pb-2">{formData.responsavelAssinatura}</p>
+                    <p className="text-xs text-gray-600 font-bold mb-3 uppercase tracking-widest">Responsável:</p>
+                    <p className="text-sm font-semibold text-gray-900 border-b-2 border-gray-400 pb-3 print:pb-2 print:border-gray-600 print:text-xs">{formData.responsavelAssinatura || '_'.repeat(40)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 font-bold mb-2">DATA:</p>
-                    <p className="text-sm font-semibold text-gray-900 border-b border-gray-400 pb-2">____ / ____ / ______</p>
+                    <p className="text-xs text-gray-600 font-bold mb-3 uppercase tracking-widest">Data:</p>
+                    <p className="text-sm font-semibold text-gray-900 border-b-2 border-gray-400 pb-3 print:pb-2 print:border-gray-600 print:text-xs">_____  /  _____  /  _________</p>
                   </div>
                 </div>
               </div>

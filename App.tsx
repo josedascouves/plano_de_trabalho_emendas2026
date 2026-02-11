@@ -222,8 +222,8 @@ const App: React.FC = () => {
       ]
     },
     'metas-qualitativas': {
-      title: 'Indicadores Qualitativos - Monitoramento e Qualidade',
-      description: 'Defina os indicadores que rastrearão a qualidade da execução. Estes servem para monitoramento contínuo durante o ano.',
+      title: 'Indicadores Qualitativos - Monitoramento e Qualidade (Opcional)',
+      description: 'Defina os indicadores que rastrearão a qualidade da execução. Estes servem para monitoramento contínuo durante o ano. Campo opcional.',
       tips: [
         'Indicador de Qualidade: Selecione métricas relevantes (ex: "% de pacientes resolvidos na 1ª consulta", "Satisfação em atendimento")',
         'Valor Alvo: Meta percentual (ex: 85% para resolução na 1ª consulta) ou quantidade (ex: 500 pacientes atendidos)',
@@ -703,8 +703,8 @@ const App: React.FC = () => {
       ),
       // Seção 4: Metas Quantitativas - completa se houver pelo menos uma ação
       'metas-quantitativas': formData.acoesServicos.length > 0,
-      // Seção 5: Indicadores Qualitativos - completa se houver pelo menos um indicador
-      'metas-qualitativas': formData.metasQualitativas.length > 0,
+      // Seção 5: Indicadores Qualitativos - OPCIONAL (não precisa de itens)
+      'metas-qualitativas': true,
       // Seção 6: Execução Financeira - completa se houver pelo menos uma natureza
       'execucao-financeira': formData.naturezasDespesa.length > 0,
       // Seção 7: Finalização - completa se justificativa e responsável preenchidos
@@ -1509,8 +1509,8 @@ const App: React.FC = () => {
     // METAS QUANTITATIVAS - obrigatório (pelo menos um item)
     if (formData.acoesServicos.length === 0) missingFields.push('Metas Quantitativas (adicione pelo menos uma ação/serviço)');
 
-    // INDICADORES QUALITATIVOS - obrigatório (pelo menos um item)
-    if (formData.metasQualitativas.length === 0) missingFields.push('Indicadores Qualitativos (adicione pelo menos um indicador)');
+    // INDICADORES QUALITATIVOS - OPCIONAL (não é obrigatório)
+    // Removido: validação de requiredFields
 
     // EXECUÇÃO FINANCEIRA - obrigatório (pelo menos um item)
     if (formData.naturezasDespesa.length === 0) missingFields.push('Execução Financeira - Natureza de Despesa (adicione pelo menos uma despesa)');
@@ -1975,7 +1975,7 @@ Secretaria de Estado da Saúde de São Paulo`;
             <section className="mb-10 print:mb-8 break-inside-avoid">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex items-center justify-center w-8 h-8 bg-red-700 text-white font-black text-xs rounded-sm print:rounded-none print:w-7 print:h-7 print:text-[11px]">05</div>
-                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Indicadores Qualitativos</h2>
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Indicadores Qualitativos <span className="text-xs font-normal">(Opcional)</span></h2>
               </div>
               <div className="border-t border-gray-300 pt-4 pl-11">
                 <p className="text-xs text-gray-600 mb-4">Indicadores de qualidade e acompanhamento</p>
@@ -3361,8 +3361,8 @@ Secretaria de Estado da Saúde de São Paulo`;
                 {/* SECTION 5: INDICADORES QUALITATIVOS */}
                 <Section
                   id="metas-qualitativas"
-                  title="Indicadores Qualitativos"
-                  description="Adicione indicadores qualitativos complementares"
+                  title="Indicadores Qualitativos (Opcional)"
+                  description="Adicione indicadores qualitativos complementares (opcional)"
                   icon={<BarChart3 className="w-6 h-6" />}
                   step={5}
                   totalSteps={7}

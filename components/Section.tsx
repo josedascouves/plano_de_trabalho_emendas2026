@@ -48,7 +48,7 @@ export const Section: React.FC<SectionProps> = ({
             {onHelpClick && (
               <button
                 onClick={onHelpClick}
-                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                className="p-2 text-gray-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
                 title="Clique para obter ajuda sobre como preencher esta seção"
                 aria-label={`Ajuda para ${title}`}
               >

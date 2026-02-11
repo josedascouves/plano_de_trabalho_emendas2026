@@ -165,85 +165,97 @@ const App: React.FC = () => {
   
   const canEditPlan = (planCreatedBy: string): boolean => {
     if (!currentUser) return false;
-    return isAdmin() || planCreatedBy === currentUser.username;
+    return isAdmin() || planCreatedBy === currentUser.id;
   };
   
   const canViewPlan = (planCreatedBy: string): boolean => {
     if (!currentUser) return false;
-    return isAdmin() || planCreatedBy === currentUser.username;
+    return isAdmin() || planCreatedBy === currentUser.id;
   };
 
   // Help Content for each section
   const helpContent: {[key: string]: {title: string; description: string; tips: string[]}} = {
     'info-emenda': {
-      title: 'Informações da Emenda',
-      description: 'Registre os dados básicos da emenda parlamentar que você deseja utilizar neste plano de trabalho.',
+      title: 'Informações da Emenda Parlamentar',
+      description: 'Registre os dados basilares da emenda parlamentar que você deseja utilizar neste plano de trabalho. Todas as informações devem corresponder ao documento oficial da emenda no Congresso Nacional.',
       tips: [
-        'Parlamentar: Digite o nome do deputado ou senador que originou a emenda',
-        'Número: Use o número oficial da emenda (ex: 123/2026)',
-        'Valor: Informe o valor total em reais (ex: 100000)',
-        'Programa: Selecione o programa de custeio correspondente'
+        'Parlamentar: Nome completo (ex: João da Silva, Senador). Busque informações no site da Câmara/Senado',
+        'Número da Emenda: Número oficial e ano (ex: 123/2026). Consulte o documento original ou correspondência da emenda',
+        'Valor Total: Valor em reais. Digite apenas números (ex: 500000 para R$ 500.000,00)',
+        'Programa: Selecione o programa alinhado às ações (Atenção Básica, Urgência, Serviços Especializados, etc)',
+        'Importante: Os dados devem estar alinhados com a Portaria de Emendas Parlamentares 2026'
       ]
     },
     'beneficiario': {
-      title: 'Dados do Beneficiário',
-      description: 'Identifique a instituição ou serviço que se beneficiará dos recursos.',
+      title: 'Dados do Beneficiário - Identificação da Instituição',
+      description: 'Identifique com precisão a instituição que será beneficiada. Este campo é crítico para auditoria e conformidade regulatória.',
       tips: [
-        'Nome: Nome completo do estabelecimento de saúde ou entidade',
-        'CNES: Código Nacional do Estabelecimento de Saúde (8 dígitos)',
-        'CNPJ: Insira o CNPJ da instituição sem pontos ou barras',
-        'E-mail: E-mail de contato válido',
-        'Telefone: Número com DDD (ex: 11999999999)'
+        'Nome da Instituição: Nome completo e oficial do estabelecimento (ex: Hospital Municipal São João da Boa Vista)',
+        'CNES: Código Nacional com 8 dígitos (obtém em: saude.sp.gov.br ou no CNES Nacional). Verifique a vigência',
+        'CNPJ: 14 dígitos sem formatação (ex: 12345678901234). Se PJ, valide na Receita Federal',
+        'E-mail Institucional: Utilize e-mail corporativo quando disponível. Ex: contato@hospital.sp.gov.br',
+        'Telefone com DDD: Use formato completo com DDD (ex: 11999887766). Incluir ramal se houver',
+        'Revisão: Verifique todas as informações antes de salvar. Erros aqui afetam toda a auditoria'
       ]
     },
     'alinhamento': {
-      title: 'Alinhamento Estratégico',
-      description: 'Alinhe o seu plano com as diretrizes e objetivos estratégicos da SES-SP.',
+      title: 'Alinhamento Estratégico com Diretrizes SES-SP',
+      description: 'Conecte seu plano às diretrizes estratégicas da Secretaria de Estado da Saúde. Este alinhamento é obrigatório para aprovação e conformidade.',
       tips: [
-        'Diretriz: Escolha a diretriz que melhor se alinha com sua proposta',
-        'Objetivo: Selecione o objetivo estratégico relacionado',
-        'Metas: Marque as metas que esta emenda ajudará a cumprir'
+        'Diretriz: Escolha a diretriz-mãe que melhor se alinha (ex: "Reafirmar o SUS como política de Estado"). Leia a descrição completa',
+        'Objetivo Estratégico: Selecione um objetivo dentro da diretriz (ex: "Garantir a gestão bipartite com pactuação em CIB")',
+        'Metas Relacionadas: Marque as metas que sua emenda ajudará a cumprir. Pode selecionar múltiplas metas',
+        'Justificativa: Na seção final, explique COMO suas ações contribuem para atingir as metas selecionadas',
+        'Exemplos Práticos: Emenda para consultas → pode contribuir para "Garantir o acesso oportuno à atenção integral"'
       ]
     },
     'metas-quantitativas': {
-      title: 'Metas Quantitativas',
-      description: 'Defina as ações/serviços e suas respectivas execuções financeiras.',
+      title: 'Metas Quantitativas - Ações e Alocação Financeira',
+      description: 'Defina quais ações/serviços serão realizados e quanto de cada emenda será destinado a cada ação. O sistema valida automaticamente o total.',
       tips: [
-        'Grupo de Ação: Selecione a categoria de ação (ex: Consultas, Procedimentos)',
-        'Ação Específica: Escolha a ação específica dentro do grupo',
-        'Valor: Informe o valor monetário alocado para essa ação',
-        'O sistema calcula automaticamente o total das ações'
+        'Grupo de Ação: Selecione por tipo (Consultas Especializadas, Procedimentos, Medicamentos, Capacitação, etc)',
+        'Ação Específica: Escolha a ação detalhada dentro do grupo (ex: "Consulta de Oftalmologia" dentro de Consultas)',
+        'Valor: Informe o valor em reais para essa ação. Ex: 50000 para R$ 50.000,00',
+        'Múltiplas Ações: Pode adicionar várias ações. A soma deve ser ≤ valor total da emenda',
+        'Validação: O sistema avisa se houver divergências. Releia as ações se o total não bater',
+        'Dica: Seja específico nas ações. "Consulta" é vago. "Consulta Oftalmológica em Unidade de Referência" é mais claro'
       ]
     },
     'metas-qualitativas': {
-      title: 'Indicadores Qualitativos',
-      description: 'Defina indicadores de qualidade que serão monitorados durante a execução.',
+      title: 'Indicadores Qualitativos - Monitoramento e Qualidade',
+      description: 'Defina os indicadores que rastrearão a qualidade da execução. Estes servem para monitoramento contínuo durante o ano.',
       tips: [
-        'Indicador: Selecione um indicador qualitativo relevante',
-        'Valor: Informe o valor alvo (percentual ou quantidade)',
-        'Os indicadores ajudam a medir o sucesso da execução',
-        'Você pode adicionar múltiplos indicadores'
+        'Indicador de Qualidade: Selecione métricas relevantes (ex: "% de pacientes resolvidos na 1ª consulta", "Satisfação em atendimento")',
+        'Valor Alvo: Meta percentual (ex: 85% para resolução na 1ª consulta) ou quantidade (ex: 500 pacientes atendidos)',
+        'Monitoramento Contínuo: Esses indicadores serão consultados em relatórios mensais/trimestrais de execução',
+        'Múltiplos Indicadores: Recomenda-se 3-5 indicadores. Muito poucos não acompanham qualidade, muitos são onerosos',
+        'Legislação: Revise indicadores em literais da Portaria SES. Alguns são mandatórios conforme tipo de ação'
       ]
     },
     'execucao-financeira': {
-      title: 'Execução Financeira',
-      description: 'Classifique os gastos por natureza de despesa conforme a legislação.',
+      title: 'Execução Financeira - Classificação de Despesas',
+      description: 'Classifique os gastos conforme as Naturezas de Despesa da legislação de Saúde. Isto é obrigatório para auditoria e conformidade fiscal.',
       tips: [
-        'Natureza de Despesa: Selecione a classificação (ex: Pessoal, Custeio)',
-        'Valor: Informe o valor para essa categoria',
-        'A soma das naturezas deve corresponder ao valor total da emenda',
-        'Siga rigorosamente as normas de despesa pública'
+        'Natureza de Despesa: Classifique por tipo formal (Pessoal, Custeio, Investimento, Transferências, etc)',
+        'Pessoal: Salários, encargos e benefícios de servidores contratados para as ações (ex: médicos contratados)',
+        'Custeio: Medicamentos, materiais, combustível, energia, diárias, passagens (custos operacionais)',
+        'Investimento: Equipamentos, construção, reforma com vida útil > 1 ano (quando permitido em legislação)',
+        'Total Convergente: A SOMA de todas as naturezas deve igualar exatamente o valor total da emenda',
+        'Revisão Fiscal: Erros aqui causam rejeição em auditoria. Dupla-checagem com setor financeiro é recomendada',
+        'Legislação: Siga rigorosamente a Instrução Normativa SES e Decretos sobre Execução Orçamentária 2026'
       ]
     },
     'finalizacao': {
-      title: 'Finalização e Justificativa',
-      description: 'Complete o plano com uma justificativa técnica e identifique o responsável pela assinatura.',
+      title: 'Finalização - Justificativa Técnica e Responsável',
+      description: 'Complete o plano com uma justificativa técnica sólida e identifique o responsável pela assinatura. Esta é a etapa final antes da submissão.',
       tips: [
-        'Responsável pela Assinatura: Informe o nome completo da pessoa que assinará o documento',
-        'Justificativa Técnica: Descreva os motivos pelos quais escolheu essa alocação de recursos',
-        'Explique como o plano atende às metas da SES-SP',
-        'Cite legislações ou políticas relevantes',
-        'Revise bem todo o plano antes de enviar'
+        'Responsável pela Assinatura: Nome completo e documento (CPF/cargo). Deve ser responsável pela unidade ou autoridade técnica',
+        'Justificativa Técnica: Parágrafo detalhado explicando POR QUE escolheu essa alocação (contexto epidemiológico, deficiências, diagnóstico situacional)',
+        'Alinhamento Estratégico: Reafirme como as ações contribuem para as diretrizes e metas estratégicas SES-SP',
+        'Legislação Pertinente: Cite portarias, decretos e políticas relevantes (ex: Portaria SES 234/2025, Decreto 67.435/2023)',
+        'Realismo: Justificativas genéricas são rejeitadas. Base-se em dados epidemiológicos, demanda reprimida, estudos de viabilidade',
+        'Revisão Final: Releia TODO o plano (seções 1-7) antes de salvar. Erros em justificativa afetam aprovação',
+        'Assinatura: Será necessária assinatura digital ou manuscrita no PDF gerado. Responsável deve estar disponível'
       ]
     }
   };
@@ -267,6 +279,7 @@ const App: React.FC = () => {
           
           if (!profileError && profile) {
             setCurrentUser({
+              id: session.user.id,
               username: session.user.email || '',
               name: profile.full_name,
               role: profile.role
@@ -277,6 +290,7 @@ const App: React.FC = () => {
             // Tenta forçar o usuário a ver a tela de login ou exibe erro se for admin
             if (session.user.email === 'sessp.css3@gmail.com') {
                setCurrentUser({
+                id: session.user.id,
                 username: session.user.email,
                 name: 'Admin Provisório',
                 role: 'admin'
@@ -417,6 +431,7 @@ const App: React.FC = () => {
         }
 
         setCurrentUser({
+          id: data.user.id,
           username: data.user.email || '',
           name: profile?.full_name || 'Usuário',
           role: profile?.role || 'user',
@@ -636,9 +651,22 @@ const App: React.FC = () => {
       const { data: planos, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
+      
+      // Debug: Log dos dados carregados
+      if (isAdmin() && planos && planos.length > 0) {
+        console.log('📊 Planos carregados:', planos.length);
+        const planoComEdits = planos.find(p => p.edit_count !== undefined);
+        console.log('✅ Colunas de versionamento:', planoComEdits ? 'ENCONTRADAS' : 'NÃO ENCONTRADAS');
+        if (planoComEdits) {
+          console.log('  - edit_count:', planoComEdits.edit_count);
+          console.log('  - last_edited_at:', planoComEdits.last_edited_at);
+        }
+      }
+      
       setPlanosList(planos || []);
     } catch (error: any) {
       alert(`Erro ao carregar planos: ${error.message}`);
+      console.error('Erro ao carregar planos:', error);
     } finally {
       setIsLoadingPlanos(false);
     }
@@ -731,9 +759,9 @@ const App: React.FC = () => {
           telefone: ''
         },
         planejamento: {
-          diretrizId: '',
-          objetivoId: '',
-          metaIds: []
+          diretrizId: plano.diretriz_id || '',
+          objetivoId: plano.objetivo_id || '',
+          metaIds: plano.metas_ids || []
         },
         acoesServicos: (acoes || []).map(a => ({
           categoria: a.categoria || '',
@@ -1122,7 +1150,20 @@ const App: React.FC = () => {
     setIsSending(true);
 
     try {
-      // VALIDAÇÃO: Total de Naturezas de Despesa não pode ultrapassar Total de Metas Quantitativas
+      // VALIDAÇÃO 1: Validar TODOS os campos obrigatórios PRIMEIRO
+      const validation = validateRequiredFields();
+      if (!validation.isValid) {
+        const missingList = validation.missingFields.map((field, idx) => `${idx + 1}. ${field}`).join('\n');
+        alert(
+          `⚠️ FORMULÁRIO INCOMPLETO!\n\n` +
+          `Os campos obrigatórios abaixo devem ser preenchidos:\n\n${missingList}\n\n` +
+          `Por favor, complete todos os campos indicados antes de salvar o plano.`
+        );
+        setIsSending(false);
+        return null;
+      }
+
+      // VALIDAÇÃO 2: Total de Naturezas de Despesa não pode ultrapassar Total de Metas Quantitativas
       const totalMetasQuantitativas = formData.acoesServicos.reduce((sum, acao) => sum + parseCurrency(acao.valor), 0);
       const totalDespesas = formData.naturezasDespesa.reduce((sum, despesa) => sum + parseCurrency(despesa.valor), 0);
       
@@ -1133,10 +1174,16 @@ const App: React.FC = () => {
         return null;
       }
 
-      // VALIDAÇÃO 2: Se já tem plano salvo E não há mudanças = não fazer nada
+      // VALIDAÇÃO 3: Se já tem plano salvo E não há mudanças = não fazer nada
       if (planoSalvoId && lastSavedFormData) {
         const currentJson = JSON.stringify(formData);
         const savedJson = JSON.stringify(lastSavedFormData);
+        console.log("🔍 DEBUGAR MUDANÇAS:");
+        console.log("   planoSalvoId:", planoSalvoId);
+        console.log("   Dados são iguais?", currentJson === savedJson);
+        if (currentJson !== savedJson) {
+          console.log("   ✅ Mudanças detectadas - prosseguindo com atualização");
+        }
         if (currentJson === savedJson) {
           alert('⚠️ Nenhuma mudança detectada!\n\nO plano não foi alterado desde o último salvamento.');
           setIsSending(false);
@@ -1151,8 +1198,12 @@ const App: React.FC = () => {
 
       // VERIFICAR SE JÁ EXISTE PLANO NO BANCO - EVITAR DUPLICAÇÃO
       let existingPlanoId = planoSalvoId;
+      console.log("🔍 DEBUG SAVE:");
+      console.log("   planoSalvoId:", planoSalvoId);
+      console.log("   existingPlanoId INICIAL:", existingPlanoId);
       
       if (!existingPlanoId) {
+        console.log("   ℹ️ planoSalvoId não setado, verificando no banco...");
         // Verificar no banco se já existe plano com esta emenda
         const { data: existingPlano, error: checkError } = await supabase
           .from('planos_trabalho')
@@ -1173,11 +1224,25 @@ const App: React.FC = () => {
           existingPlanoId = existingPlano.id;
           setPlanoSalvoId(existingPlano.id); // Sincronizar state
         }
+      } else {
+        console.log("   ✅ planoSalvoId já estava setado, usando para UPDATE");
       }
+      
+      console.log("   existingPlanoId FINAL:", existingPlanoId);
 
       // VERIFICAR SE JÁ EXISTE PLANO SALVO - NÃO CRIAR DUPLICADO
       if (existingPlanoId) {
         console.log(`⚠️ Plano ${existingPlanoId} já existe. Atualizando dados...`);
+        
+        // Buscar o edit_count atual para incrementar
+        const { data: currentPlano } = await supabase
+          .from('planos_trabalho')
+          .select('edit_count')
+          .eq('id', existingPlanoId)
+          .single();
+        
+        const newEditCount = (currentPlano?.edit_count || 0) + 1;
+        
         // Aqui só atualiza o plano existente, não cria novo
         const { error: updateError } = await supabase
           .from('planos_trabalho')
@@ -1191,15 +1256,121 @@ const App: React.FC = () => {
             cnes: formData.beneficiario.cnes || null,
             justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
-            updated_at: new Date().toISOString()
+            diretriz_id: formData.planejamento.diretrizId || null,
+            objetivo_id: formData.planejamento.objetivoId || null,
+            metas_ids: formData.planejamento.metaIds,
+            updated_at: new Date().toISOString(),
+            edit_count: newEditCount,
+            last_edited_at: new Date().toISOString(),
+            last_edited_by: user.id
           })
           .eq('id', existingPlanoId);
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error("❌ ERRO CRÍTICO ao atualizar plano principal:", updateError);
+          alert(`❌ ERRO ao atualizar plano:\n${updateError.message}`);
+          setIsSending(false);
+          return null;
+        }
         
-        console.log("✅ Plano atualizado");
+        console.log("✅ Plano principal atualizado (edição #" + newEditCount + ")");
+        
+        // DELETAR dados relacionados antigos
+        console.log("🗑️ Deletando dados relacionados antigos...");
+        const { error: deleteAcoesError } = await supabase.from('acoes_servicos').delete().eq('plano_id', existingPlanoId);
+        if (deleteAcoesError) {
+          console.error("❌ ERRO ao deletar ações:", deleteAcoesError);
+          alert(`❌ ERRO ao deletar ações:\n${deleteAcoesError.message}`);
+          setIsSending(false);
+          return null;
+        }
+        
+        const { error: deleteMetasError } = await supabase.from('metas_qualitativas').delete().eq('plano_id', existingPlanoId);
+        if (deleteMetasError) {
+          console.error("❌ ERRO ao deletar metas qualitativas:", deleteMetasError);
+          alert(`❌ ERRO ao deletar metas qualitativas:\n${deleteMetasError.message}`);
+          setIsSending(false);
+          return null;
+        }
+        
+        const { error: deleteNatError } = await supabase.from('naturezas_despesa_plano').delete().eq('plano_id', existingPlanoId);
+        if (deleteNatError) {
+          console.error("❌ ERRO ao deletar naturezas:", deleteNatError);
+          alert(`❌ ERRO ao deletar naturezas:\n${deleteNatError.message}`);
+          setIsSending(false);
+          return null;
+        }
+        
+        console.log("✅ Dados relacionados deletados");
+        
+        // INSERIR novos dados relacionados
+        console.log("📝 Inserindo novos dados relacionados...");
+        
+        // Inserir Metas Quantitativas
+        if (formData.acoesServicos.length > 0) {
+          const acoesData = formData.acoesServicos.map(a => ({
+            plano_id: existingPlanoId,
+            categoria: a.categoria,
+            item: a.item,
+            meta: a.metasQuantitativas[0],
+            valor: parseCurrency(a.valor),
+            created_by: user.id
+          }));
+          const { error: acoesError } = await supabase.from('acoes_servicos').insert(acoesData);
+          if (acoesError) {
+            console.error("❌ Erro ao inserir ações:", acoesError);
+            alert(`❌ ERRO ao inserir ações:\n${acoesError.message}`);
+            setIsSending(false);
+            return null;
+          }
+          console.log("✅ Metas quantitativas inseridas na edição");
+        }
+
+        // Inserir Metas Qualitativas
+        if (formData.metasQualitativas.length > 0) {
+          const qualData = formData.metasQualitativas.map(q => ({
+            plano_id: existingPlanoId,
+            meta_descricao: q.meta,
+            indicador: q.valor,
+            created_by: user.id
+          }));
+          const { error: qualError } = await supabase.from('metas_qualitativas').insert(qualData);
+          if (qualError) {
+            console.error("❌ Erro ao inserir metas qualitativas:", qualError);
+            alert(`❌ ERRO ao inserir metas qualitativas:\n${qualError.message}`);
+            setIsSending(false);
+            return null;
+          }
+          console.log("✅ Metas qualitativas inseridas na edição");
+        }
+
+        // Inserir Naturezas de Despesa
+        if (formData.naturezasDespesa.length > 0) {
+          const natData = formData.naturezasDespesa.map(n => ({
+            plano_id: existingPlanoId,
+            codigo: n.codigo,
+            valor: parseCurrency(n.valor),
+            created_by: user.id
+          }));
+          const { error: natError } = await supabase.from('naturezas_despesa_plano').insert(natData);
+          if (natError) {
+            console.error("❌ Erro ao inserir naturezas:", natError);
+            alert(`❌ ERRO ao inserir naturezas:\n${natError.message}`);
+            setIsSending(false);
+            return null;
+          }
+          console.log("✅ Naturezas de despesa inseridas na edição");
+        }
+        
+        console.log("✅ Edição salva com sucesso!");
         setLastSavedFormData(JSON.parse(JSON.stringify(formData)));
         setFormHasChanges(false);
+        
+        // Recarregar lista de planos para atualizar contagem de edições
+        console.log("🔄 Recarregando lista de planos após edição...");
+        await loadPlanos();
+        console.log("✅ Lista de planos recarregada");
+        
         setIsSending(false);
         return existingPlanoId;
       }
@@ -1218,6 +1389,9 @@ const App: React.FC = () => {
           cnes: formData.beneficiario.cnes || null,
           justificativa: formData.justificativa,
           responsavel_assinatura: formData.responsavelAssinatura,
+          diretriz_id: formData.planejamento.diretrizId || null,
+          objetivo_id: formData.planejamento.objetivoId || null,
+          metas_ids: formData.planejamento.metaIds,
           pdf_url: null,
           created_by: user.id
         }])
@@ -1291,6 +1465,12 @@ const App: React.FC = () => {
       // Resetar flag de mudanças após sucesso
       setFormHasChanges(false);
       console.log(`📌 Plano ${plano.id} salvo. lastSavedFormData atualizado.`);
+      
+      // Recarregar lista de planos para atualizar contagem de edições e datas
+      console.log("🔄 Recarregando lista de planos...");
+      await loadPlanos();
+      console.log("✅ Lista de planos recarregada com sucesso");
+      
       setShowEmailModal(true);
       return plano.id; // Retornar ID para uso síncrono
     } catch (error: any) {
@@ -2298,20 +2478,20 @@ Secretaria de Estado da Saúde de São Paulo`;
             <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
               <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl animate-slideUp max-h-[90vh] overflow-y-auto">
                 
-                {/* Header */}
-                <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 border-b border-blue-800/50 flex items-center justify-between">
+                {/* Header - Cores vermelhas do sistema */}
+                <div className="sticky top-0 bg-gradient-to-r from-red-700 to-red-600 px-8 py-6 border-b border-red-800/50 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-xl bg-blue-500/30">
+                    <div className="p-3 rounded-xl bg-red-600/40">
                       <Info className="text-white w-6 h-6" />
                     </div>
                     <div>
                       <h2 className="text-2xl font-black text-white">{helpContent[helpSectionId]?.title}</h2>
-                      <p className="text-blue-100 text-sm mt-1">Clique para aprender como preencher</p>
+                      <p className="text-red-100 text-sm mt-1">Guia de preenchimento</p>
                     </div>
                   </div>
                   <button 
                     onClick={() => setShowHelpModal(false)} 
-                    className="p-2 hover:bg-blue-500/50 rounded-lg transition-colors"
+                    className="p-2 hover:bg-red-600/50 rounded-lg transition-colors"
                   >
                     <X className="w-6 h-6 text-white" />
                   </button>
@@ -2325,15 +2505,15 @@ Secretaria de Estado da Saúde de São Paulo`;
                     </p>
                   </div>
 
-                  <div className="bg-blue-50 rounded-2xl p-6 border border-blue-200">
-                    <h3 className="text-base font-black text-blue-900 mb-4 flex items-center gap-2">
+                  <div className="bg-red-50 rounded-2xl p-6 border border-red-200">
+                    <h3 className="text-base font-black text-red-900 mb-4 flex items-center gap-2">
                       <ArrowUp className="w-5 h-5" />
-                      Dicas para Preenchimento
+                      Orientações para Preenchimento
                     </h3>
                     <ul className="space-y-3">
                       {helpContent[helpSectionId]?.tips.map((tip, idx) => (
                         <li key={idx} className="flex gap-3 text-gray-700">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-700 text-white text-xs font-bold flex items-center justify-center">
                             {idx + 1}
                           </span>
                           <span className="pt-0.5">{tip}</span>
@@ -2344,7 +2524,7 @@ Secretaria de Estado da Saúde de São Paulo`;
 
                   <button
                     onClick={() => setShowHelpModal(false)}
-                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold uppercase text-sm tracking-wider hover:bg-blue-700 transition-colors"
+                    className="w-full py-3 bg-red-700 text-white rounded-xl font-bold uppercase text-sm tracking-wider hover:bg-red-800 transition-colors"
                   >
                     Entendi, Feche a Ajuda
                   </button>
@@ -2602,7 +2782,15 @@ Secretaria de Estado da Saúde de São Paulo`;
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Data</p>
-                              <p className="text-sm font-bold text-gray-900">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</p>
+                              <div className="space-y-0.5">
+                                <p className="text-sm font-bold text-gray-900">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</p>
+                                {isAdmin() && plano.last_edited_at && (
+                                  <p className="text-xs text-orange-600 font-semibold">Ed: {new Date(plano.last_edited_at).toLocaleDateString('pt-BR')}</p>
+                                )}
+                                {isAdmin() && plano.edit_count > 0 && (
+                                  <p className="text-xs bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded inline-block">{plano.edit_count} edição(ões)</p>
+                                )}
+                              </div>
                             </div>
                             </div>
                           </div>
@@ -2615,12 +2803,14 @@ Secretaria de Estado da Saúde de São Paulo`;
                                 >
                                   <Settings2 className="w-4 h-4" /> Editar
                                 </button>
-                                <button 
-                                  onClick={() => deletePlan(plano.id)}
-                                  className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-red-200 transition-all"
-                                >
-                                  <Trash2 className="w-4 h-4" /> Deletar
-                                </button>
+                                {isAdmin() && (
+                                  <button 
+                                    onClick={() => deletePlan(plano.id)}
+                                    className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-red-200 transition-all"
+                                  >
+                                    <Trash2 className="w-4 h-4" /> Deletar
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>
@@ -2650,6 +2840,44 @@ Secretaria de Estado da Saúde de São Paulo`;
             ) : (
               <div className="space-y-8 animate-fadeIn">
                 <h2 className="text-base font-black text-gray-900 uppercase tracking-wider text-center">Dashboard - Relatórios e Estatísticas</h2>
+              
+                {/* DIAGNÓSTICO DE VERSIONAMENTO */}
+                {(() => {
+                  const hasVersioningColumns = planosList.length > 0 && planosList.some(p => p.edit_count !== undefined);
+                  const plansWithEdits = planosList.filter(p => p.edit_count > 0).length;
+                  
+                  return (
+                    <div className={`rounded-lg p-6 border-2 ${hasVersioningColumns ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1">
+                          {hasVersioningColumns ? (
+                            <>
+                              <h3 className="text-lg font-bold text-green-900 mb-2">✅ Colunas de Versionamento Ativas</h3>
+                              <p className="text-sm text-green-800">
+                                O sistema está rastreando edições. <strong>{plansWithEdits} plano(s)</strong> já foram editado(s) por usuários.
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <h3 className="text-lg font-bold text-red-900 mb-2">⚠️ Colunas de Versionamento Não Configuradas</h3>
+                              <p className="text-sm text-red-800 mb-3">
+                                As colunas <code className="bg-red-100 px-2 py-1 rounded font-mono">edit_count</code>, <code className="bg-red-100 px-2 py-1 rounded font-mono">last_edited_at</code> e <code className="bg-red-100 px-2 py-1 rounded font-mono">diretriz_id</code> ainda não foram criadas no Supabase.
+                              </p>
+                              <p className="text-xs text-red-700 mb-3">
+                                <strong>Solução:</strong> Execute os scripts SQL do arquivo <code className="bg-red-100 px-2 py-1 rounded font-mono">EXECUTAR-SCRIPTS-SQL.md</code> no console Supabase.
+                              </p>
+                              <div className="flex gap-2">
+                                <a href="https://app.supabase.com" target="_blank" rel="noopener noreferrer" className="text-sm bg-red-600 text-white px-3 py-1.5 rounded font-bold hover:bg-red-700">
+                                  Abrir Supabase
+                                </a>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               
               {isLoadingPlanos ? (
                 <div className="flex justify-center py-20">
@@ -2707,6 +2935,64 @@ Secretaria de Estado da Saúde de São Paulo`;
                             </div>
                           ) : null;
                         })}
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 p-8 rounded-lg mt-8">
+                      <h3 className="text-lg font-bold text-black uppercase tracking-wide mb-6">📋 Histórico de Edições</h3>
+                      
+                      {/* Verificar se as colunas foram criadas */}
+                      {(!planosList || planosList.length === 0 || !planosList.some(p => p.edit_count !== undefined)) && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 mb-6">
+                          <p className="text-sm text-amber-800">
+                            <strong>⚠️ Colunas de versionamento ainda não configuradas.</strong><br/>
+                            Para ativar o rastreamento de edições, execute os scripts SQL do arquivo <code className="bg-amber-100 px-2 py-1 rounded">EXECUTAR-SCRIPTS-SQL.md</code>
+                          </p>
+                        </div>
+                      )}
+                      
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-100 border-b border-gray-200">
+                              <th className="px-4 py-3 text-left font-bold text-gray-900 uppercase text-xs">Emenda</th>
+                              <th className="px-4 py-3 text-left font-bold text-gray-900 uppercase text-xs">Parlamentar</th>
+                              <th className="px-4 py-3 text-left font-bold text-gray-900 uppercase text-xs">Criada em</th>
+                              <th className="px-4 py-3 text-center font-bold text-gray-900 uppercase text-xs">Edições</th>
+                              <th className="px-4 py-3 text-left font-bold text-gray-900 uppercase text-xs">Última Edição</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {planosList
+                              .filter(p => (p.edit_count > 0 || p.last_edited_at) && p.edit_count !== undefined)
+                              .sort((a, b) => new Date(b.last_edited_at || b.created_at).getTime() - new Date(a.last_edited_at || a.created_at).getTime())
+                              .slice(0, 10)
+                              .map(plano => (
+                                <tr key={plano.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 font-bold text-gray-900">{plano.numero_emenda}</td>
+                                  <td className="px-4 py-3 text-gray-700">{plano.parlamentar}</td>
+                                  <td className="px-4 py-3 text-gray-700">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    {plano.edit_count > 0 ? (
+                                      <span className="px-3 py-1 bg-orange-100 text-orange-700 font-bold text-xs rounded-full">
+                                        {plano.edit_count}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-700">
+                                    {plano.last_edited_at ? new Date(plano.last_edited_at).toLocaleDateString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                        {planosList.filter(p => (p.edit_count > 0 || p.last_edited_at) && p.edit_count !== undefined).length === 0 && (
+                          <div className="text-center py-8 text-gray-500">
+                            <p className="text-sm">Nenhum plano foi editado ainda</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                 </>
@@ -3439,18 +3725,28 @@ Secretaria de Estado da Saúde de São Paulo`;
                             label={isSending ? "⏳ Gerando..." : "📥 Visualizar e Baixar PDF"}
                             onClick={async () => {
                               if (isSending) return; // Proteger contra duplo clique
-                              if (!planoSalvoId) {
-                                const save = confirm('O plano ainda não foi salvo. Deseja salvar agora e gerar o PDF?');
-                                if (save) {
-                                  const savedId = await handleFinalSend();
-                                  if (savedId) {
-                                    setShowDocument(true);
-                                    setTimeout(() => handleGeneratePDF(), 1000);
-                                  }
-                                }
-                              } else {
+                              
+                              // VALIDAR CAMPOS OBRIGATÓRIOS SEMPRE
+                              const validation = validateRequiredFields();
+                              if (!validation.isValid) {
+                                const missingList = validation.missingFields.map((field, idx) => `${idx + 1}. ${field}`).join('\n');
+                                alert(
+                                  `⚠️ FORMULÁRIO INCOMPLETO!\n\n` +
+                                  `Os campos obrigatórios abaixo devem ser preenchidos:\n\n${missingList}\n\n` +
+                                  `Por favor, complete todos os campos indicados antes de gerar o PDF.`
+                                );
+                                return;
+                              }
+                              
+                              // SEMPRE salvar antes de gerar PDF (new or update)
+                              console.log("📌 Salvando plano antes de gerar PDF...");
+                              const savedId = await handleFinalSend();
+                              if (savedId) {
+                                console.log("✅ Plano salvo, abrindo PDF...");
                                 setShowDocument(true);
                                 setTimeout(() => handleGeneratePDF(), 1000);
+                              } else {
+                                console.log("❌ Falha ao salvar plano");
                               }
                             }}
                             variant="primary"

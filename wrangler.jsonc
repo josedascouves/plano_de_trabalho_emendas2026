@@ -1,0 +1,27 @@
+{
+  "name": "plano-de-trabalho-ses-sp-2026",
+  "type": "javascript",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "build": {
+    "command": "npm run build",
+    "cwd": "./",
+    "watch_paths": ["src/**/*.ts", "src/**/*.tsx"]
+  },
+  "env": {
+    "production": {
+      "name": "plano-de-trabalho-ses-sp-2026",
+      "routes": [
+        {
+          "pattern": "*",
+          "zone_name": ""
+        }
+      ]
+    }
+  }
+}

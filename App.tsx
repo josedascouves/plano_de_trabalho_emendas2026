@@ -37,7 +37,10 @@ import {
   BarChart3,
   Info,
   ArrowUp,
-  AlertTriangle
+  AlertTriangle,
+  Crown,
+  ChevronDown,
+  Key
 } from 'lucide-react';
 import { FormState, User } from './types';
 import { 
@@ -80,6 +83,8 @@ const App: React.FC = () => {
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [usersList, setUsersList] = useState<any[]>([]);
   const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as const, cnes: '' });
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
 
   // Plan List & Edit Management
   const [planosList, setPlanosList] = useState<any[]>([]);
@@ -125,7 +130,7 @@ const App: React.FC = () => {
   });
 
   const [formData, setFormData] = useState<FormState>({
-    emenda: { parlamentar: '', numero: '', valor: '', valorExtenso: '', programa: 'CUSTEIO MAC – 2E90' },
+    emenda: { parlamentar: '', numero: '', valor: '', valorExtenso: '', programa: 'EMENDA INDIVIDUAL - CUSTEIO MAC - 2E90' },
     beneficiario: { nome: '', cnes: '', cnpj: '', email: '', telefone: '' },
     planejamento: { diretrizId: '', objetivoId: '', metaIds: [] },
     acoesServicos: [],
@@ -136,16 +141,28 @@ const App: React.FC = () => {
   });
 
   // Função para obter formData inicial
-  const getInitialFormData = (): FormState => ({
-    emenda: { parlamentar: '', numero: '', valor: '', valorExtenso: '', programa: '' },
-    beneficiario: { nome: '', cnes: currentUser?.cnes || '', cnpj: '', email: '', telefone: '' },
-    planejamento: { diretrizId: '', objetivoId: '', metaIds: [] },
-    acoesServicos: [],
-    metasQualitativas: [],
-    naturezasDespesa: [],
-    justificativa: '',
-    responsavelAssinatura: ''
-  });
+  const getInitialFormData = (): FormState => {
+    // Auto-fill CNES for regular users (non-admin)
+    const userCnes = currentUser?.role === 'user' ? (currentUser?.cnes || '') : '';
+    
+    console.log('📝 getInitialFormData() chamado:', {
+      currentUser_role: currentUser?.role,
+      currentUser_cnes: currentUser?.cnes,
+      userCnes_resultado: userCnes,
+      ifrUserStandard: currentUser?.role === 'user'
+    });
+    
+    return {
+      emenda: { parlamentar: '', numero: '', valor: '', valorExtenso: '', programa: '' },
+      beneficiario: { nome: '', cnes: userCnes, cnpj: '', email: '', telefone: '' },
+      planejamento: { diretrizId: '', objetivoId: '', metaIds: [] },
+      acoesServicos: [],
+      metasQualitativas: [],
+      naturezasDespesa: [],
+      justificativa: '',
+      responsavelAssinatura: ''
+    };
+  };
 
   const [currentSelection, setCurrentSelection] = useState<{
     categoria: string;
@@ -161,7 +178,14 @@ const App: React.FC = () => {
   const LOGO_URL_BRANCA = "/img/logo_branco.png";      // Versão oficial branca para header
 
   // ======== RBAC - CONTROLE DE ACESSO ========
-  const isAdmin = (): boolean => currentUser?.role === 'admin';
+  const isAdmin = (): boolean => {
+    const adminStatus = currentUser?.role === 'admin';
+    console.log('🔐 isAdmin() check:', {
+      currentUser: currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role } : null,
+      isAdmin: adminStatus
+    });
+    return adminStatus;
+  };
   
   const canEditPlan = (planCreatedBy: string): boolean => {
     if (!currentUser) return false;
@@ -271,19 +295,25 @@ const App: React.FC = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+          // Query explícita para todas as colunas que precisamos
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
-            .select('*')
+            .select('id, full_name, email, role, cnes, disabled, created_at, updated_at, password_changed_at, last_login_at')
             .eq('id', session.user.id)
             .single();
           
+          console.log('🔍 Debug - Query resultado:', { profile, error: profileError });
+          
           if (!profileError && profile) {
-            setCurrentUser({
+            const userData = {
               id: session.user.id,
               username: session.user.email || '',
               name: profile.full_name,
-              role: profile.role
-            });
+              role: profile.role,
+              cnes: profile.cnes || ''
+            };
+            console.log('✅ LOGIN SUCESSO:', userData);
+            setCurrentUser(userData);
             setIsAuthenticated(true);
           } else if (profileError) {
             console.warn("Perfil não encontrado. O usuário pode existir no Auth mas não na tabela profiles. Rode o script SQL.");
@@ -293,7 +323,8 @@ const App: React.FC = () => {
                 id: session.user.id,
                 username: session.user.email,
                 name: 'Admin Provisório',
-                role: 'admin'
+                role: 'admin',
+                cnes: ''
               });
               setIsAuthenticated(true);
             }
@@ -312,31 +343,81 @@ const App: React.FC = () => {
   const prevShowUserManagementRef = useRef(showUserManagement);
   
   useEffect(() => {
+    console.log('🔍 useEffect check:', {
+      isAuthenticated,
+      showUserManagement,
+      currentUser_role: currentUser?.role,
+      prevShowUserManagementRef: prevShowUserManagementRef.current,
+      shouldFetch: isAuthenticated && showUserManagement && currentUser?.role === 'admin' && !prevShowUserManagementRef.current
+    });
+    
     // Only fetch when modal opens (showUserManagement becomes true)
     if (isAuthenticated && showUserManagement && currentUser?.role === 'admin' && !prevShowUserManagementRef.current) {
       const fetchUsers = async () => {
         try {
-          const { data: profiles, error } = await supabase.from('profiles').select('*');
+          console.log('👥 fetchUsers() - Iniciando carregamento de usuários');
           
-          if (error) {
-            console.error('Erro ao carregar usuários:', error.message);
-            alert(`⚠ Erro ao carregar usuários: ${error.message}\n\nVerifique as políticas RLS na tabela profiles.`);
+          // Buscar profiles com user_roles (LEFT JOIN)
+          const { data: profiles, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, cnes, created_at')
+            .order('full_name');
+          
+          if (profileError) {
+            console.error('❌ Erro ao carregar profiles:', profileError);
+            setUsersList([]);
+            alert(`⚠ Erro ao carregar usuários: ${profileError.message}`);
             return;
           }
+
+          console.log('✅ Profiles carregados:', profiles?.length || 0, profiles);
+
+          // Buscar roles de cada usuário
+          const { data: userRoles, error: roleError } = await supabase
+            .from('user_roles')
+            .select('user_id, role, disabled');
           
-          if (profiles) {
-            setUsersList(profiles.map(p => ({
-              id: p.id,
-              username: p.email || '',
-              email: p.email || '',
-              name: p.full_name,
-              role: p.role,
-              cnes: p.cnes || '',
-              disabled: p.disabled || false
-            })));
+          if (roleError) {
+            console.error('❌ Erro ao carregar user_roles:', roleError);
+            setUsersList([]);
+            alert(`⚠ Erro ao carregar permissões: ${roleError.message}`);
+            return;
+          }
+
+          console.log('✅ User roles carregados:', userRoles?.length || 0, userRoles);
+
+          // Fazer merge dos dados
+          if (profiles && userRoles) {
+            // Usar objeto simples em vez de Map (compatibilidade)
+            const usersByRole: { [key: string]: { role: string; disabled: boolean } } = {};
+            userRoles.forEach(ur => {
+              usersByRole[ur.user_id] = { role: ur.role, disabled: ur.disabled };
+            });
+            
+            const usersList = profiles.map(p => {
+              const role = usersByRole[p.id]?.role || 'user';
+              const disabled = usersByRole[p.id]?.disabled || false;
+              console.log(`  - User: ${p.email} => role: ${role}, disabled: ${disabled}, cnes: ${p.cnes}`);
+              return {
+                id: p.id,
+                username: p.email || '',
+                email: p.email || '',
+                name: p.full_name,
+                role: role,
+                cnes: p.cnes || '',
+                disabled: disabled
+              };
+            });
+            
+            setUsersList(usersList);
+            console.log('✅ Lista de usuários atualizada:', usersList.length, usersList);
+          } else {
+            console.warn('⚠️ Profiles ou userRoles vazios:', { profiles_count: profiles?.length, roles_count: userRoles?.length });
+            setUsersList([]);
           }
         } catch (err: any) {
-          console.error('Erro ao buscar usuários:', err);
+          console.error('❌ Erro ao buscar usuários:', err);
+          setUsersList([]);
         }
       };
       fetchUsers();
@@ -358,15 +439,52 @@ const App: React.FC = () => {
     }
   }, [currentView, isAuthenticated]);
 
-  // Auto-fill CNES when user logs in or form is initialized
+  // Auto-fill form when user logs in or form is initialized
   useEffect(() => {
-    if (isAuthenticated && currentUser?.cnes && formData.beneficiario.cnes !== currentUser.cnes) {
+    if (isAuthenticated && currentUser?.email && formData.beneficiario.email !== currentUser.email) {
       updateFormData('beneficiario', { 
         ...formData.beneficiario, 
-        cnes: currentUser.cnes 
+        email: currentUser.email 
       });
     }
-  }, [isAuthenticated, currentUser?.cnes]);
+  }, [isAuthenticated, currentUser?.email]);
+
+  // Auto-fill CNES for regular users when they log in
+  useEffect(() => {
+    console.log('🔍 useEffect CNES check:', {
+      isAuthenticated,
+      currentUser_cnes: currentUser?.cnes,
+      currentUser_role: currentUser?.role,
+      formData_cnes: formData.beneficiario.cnes,
+      shouldUpdate: isAuthenticated && currentUser?.role === 'user'
+    });
+    
+    // Preencher CNES para usuários padrão (mesmo que seja vazio, apenas para não-admins)
+    if (isAuthenticated && currentUser?.role === 'user') {
+      const cnesToUse = currentUser.cnes || '';
+      if (formData.beneficiario.cnes !== cnesToUse) {
+        console.log('✅ Auto-preenchendo CNES para usuário padrão:', cnesToUse);
+        updateFormData('beneficiario', { 
+          ...formData.beneficiario, 
+          cnes: cnesToUse
+        });
+      }
+    }
+  }, [isAuthenticated, currentUser?.cnes, currentUser?.role]);
+
+  // Quando muda para 'new', garante que CNES é preenchido para usuários padrão
+  useEffect(() => {
+    if (currentView === 'new' && isAuthenticated && currentUser?.role === 'user') {
+      const cnesToUse = currentUser.cnes || '';
+      console.log('📝 View mudou para NEW, preenchendo CNES para usuário padrão:', cnesToUse);
+      if (formData.beneficiario.cnes !== cnesToUse) {
+        updateFormData('beneficiario', { 
+          ...formData.beneficiario, 
+          cnes: cnesToUse
+        });
+      }
+    }
+  }, [currentView, isAuthenticated, currentUser?.cnes, currentUser?.role]);
 
   // Track form changes - melhorado para detectar mudanças reais
   useEffect(() => {
@@ -413,6 +531,9 @@ const App: React.FC = () => {
       }
 
       if (data.user) {
+        console.log('🔑 LOGIN - Usuário autenticado:', data.user.email);
+        
+        // Buscar perfil do usuário
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -420,25 +541,45 @@ const App: React.FC = () => {
           .single();
         
         if (profileError) {
-          console.error('Erro ao buscar perfil:', profileError);
+          console.error('❌ Erro ao buscar perfil:', profileError);
           throw new Error('Erro ao carregar perfil do usuário');
         }
 
+        console.log('✅ Perfil carregado:', profile?.full_name, profile?.email);
+
+        // Buscar role e status (disabled) da tabela user_roles
+        const { data: userRole, error: userRoleError } = await supabase
+          .from('user_roles')
+          .select('role, disabled')
+          .eq('user_id', data.user.id)
+          .single();
+        
+        if (userRoleError) {
+          console.error('❌ Erro ao buscar role:', userRoleError);
+          throw new Error('Erro ao carregar permissões do usuário');
+        }
+
+        console.log('✅ Role carregado:', { role: userRole?.role, disabled: userRole?.disabled });
+
         // Verificar se usuário está desativado
-        if (profile?.disabled) {
+        if (userRole?.disabled) {
           await supabase.auth.signOut();
           throw new Error('Este usuário foi desativado. Contate um administrador.');
         }
 
-        setCurrentUser({
+        const userObject = {
           id: data.user.id,
           username: data.user.email || '',
           name: profile?.full_name || 'Usuário',
-          role: profile?.role || 'user',
+          role: userRole?.role || 'user',
           cnes: profile?.cnes || ''
-        });
+        };
+        
+        console.log('🎯 setCurrentUser:', userObject);
+        setCurrentUser(userObject);
         setIsAuthenticated(true);
         setLoginInput({ email: '', password: '' });
+        console.log('✅ LOGIN CONCLUÍDO - Usuário autenticado com sucesso');
       }
     } catch (error: any) {
       console.error('Erro ao fazer login:', error);
@@ -463,9 +604,9 @@ const App: React.FC = () => {
       if (!user) return;
 
       const { error } = await supabase
-        .from('profiles')
+        .from('user_roles')
         .update({ disabled: !user.disabled })
-        .eq('id', userId);
+        .eq('user_id', userId);
 
       if (error) throw error;
 
@@ -473,16 +614,27 @@ const App: React.FC = () => {
       alert(`✓ Usuário ${action} com sucesso!`);
 
       // Recarregar lista
-      const { data: profiles } = await supabase.from('profiles').select('*');
-      if (profiles) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cnes, created_at')
+        .order('full_name');
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role, disabled');
+      
+      if (profiles && userRoles) {
+        const usersByRole: { [key: string]: any } = {};
+        userRoles.forEach(ur => {
+          usersByRole[ur.user_id] = ur;
+        });
         setUsersList(profiles.map(p => ({
           id: p.id,
           username: p.email || '',
           email: p.email || '',
           name: p.full_name,
-          role: p.role,
+          role: usersByRole[p.id]?.role || 'user',
           cnes: p.cnes || '',
-          disabled: p.disabled || false
+          disabled: usersByRole[p.id]?.disabled || false
         })));
       }
     } catch (error: any) {
@@ -493,15 +645,106 @@ const App: React.FC = () => {
   // Alterar senha - Enviar email de reset
   const handleChangePassword = async (userEmail: string) => {
     try {
+      console.log('🔑 Enviando email de reset para:', userEmail);
       const { error } = await supabase.auth.resetPasswordForEmail(userEmail, {
         redirectTo: `${window.location.origin}/reset-password`
       });
 
       if (error) throw error;
-      alert(`Email de redefinição de senha enviado para ${userEmail}`);
+      alert(`✅ Email de redefinição de senha enviado para ${userEmail}`);
     } catch (error: any) {
-      console.error('Erro ao enviar email de reset:', error);
-      alert(`Erro: ${error.message}`);
+      console.error('❌ Erro ao enviar email de reset:', error);
+      alert(`❌ Erro: ${error.message}`);
+    }
+  };
+
+  // Promover usuário a admin
+  const handlePromoteUserToAdmin = async (userId: string, userName: string) => {
+    try {
+      console.log('👑 Promovendo usuário para admin:', userId);
+      
+      const { error } = await supabase
+        .from('user_roles')
+        .update({ role: 'admin' })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      alert(`✅ ${userName} foi promovido a ADMINISTRADOR!`);
+      console.log('✅ Promoção concluída');
+
+      // Recarregar lista
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cnes, created_at')
+        .order('full_name');
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role, disabled');
+      
+      if (profiles && userRoles) {
+        const usersByRole: { [key: string]: any } = {};
+        userRoles.forEach(ur => {
+          usersByRole[ur.user_id] = ur;
+        });
+        setUsersList(profiles.map(p => ({
+          id: p.id,
+          username: p.email || '',
+          email: p.email || '',
+          name: p.full_name,
+          role: usersByRole[p.id]?.role || 'user',
+          cnes: p.cnes || '',
+          disabled: usersByRole[p.id]?.disabled || false
+        })));
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao promover usuário:', error);
+      alert(`❌ Erro ao promover: ${error.message}`);
+    }
+  };
+
+  // Rebaixar de admin para usuário
+  const handleDemoteUserToRegular = async (userId: string, userName: string) => {
+    try {
+      console.log('⬇️ Rebaixando usuário para regular:', userId);
+      
+      const { error } = await supabase
+        .from('user_roles')
+        .update({ role: 'user' })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      alert(`✅ ${userName} foi rebaixado para USUÁRIO PADRÃO!`);
+      console.log('✅ Rebaixamento concluído');
+
+      // Recarregar lista
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cnes, created_at')
+        .order('full_name');
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role, disabled');
+      
+      if (profiles && userRoles) {
+        const usersByRole: { [key: string]: any } = {};
+        userRoles.forEach(ur => {
+          usersByRole[ur.user_id] = ur;
+        });
+        setUsersList(profiles.map(p => ({
+          id: p.id,
+          username: p.email || '',
+          email: p.email || '',
+          name: p.full_name,
+          role: usersByRole[p.id]?.role || 'user',
+          cnes: p.cnes || '',
+          disabled: usersByRole[p.id]?.disabled || false
+        })));
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao rebaixar usuário:', error);
+      alert(`❌ Erro ao rebaixar: ${error.message}`);
     }
   };
 
@@ -510,6 +753,14 @@ const App: React.FC = () => {
     if (!confirm(`Tem certeza que deseja excluir o usuário? Esta ação não pode ser desfeita.`)) return;
 
     try {
+      // Deletar de user_roles primeiro (foreign key)
+      const { error: rolesError } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId);
+
+      if (rolesError) throw rolesError;
+
       // Deletar da tabela profiles
       const { error } = await supabase
         .from('profiles')
@@ -521,21 +772,104 @@ const App: React.FC = () => {
       alert('✓ Usuário deletado com sucesso!');
 
       // Recarregar lista
-      const { data: profiles } = await supabase.from('profiles').select('*');
-      if (profiles) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cnes, created_at')
+        .order('full_name');
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role, disabled');
+      
+      if (profiles && userRoles) {
+        const usersByRole: { [key: string]: any } = {};
+        userRoles.forEach(ur => {
+          usersByRole[ur.user_id] = ur;
+        });
         setUsersList(profiles.map(p => ({
           id: p.id,
           username: p.email || '',
           email: p.email || '',
           name: p.full_name,
-          role: p.role,
+          role: usersByRole[p.id]?.role || 'user',
           cnes: p.cnes || '',
-          disabled: p.disabled || false
+          disabled: usersByRole[p.id]?.disabled || false
         })));
       }
     } catch (error: any) {
       console.error('Erro ao deletar usuário:', error);
       alert(`❌ Erro ao deletar usuário: ${error.message}`);
+    }
+  };
+
+  // Editar usuário - Update nome, email, CNES e opcionalmente senha
+  const handleEditUser = async () => {
+    if (!editingUser.id) return;
+    
+    try {
+      console.log('🔧 Editando usuário:', editingUser);
+      
+      // Validação de nome
+      if (!editingUser.name || editingUser.name.trim().length < 3) {
+        throw new Error('Nome deve ter no mínimo 3 caracteres');
+      }
+
+      // Validação de email
+      if (!editingUser.email || !validateEmail(editingUser.email)) {
+        throw new Error('E-mail inválido. Use um formato válido (ex: usuario@example.com)');
+      }
+
+      // Atualizar perfil (nome, email, CNES)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ 
+          full_name: editingUser.name, 
+          email: editingUser.email,
+          cnes: editingUser.cnes || null
+        })
+        .eq('id', editingUser.id);
+
+      if (profileError) throw profileError;
+
+      // Se houver nova senha, alterar no Auth
+      if (editingUser.password && editingUser.password.length >= 6) {
+        const { error: passwordError } = await supabase.auth.admin.updateUserById(
+          editingUser.id,
+          { password: editingUser.password }
+        );
+        if (passwordError) throw passwordError;
+      }
+
+      alert('✅ Usuário atualizado com sucesso!');
+      setShowEditUserModal(false);
+      setEditingUser({ id: '', email: '', name: '', cnes: '', password: '' });
+
+      // Recarregar lista
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cnes, created_at')
+        .order('full_name');
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role, disabled');
+      
+      if (profiles && userRoles) {
+        const usersByRole: { [key: string]: any } = {};
+        userRoles.forEach(ur => {
+          usersByRole[ur.user_id] = ur;
+        });
+        setUsersList(profiles.map(p => ({
+          id: p.id,
+          username: p.email || '',
+          email: p.email || '',
+          name: p.full_name,
+          role: usersByRole[p.id]?.role || 'user',
+          cnes: p.cnes || '',
+          disabled: usersByRole[p.id]?.disabled || false
+        })));
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao editar usuário:', error);
+      alert(`❌ Erro ao editar: ${error.message}`);
     }
   };
 
@@ -563,10 +897,16 @@ const App: React.FC = () => {
         throw new Error('Perfil do usuário é obrigatório');
       }
 
-      // Validação de CNES
+      // Validação de CNES - OBRIGATÓRIO
       if (!newUser.cnes || newUser.cnes.trim().length === 0) {
-        throw new Error('CNES da instituição é obrigatório');
+        throw new Error('🔴 CNES da instituição é OBRIGATÓRIO (máximo 8 dígitos)');
       }
+
+      if (newUser.cnes.trim().length > 8) {
+        throw new Error('CNES não pode ter mais de 8 dígitos');
+      }
+
+      console.log('👤 Criando novo usuário:', { email: newUser.email, name: newUser.name, role: newUser.role });
 
       // 1. Criar usuário no Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -574,9 +914,7 @@ const App: React.FC = () => {
         password: newUser.password,
         options: {
           data: {
-            full_name: newUser.name,
-            role: newUser.role,
-            cnes: newUser.cnes.trim()
+            full_name: newUser.name
           }
         }
       });
@@ -590,40 +928,69 @@ const App: React.FC = () => {
 
       if (!authData.user) throw new Error('Falha ao criar usuário (ID não retornado)');
 
-      // 2. Inserir ou atualizar perfil na tabela profiles (usar UPSERT para evitar conflitos)
+      console.log('✅ Usuário criado no Auth:', authData.user.id);
+
+      // 2. Inserir perfil na tabela profiles (apenas dados pessoais)
       const { error: profileError } = await supabase
         .from('profiles')
-        .upsert([
+        .insert([
           {
             id: authData.user.id,
             email: newUser.email,
             full_name: newUser.name,
-            role: newUser.role,
-            cnes: newUser.cnes.trim(),
-            disabled: false
+            cnes: newUser.cnes.trim()
           }
-        ], 
-        { onConflict: 'id' });
+        ]);
 
-      if (profileError) {
+      if (profileError && !profileError.message.includes('duplicate')) {
         throw new Error(`Erro ao criar perfil: ${profileError.message}`);
       }
 
+      console.log('✅ Perfil criado');
+
+      // 3. Inserir role na tabela user_roles (separado - CRUCIAL para RBAC)
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .insert([
+          {
+            user_id: authData.user.id,
+            role: newUser.role,
+            disabled: false
+          }
+        ]);
+
+      if (roleError && !roleError.message.includes('duplicate')) {
+        throw new Error(`Erro ao atribuir perfil: ${roleError.message}`);
+      }
+
+      console.log('✅ Role atribuído:', newUser.role);
+
       // Sucesso
-      alert(`✓ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nCNES: ${newUser.cnes}\nPerfil: ${newUser.role === 'admin' ? 'Administrador' : 'Usuário Padrão'}`);
+      alert(`✅ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nCNES: ${newUser.cnes}\nPerfil: ${newUser.role === 'admin' ? 'Administrador' : 'Usuário Padrão'}`);
       setNewUser({ email: '', password: '', name: '', role: 'user', cnes: '' });
       
       // Recarregar lista de usuários
-      const { data: profiles, error: fetchError } = await supabase.from('profiles').select('*');
-      if (!fetchError && profiles) {
+      const { data: profiles, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cnes, created_at')
+        .order('full_name');
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role, disabled');
+      
+      if (!fetchError && profiles && userRoles) {
+        const usersByRole: { [key: string]: any } = {};
+        userRoles.forEach(ur => {
+          usersByRole[ur.user_id] = ur;
+        });
         setUsersList(profiles.map(p => ({
           id: p.id,
           username: p.email || '',
           email: p.email || '',
           name: p.full_name,
-          role: p.role,
+          role: usersByRole[p.id]?.role || 'user',
           cnes: p.cnes || '',
-          disabled: p.disabled || false
+          disabled: usersByRole[p.id]?.disabled || false
         })));
       }
     } catch (error: any) {
@@ -641,30 +1008,47 @@ const App: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sessão expirada");
 
+      console.log('📋 loadPlanos - Iniciando carregamento:', {
+        user_id: user.id,
+        isAdmin: isAdmin(),
+        currentUser: currentUser ? { id: currentUser.id, role: currentUser.role } : null
+      });
+
       let query = supabase.from('planos_trabalho').select('*');
 
       // Se não for admin, filtrar apenas pelos planos do usuário
       if (!isAdmin()) {
+        console.log('📋 Filtrando planos: apenas do usuário', user.id);
         query = query.eq('created_by', user.id);
+      } else {
+        console.log('📋 Carregando planos: ADMIN - todos os planos');
       }
 
       const { data: planos, error } = await query.order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erro ao carregar planos:', error);
+        throw error;
+      }
+      
+      console.log('✅ Planos carregados:', planos?.length || 0, planos);
       
       // Debug: Log dos dados carregados
-      if (isAdmin() && planos && planos.length > 0) {
-        console.log('📊 Planos carregados:', planos.length);
+      if (planos && planos.length > 0) {
+        console.log('📊 Total de planos:', planos.length);
         const planoComEdits = planos.find(p => p.edit_count !== undefined);
         console.log('✅ Colunas de versionamento:', planoComEdits ? 'ENCONTRADAS' : 'NÃO ENCONTRADAS');
         if (planoComEdits) {
           console.log('  - edit_count:', planoComEdits.edit_count);
           console.log('  - last_edited_at:', planoComEdits.last_edited_at);
         }
+      } else {
+        console.warn('⚠ Nenhum plano encontrado');
       }
       
       setPlanosList(planos || []);
     } catch (error: any) {
+      console.error('❌ Erro ao carregar planos (catch):', error);
       alert(`Erro ao carregar planos: ${error.message}`);
       console.error('Erro ao carregar planos:', error);
     } finally {
@@ -703,9 +1087,9 @@ const App: React.FC = () => {
       ),
       // Seção 4: Metas Quantitativas - completa se houver pelo menos uma ação
       'metas-quantitativas': formData.acoesServicos.length > 0,
-      // Seção 5: Indicadores Qualitativos - OPCIONAL (não precisa de itens)
-      'metas-qualitativas': true,
-      // Seção 6: Execução Financeira - completa se houver pelo menos uma natureza
+      // Seção 5: Indicadores Qualitativos - OPCIONAL (só completa se preenchido)
+      'metas-qualitativas': formData.metasQualitativas.length > 0,
+      // Seção 6: Execução Financeira - OPCIONAL (só completa se houver itens)
       'execucao-financeira': formData.naturezasDespesa.length > 0,
       // Seção 7: Finalização - completa se justificativa e responsável preenchidos
       'finalizacao': !!formData.justificativa?.trim() && !!formData.responsavelAssinatura?.trim()
@@ -714,6 +1098,8 @@ const App: React.FC = () => {
 
   const loadPlanForEditing = async (planoId: string) => {
     try {
+      console.log('📂 Iniciando carregamento de plano para edição:', planoId);
+      
       // 1. Buscar plano principal
       const { data: plano, error: planoError } = await supabase
         .from('planos_trabalho')
@@ -724,11 +1110,22 @@ const App: React.FC = () => {
       if (planoError) throw planoError;
       if (!plano) throw new Error('Plano não encontrado');
 
+      console.log('✅ Plano carregado:', {
+        id: plano.id,
+        numero: plano.numero_emenda,
+        beneficiario: plano.beneficiario_nome,
+        diretriz_id: plano.diretriz_id,
+        objetivo_id: plano.objetivo_id,
+        metas_ids: plano.metas_ids
+      });
+
       // 2. Buscar metas quantitativas
       const { data: acoes } = await supabase
         .from('acoes_servicos')
         .select('*')
         .eq('plano_id', planoId);
+
+      console.log('✅ Ações/Serviços carregados:', acoes?.length || 0);
 
       // 3. Buscar metas qualitativas
       const { data: metas } = await supabase
@@ -736,11 +1133,15 @@ const App: React.FC = () => {
         .select('*')
         .eq('plano_id', planoId);
 
+      console.log('✅ Metas Qualitativas carregadas:', metas?.length || 0);
+
       // 4. Buscar naturezas de despesa
       const { data: naturezas } = await supabase
         .from('naturezas_despesa_plano')
         .select('*')
         .eq('plano_id', planoId);
+
+      console.log('✅ Naturezas de Despesa carregadas:', naturezas?.length || 0);
 
       // 5. Montar formData completo com todos os dados
       const loadedFormData: FormState = {
@@ -781,6 +1182,8 @@ const App: React.FC = () => {
         responsavelAssinatura: plano.responsavel_assinatura || ''
       };
       
+      console.log('📝 FormData montado para edição:', loadedFormData);
+      
       setFormData(loadedFormData);
       setPlanoSalvoId(planoId);
       const savedCopy = JSON.parse(JSON.stringify(loadedFormData));
@@ -788,6 +1191,7 @@ const App: React.FC = () => {
       setFormHasChanges(false);
       console.log(`✅ Plano ${planoId} carregado completamente com todos os dados para edição.`);
     } catch (error: any) {
+      console.error('❌ Erro ao carregar plano:', error);
       alert(`Erro ao carregar plano para editar: ${error.message}`);
       setEditingPlanId(null);
     }
@@ -1603,6 +2007,9 @@ const App: React.FC = () => {
   );
 
   const updateFormData = (section: keyof FormState, value: any) => {
+    if (section === 'beneficiario' && value?.cnes) {
+      console.log('🔄 updateFormData - beneficiario:', value);
+    }
     setFormData(prev => ({ ...prev, [section]: value }));
   };
 
@@ -2420,7 +2827,55 @@ Secretaria de Estado da Saúde de São Paulo`;
                               )}
 
                               {/* Ações */}
-                              <div className="flex gap-2 pt-4 border-t border-gray-100">
+                              <div className="flex gap-2 pt-4 border-t border-gray-100 flex-wrap">
+                                {/* Editar */}
+                                <button 
+                                  onClick={() => {
+                                    setEditingUser({
+                                      id: u.id,
+                                      email: u.email,
+                                      name: u.name,
+                                      cnes: u.cnes || '',
+                                      password: ''
+                                    });
+                                    setShowEditUserModal(true);
+                                  }}
+                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-green-700 bg-green-100 hover:bg-green-200 transition-colors flex items-center justify-center gap-2"
+                                  title="Editar dados do usuário"
+                                >
+                                  <Settings2 className="w-4 h-4" />
+                                  Editar
+                                </button>
+
+                                {/* Promover/Rebaixar */}
+                                {u.role === 'user' ? (
+                                  <button 
+                                    onClick={() => {
+                                      if (window.confirm(`Deseja promover ${u.name} a ADMINISTRADOR?`)) {
+                                        handlePromoteUserToAdmin(u.id, u.name);
+                                      }
+                                    }}
+                                    className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-yellow-700 bg-yellow-100 hover:bg-yellow-200 transition-colors flex items-center justify-center gap-2"
+                                    title="Promover a administrador"
+                                  >
+                                    <Crown className="w-4 h-4" />
+                                    Promover
+                                  </button>
+                                ) : (
+                                  <button 
+                                    onClick={() => {
+                                      if (window.confirm(`Deseja rebaixar ${u.name} para USUÁRIO PADRÃO?`)) {
+                                        handleDemoteUserToRegular(u.id, u.name);
+                                      }
+                                    }}
+                                    className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-purple-700 bg-purple-100 hover:bg-purple-200 transition-colors flex items-center justify-center gap-2"
+                                    title="Rebaixar para usuário padrão"
+                                  >
+                                    <ChevronDown className="w-4 h-4" />
+                                    Rebaixar
+                                  </button>
+                                )}
+
                                 {/* Ativar/Desativar */}
                                 <button 
                                   onClick={() => handleToggleUserDisable(u.id)} 
@@ -2437,14 +2892,14 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
                                   title="Enviar email de reset de senha"
                                 >
-                                  <Lock className="w-4 h-4" />
-                                  Resetar Senha
+                                  <Key className="w-4 h-4" />
+                                  Senha
                                 </button>
 
                                 {/* Deletar */}
                                 <button 
                                   onClick={() => {
-                                    if (window.confirm(`Tem certeza que deseja deletar o usuário ${u.name}?`)) {
+                                    if (window.confirm(`Tem certeza que deseja deletar o usuário ${u.name}? ESTA AÇÃO NÃO PODE SER DESFEITA.`)) {
                                       handleDeleteUser(u.id, u.email);
                                     }
                                   }}
@@ -2458,16 +2913,123 @@ Secretaria de Estado da Saúde de São Paulo`;
                             </div>
                           ))
                         ) : (
-                          <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-                            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                            <p className="text-base font-bold text-gray-500">Nenhum usuário cadastrado</p>
-                            <p className="text-sm text-gray-400 mt-1">Registre o primeiro usuário acima para começar</p>
+                          <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-dashed border-gray-300 shadow-sm">
+                            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                            <p className="text-lg font-bold text-gray-600">Nenhum usuário encontrado</p>
+                            <p className="text-sm text-gray-500 mt-2">
+                              {usersList === null ? '⏳ Carregando...' : usersList.length === 0 ? '📭 Nenhum usuário cadastrado' : ''}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-3 max-w-sm mx-auto">
+                              Abra o DevTools (F12) e vá à aba "Console" para ver detalhes do carregamento.
+                              Procure por logs com 👥, ✅ ou ❌
+                            </p>
                           </div>
                         )}
                       </div>
                     </div>
 
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* EDIT USER MODAL */}
+          {showEditUserModal && (
+            <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl animate-slideUp">
+                
+                {/* Header - Cores verdes do sistema */}
+                <div className="bg-gradient-to-r from-green-700 to-green-600 px-8 py-6 border-b border-green-800/50 flex items-center justify-between">
+                  <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+                    <Settings2 className="w-6 h-6" />
+                    Editar Usuário: {editingUser.name}
+                  </h3>
+                  <button
+                    onClick={() => setShowEditUserModal(false)}
+                    className="text-white hover:bg-green-800/30 p-2 rounded-lg transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-8 space-y-6">
+                  {/* Nome */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Nome</label>
+                    <input
+                      type="text"
+                      value={editingUser.name}
+                      onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-500 transition-colors"
+                      placeholder="Nome completo"
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Email</label>
+                    <input
+                      type="email"
+                      value={editingUser.email}
+                      onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-500 transition-colors"
+                      placeholder="email@example.com"
+                    />
+                  </div>
+
+                  {/* CNES */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">CNES</label>
+                    <input
+                      type="text"
+                      value={editingUser.cnes}
+                      onChange={(e) => setEditingUser({ ...editingUser, cnes: maskCNES(e.target.value) })}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-500 transition-colors"
+                      placeholder="Código CNES (8 dígitos)"
+                      maxLength="8"
+                    />
+                  </div>
+
+                  {/* Nova Senha (opcional) */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Nova Senha (opcional)</label>
+                    <input
+                      type="password"
+                      value={editingUser.password}
+                      onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-500 transition-colors"
+                      placeholder="Deixe em branco para não alterar"
+                    />
+                    {editingUser.password && editingUser.password.length < 6 && (
+                      <p className="text-xs text-red-500 mt-1">Mínimo 6 caracteres</p>
+                    )}
+                  </div>
+
+                  {/* Info text */}
+                  <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                    <p className="text-sm text-blue-800">
+                      <strong>💡 Dica:</strong> Se deixar a senha em branco, ela não será alterada. Preencha apenas se quiser resetar a senha do usuário.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-6 border-t border-gray-200 flex items-center justify-end gap-3 rounded-b-3xl">
+                  <button
+                    onClick={() => setShowEditUserModal(false)}
+                    className="px-6 py-3 font-bold text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleEditUser}
+                    className="px-6 py-3 font-bold text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <Settings2 className="w-5 h-5" />
+                    Salvar Alterações
+                  </button>
                 </div>
               </div>
             </div>
@@ -2859,16 +3421,21 @@ Secretaria de Estado da Saúde de São Paulo`;
                             </>
                           ) : (
                             <>
-                              <h3 className="text-lg font-bold text-red-900 mb-2">⚠️ Colunas de Versionamento Não Configuradas</h3>
-                              <p className="text-sm text-red-800 mb-3">
-                                As colunas <code className="bg-red-100 px-2 py-1 rounded font-mono">edit_count</code>, <code className="bg-red-100 px-2 py-1 rounded font-mono">last_edited_at</code> e <code className="bg-red-100 px-2 py-1 rounded font-mono">diretriz_id</code> ainda não foram criadas no Supabase.
+                              <h3 className="text-lg font-bold text-blue-900 mb-2">ℹ️ Configurar Campos de Edição</h3>
+                              <p className="text-sm text-blue-800 mb-3">
+                                Para permitir edição completa de planos com todas as diretrizes e metas, execute o script SQL <code className="bg-blue-100 px-2 py-1 rounded font-mono">ADD-COLUNAS-ALINHAMENTO.sql</code>
                               </p>
-                              <p className="text-xs text-red-700 mb-3">
-                                <strong>Solução:</strong> Execute os scripts SQL do arquivo <code className="bg-red-100 px-2 py-1 rounded font-mono">EXECUTAR-SCRIPTS-SQL.md</code> no console Supabase.
+                              <p className="text-xs text-blue-700 mb-3">
+                                <strong>Passos:</strong>
+                                <ol className="list-decimal list-inside mt-2 space-y-1">
+                                  <li>Abra o Supabase SQL Editor</li>
+                                  <li>Copie e execute o conteúdo de <code className="bg-blue-100 px-1 rounded">ADD-COLUNAS-ALINHAMENTO.sql</code></li>
+                                  <li>Recarregue o app (F5)</li>
+                                </ol>
                               </p>
                               <div className="flex gap-2">
-                                <a href="https://app.supabase.com" target="_blank" rel="noopener noreferrer" className="text-sm bg-red-600 text-white px-3 py-1.5 rounded font-bold hover:bg-red-700">
-                                  Abrir Supabase
+                                <a href="https://app.supabase.com" target="_blank" rel="noopener noreferrer" className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded font-bold hover:bg-blue-700">
+                                  Abrir Supabase SQL
                                 </a>
                               </div>
                             </>
@@ -3038,10 +3605,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                       label="Programa Orçamentário"
                       value={formData.emenda.programa}
                       onChange={(e) => updateFormData('emenda', { ...formData.emenda, programa: e.target.value })}
-                      options={[
-                        { value: '', label: 'Selecione um Programa' },
-                        ...PROGRAMAS.map(p => ({ value: p, label: p }))
-                      ]}
+                      options={PROGRAMAS.map(p => ({ value: p, label: p }))}
                       required
                     />
                     <InputField
@@ -3107,10 +3671,16 @@ Secretaria de Estado da Saúde de São Paulo`;
                         label="CNES"
                         name="cnes"
                         value={formData.beneficiario.cnes}
-                        onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, cnes: maskCNES(e.target.value) })}
+                        onChange={(e) => {
+                          // Only allow changes if user is admin
+                          if (currentUser?.role === 'admin') {
+                            updateFormData('beneficiario', { ...formData.beneficiario, cnes: maskCNES(e.target.value) });
+                          }
+                        }}
                         mask={(val: string) => maskCNES(val)}
                         placeholder="Código CNES"
-                        readOnly={currentUser?.cnes ? true : false}
+                        disabled={currentUser?.role === 'user'}
+                        title={`Seu CNES: ${currentUser?.cnes || 'não preenchido'}`}
                       />
                       <InputField
                         label="Email"

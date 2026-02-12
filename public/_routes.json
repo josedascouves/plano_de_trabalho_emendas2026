@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "include": ["/*"],
+  "exclude": [
+    "/assets/*",
+    "/img/*",
+    "/*.html",
+    "/favicon.ico",
+    "/manifest.json"
+  ],
+  "rules": [
+    {
+      "oneOf": [
+        {
+          "type": "static",
+          "include": "/assets/*",
+          "cache": {
+            "default_ttl": 31536000
+          }
+        },
+        {
+          "type": "static",
+          "include": "/img/*",
+          "cache": {
+            "default_ttl": 86400
+          }
+        },
+        {
+          "type": "static",
+          "include": "/*.html"
+        },
+        {
+          "type": "route",
+          "include": "/*",
+          "route": "/index.html"
+        }
+      ]
+    }
+  ]
+}

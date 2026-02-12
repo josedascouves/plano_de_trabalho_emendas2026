@@ -3403,48 +3403,7 @@ Secretaria de Estado da Saúde de São Paulo`;
               <div className="space-y-8 animate-fadeIn">
                 <h2 className="text-base font-black text-gray-900 uppercase tracking-wider text-center">Dashboard - Relatórios e Estatísticas</h2>
               
-                {/* DIAGNÓSTICO DE VERSIONAMENTO */}
-                {(() => {
-                  const hasVersioningColumns = planosList.length > 0 && planosList.some(p => p.edit_count !== undefined);
-                  const plansWithEdits = planosList.filter(p => p.edit_count > 0).length;
-                  
-                  return (
-                    <div className={`rounded-lg p-6 border-2 ${hasVersioningColumns ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
-                      <div className="flex items-start gap-4">
-                        <div className="flex-1">
-                          {hasVersioningColumns ? (
-                            <>
-                              <h3 className="text-lg font-bold text-green-900 mb-2">✅ Colunas de Versionamento Ativas</h3>
-                              <p className="text-sm text-green-800">
-                                O sistema está rastreando edições. <strong>{plansWithEdits} plano(s)</strong> já foram editado(s) por usuários.
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <h3 className="text-lg font-bold text-blue-900 mb-2">ℹ️ Configurar Campos de Edição</h3>
-                              <p className="text-sm text-blue-800 mb-3">
-                                Para permitir edição completa de planos com todas as diretrizes e metas, execute o script SQL <code className="bg-blue-100 px-2 py-1 rounded font-mono">ADD-COLUNAS-ALINHAMENTO.sql</code>
-                              </p>
-                              <p className="text-xs text-blue-700 mb-3">
-                                <strong>Passos:</strong>
-                                <ol className="list-decimal list-inside mt-2 space-y-1">
-                                  <li>Abra o Supabase SQL Editor</li>
-                                  <li>Copie e execute o conteúdo de <code className="bg-blue-100 px-1 rounded">ADD-COLUNAS-ALINHAMENTO.sql</code></li>
-                                  <li>Recarregue o app (F5)</li>
-                                </ol>
-                              </p>
-                              <div className="flex gap-2">
-                                <a href="https://app.supabase.com" target="_blank" rel="noopener noreferrer" className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded font-bold hover:bg-blue-700">
-                                  Abrir Supabase SQL
-                                </a>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
+
               
               {isLoadingPlanos ? (
                 <div className="flex justify-center py-20">
@@ -3508,15 +3467,6 @@ Secretaria de Estado da Saúde de São Paulo`;
                     <div className="bg-white border border-gray-200 p-8 rounded-lg mt-8">
                       <h3 className="text-lg font-bold text-black uppercase tracking-wide mb-6">📋 Histórico de Edições</h3>
                       
-                      {/* Verificar se as colunas foram criadas */}
-                      {(!planosList || planosList.length === 0 || !planosList.some(p => p.edit_count !== undefined)) && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 mb-6">
-                          <p className="text-sm text-amber-800">
-                            <strong>⚠️ Colunas de versionamento ainda não configuradas.</strong><br/>
-                            Para ativar o rastreamento de edições, execute os scripts SQL do arquivo <code className="bg-amber-100 px-2 py-1 rounded">EXECUTAR-SCRIPTS-SQL.md</code>
-                          </p>
-                        </div>
-                      )}
                       
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">

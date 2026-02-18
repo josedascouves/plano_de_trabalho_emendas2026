@@ -1,0 +1,86 @@
+✅ ERRO CORRIGIDO: "Map is not a constructor"
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔴 ERRO QUE ESTAVA ACONTECENDO:
+
+TypeError: Map is not a constructor
+    at fetchUsers (App.tsx:367:33)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔧 A CAUSA:
+
+Estava usando `new Map()` que pode não estar disponível em todos os ambientes
+JavaScript (especialmente se o código está sendo transpilado para versões antigas).
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ A SOLUÇÃO:
+
+Substituí `Map` por um simples objeto JavaScript:
+
+ANTES:
+const usersByRole = new Map(userRoles.map(ur => [ur.user_id, ur]));
+const role = usersByRole.get(p.id)?.role || 'user';
+
+DEPOIS:
+const usersByRole = {};
+userRoles.forEach(ur => {
+  usersByRole[ur.user_id] = ur;
+});
+const role = usersByRole[p.id]?.role || 'user';
+
+Muito simples e compatível com QUALQUER ambiente! ✨
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🚀 O QUE FAZER AGORA:
+
+1. Recarregue a página: F5
+
+2. Faça login novamente: afpereira@saude.sp.gov.br
+
+3. Abra DevTools: F12
+
+4. Clique no ícone de pessoas (Users)
+
+5. DESTA VEZ DEVE FUNCIONAR! 🎉
+
+O console vai mostrar:
+✅ Profiles carregados: 7
+✅ User roles carregados: 7
+✅ Lista de usuários atualizada: 7
+(SEM ERRO!)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📊 ONDE FOI CORRIGIDO:
+
+1. fetchUsers() - Linha ~365
+2. handleToggleUserDisable() - Linha ~565
+3. handleDeleteUser() - Linha ~629
+4. handleCreateUser() - Linha ~752
+
+TODOS os 4 lugares onde usava Map foram corrigidos! ✓
+
+═══════════════════════════════════════════════════════════════════════════════
+
+💡 AGORA DEVE VER:
+
+No modal de usuários:
+✅ Lista dos 7 usuários
+✅ Nomes, emails, roles, status
+✅ Botões: Editar, Promover, Deletar, Ativar/Desativar
+✅ Formulário para criar novo usuário
+
+No console (F12):
+✅ SEM erros vermelhos
+✅ Logs mostrando cada etapa
+✅ Lista completa de usuários
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎉 TESTE AGORA NOVAMENTE!
+
+Tudo deve estar funcionando perfeitamente! 🚀

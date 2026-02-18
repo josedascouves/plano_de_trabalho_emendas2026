@@ -1,0 +1,48 @@
+🔍 GUIA RÁPIDO - DIAGNOSTICAR SISTEMA
+====================================
+
+Se você receber ERRO ao executar qualquer script SQL:
+
+┌─ PASSO 1: Primeiramente execute ESTE script ──────────────┐
+│                                                              │
+│ Arquivo: DESCOBRIR-COLUNAS.sql                             │
+│                                                              │
+│ INSTRUÇÕES:                                                 │
+│ 1. Abra Supabase → SQL Editor                              │
+│ 2. Cole o conteúdo completo deste arquivo                  │
+│ 3. Pressione Ctrl+Enter para executar                       │
+│                                                              │
+│ RESULTADO:                                                  │
+│ • Mostra TODAS as colunas reais de planos_trabalho          │
+│ • Conta quantos planos existem                              │
+│ • Mostra os últimos 5 planos completos                      │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+
+┌─ PASSO 2: Depois execute o diagnóstico ────────────────────┐
+│                                                              │
+│ Arquivo: DIAGNOSTICO-COMPLETO.sql                          │
+│ OU                                                           │
+│ Arquivo: TESTE-RAPIDO-RLS.sql                              │
+│                                                              │
+│ Vai mostrar status de:                                       │
+│ • RLS em cada tabela                                         │
+│ • Usuários e admins                                          │
+│ • Planos criados                                             │
+│ • RLS policies                                               │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+
+┌─ PASSO 3: Se ainda der erro ───────────────────────────────┐
+│                                                              │
+│ 1. Copie o ERRO EXATO que aparece                          │
+│ 2. Procure pelo nome da coluna ou tabela no erro            │
+│ 3. Execute DESCOBRIR-COLUNAS.sql para confirmar             │
+│ 4. Se a coluna não existir, não use em queries             │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+
+💡 DICA: Se der erro de coluna não encontrada:
+   • Execute DESCOBRIR-COLUNAS.sql PRIMEIRO
+   • Anote as colunas reais
+   • Use apenas essas colunas nos scripts

@@ -1,0 +1,167 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                  🔧 SOLUÇÃO RÁPIDA - ADMIN NÃO VÊ DADOS 🔧                  ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📊 STATUS ATUAL:
+├─ ❌ Admin não consegue ver usuários
+├─ ❌ Admin não consegue ver planos
+├─ ⚠️  CNES precisa ser obrigatório
+└─ 🔧 RLS policies precisam de correção
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 AÇÕES NECESSÁRIAS (3 PASSOS SIMPLES)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─ PASSO 1: CORRIGIR BANCO DE DADOS (SUPABASE) ────────────────────────────┐
+│                                                                              │
+│  ⏱️  Tempo: 2 minutos                                                        │
+│  📁 Arquivo: CORRECAO-ADMIN-PLANOS.sql                                      │
+│                                                                              │
+│  INSTRUÇÕES:                                                                │
+│  1. Abra: https://app.supabase.com/                                         │
+│  2. Projeto: Seu Projeto SES SP                                            │
+│  3. Menu esquerdo → SQL Editor                                              │
+│  4. Clique em "New Query"                                                   │
+│  5. Copie o CONTEÚDO TODO do arquivo: CORRECAO-ADMIN-PLANOS.sql           │
+│  6. Cole na editor aberta                                                   │
+│  7. Pressione Ctrl+Enter OU clique "RUN"                                    │
+│                                                                              │
+│  ⚠️  IMPORTANTE: Execute tudo de uma vez! Não copie linha por linha!       │
+│                                                                              │
+│  ✅ QUANDO FUNCIONAR:                                                        │
+│     - Verá diversos SELECT mostrando dados                                  │
+│     - Última linha: "CORREÇÃO COMPLETA!"                                    │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌─ PASSO 2: LIMPAR HISTÓRICO E FAZER LOGOUT ───────────────────────────────┐
+│                                                                              │
+│  ⏱️  Tempo: 1 minuto                                                         │
+│                                                                              │
+│  INSTRUÇÕES:                                                                │
+│  1. Na aplicação, clique o ícone "Sair" (canto superior direito)           │
+│  2. Pressione: Ctrl+Shift+Delete                                            │
+│     (Abre: "Limpar Dados de Navegação")                                     │
+│  3. Marque TODAS as caixas (Cookies, Arquivos, etc.)                        │
+│  4. Clique "LIMPAR DADOS"                                                   │
+│  5. Feche a aba ou F5 para recarregar                                        │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌─ PASSO 3: FAZER LOGIN NOVAMENTE ─────────────────────────────────────────┐
+│                                                                              │
+│  ⏱️  Tempo: 1 minuto                                                         │
+│                                                                              │
+│  INSTRUÇÕES:                                                                │
+│  1. Email: afpereira@saude.sp.gov.br                                       │
+│  2. Senha: (sua senha)                                                       │
+│  3. Clique "FAZER LOGIN"                                                    │
+│  4. Aperte F12 para abrir o Console                                         │
+│                                                                              │
+│  ✅ DEVE APARECER UM DESTES LOGS (procure com Ctrl+F):                     │
+│     - 🔑 LOGIN - Usuário autenticado                                        │
+│     - ✅ Perfil carregado                                                    │
+│     - ✅ Role carregado                                                      │
+│     - 🎯 setCurrentUser (deve mostrar role: 'admin')                         │
+│                                                                              │
+│  ⚠️  SE APARECER ❌ VERMELHO:                                               │
+│     - Anote a mensagem exato do erro                                         │
+│     - Execute novamente o CORRECAO-ADMIN-PLANOS.sql                        │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ VERIFICAÇÕES FINAIS
+
+Após fazer login, você DEVE VER:
+
+┌─ NO HEADER (CANTO SUPERIOR DIREITO):
+│  ✓ Seu nome: "Seu Nome"
+│  ✓ Sua role: "ADMIN" (em vermelho)
+│  ✓ Botão de usuários (ícone com pessoas)
+│  ✓ Botão de sair (ícone sair)
+
+├─ AO CLICAR NO BOTÃO DE USUÁRIOS:
+│  ✓ Modal abre com a lista de 7 usuários
+│  ✓ Cada usuário mostra: Nome, Email, Role, Ações
+│  ✓ Botões funcionam: Editar, Promover, Deletar, Desativar
+
+└─ AO IR PARA A PÁGINA DE PLANOS:
+   ✓ Aparecem TODOS os planos (não apenas seus)
+   ✓ Você consegue editar qualquer um
+   ✓ Você consegue deletar qualquer um
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📋 MUDANÇAS TAMBÉM IMPLEMENTADAS NO CÓDIGO (App.tsx)
+
+✅ CNES agora é OBRIGATÓRIO ao criar usuário padrão
+   └─ Campo será validado antes de criar
+   └─ Máximo 8 dígitos
+
+✅ Melhor tratamento de erros com logs detalhados
+   └─ Console mostrará todos os passos (F12 para ver)
+   └─ Será fácil diagnosticar problemas
+
+✅ Separação correta de dados:
+   ├─ profiles: Nome, Email, CNES (dados pessoais)
+   └─ user_roles: Role, Disabled (dados de acesso)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🆘 TROUBLESHOOTING
+
+PROBLEMA 1: "Não consigo ver o ícone de usuários"
+SOLUÇÃO:
+  → Verifique se você realmente fez logout e login novamente
+  → Abra Console (F12) e procure por "🔑 LOGIN"
+  → Se não aparecer, você não fez login corretamente
+  → Execute CORRECAO-ADMIN-PLANOS.sql novamente
+
+PROBLEMA 2: "Vi a lista de usuários mas planos não aparecem"
+SOLUÇÃO:
+  → Abra Console (F12)
+  → Procure por "📋 loadPlanos"
+  → Se houver ❌ vermelho, há erro de RLS
+  → Execute CORRECAO-ADMIN-PLANOS.sql novamente
+
+PROBLEMA 3: "Consigo criar usuário mas CNES não é validado"
+SOLUÇÃO:
+  → Recarregue a página (F5)
+  → Tente novamente criar usuário SEM preencher CNES
+  → Deve aparecer erro obrigatório
+
+PROBLEMA 4: "Banco diz 'CNES column not found'"
+SOLUÇÃO:
+  → Execute: CORRECAO-ADMIN-PLANOS.sql
+  → Ele criará a coluna se não existir
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📞 SUPORTE TÉCNICO
+
+Se após seguir todos os passos ainda não funcionar:
+
+1. Abra Console (F12)
+2. Procure por ❌ (erros em vermelho)
+3. Anote a mensagem exato do erro
+4. Execute script de diagnóstico:
+   → Arquivo: DIAGNOSTICO-COMPLETO.sql
+   → Execute no Supabase SQL Editor
+5. Compartilhe:
+   - Erro exato do console
+   - Resultado do diagnóstico
+   - Qual passo não funcionou
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎉 PRONTO! Agora execute os 3 passos acima e tudo deve funcionar! 🎉
+
+Qualquer dúvida, consulte os arquivos:
+• COMO-CORRIGIR-ADMIN.md (guia detalhado)
+• CORRECAO-ADMIN-PLANOS.sql (script principal)
+• DIAGNOSTICO-COMPLETO.sql (diagnosticar problemas)
+• TESTE-RAPIDO-RLS.sql (testar após corrigir)

@@ -1,0 +1,175 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║        ⚡ AÇÕES RÁPIDAS - USUÁRIOS NÃO APARECEM NO ADMIN                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+Os testes passaram, mas você não consegue ver os usuários na interface.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ CHECKLIST RÁPIDO (3 minutos):
+
+1️⃣  Você vê um ÍCONE DE PESSOAS no header (canto superior direito)?
+    ├─ SIM: Continue para 2️⃣
+    └─ NÃO: Execute → CORRECAO-ADMIN-PLANOS.sql (novamente)
+
+2️⃣  Clica no ícone e abre um modal com título "Gerenciar Usuários"?
+    ├─ SIM: Continue para 3️⃣
+    └─ NÃO: Algo está errado, veja DEBUG-USUARIOS-NAO-CARREGAM.md
+
+3️⃣  Dentro do modal, vê uma área com "Nenhum usuário encontrado"?
+    ├─ SIM: Problema identificado! Veja SOLUÇÃO abaixo
+    └─ NÃO SIM VÊ A LISTA: Parabéns! Tudo está funcionando! 🎉
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔧 SOLUÇÃO SE MOSTRAR "NENHUM USUÁRIO ENCONTRADO":
+
+┌─ AÇ 1: RECARREGAR A PÁGINA ──────────────────────────────┐
+│                                                             │
+│ 1. Pressione: F5 (ou Ctrl+R)                               │
+│ 2. Log in novamente                                        │
+│ 3. Clique no ícone de pessoas                              │
+│                                                             │
+│ Se resolver: ✅ Pronto!                                    │
+│ Se não resolver: Continue...                               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─ AÇ 2: LIMPAR CACHE COMPLETO ────────────────────────────┐
+│                                                             │
+│ 1. Pressione: Ctrl+Shift+Delete                            │
+│ 2. Vai abrir: "Limpar dados de navegação"                  │
+│ 3. Marque TUDO:                                             │
+│    □ Cookies                                                │
+│    □ Arquivos em cache                                      │
+│    □ Imagens em cache                                       │
+│    □ LocalStorage                                           │
+│    (MARQUE TODOS)                                           │
+│ 4. Clique: "LIMPAR DADOS"                                  │
+│ 5. Recarregue a página (F5)                                │
+│ 6. Faça login novamente                                     │
+│                                                             │
+│ Se resolver: ✅ Pronto!                                    │
+│ Se não resolver: Continue...                               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─ AÇ 3: VERIFICAR CONSOLE (F12) ──────────────────────────┐
+│                                                             │
+│ 1. Pressione: F12                                           │
+│ 2. Clique na aba: "Console"                                │
+│ 3. Clique no ícone de pessoas (abre modal)                 │
+│ 4. Procure por estas mensagens (use Ctrl+F):              │
+│                                                             │
+│    ✅ Se VER: "👥 fetchUsers()"                            │
+│       → Continue procurando...                              │
+│                                                             │
+│    ✅ Se VER: "✅ Profiles carregados: X"                  │
+│       → Continue procurando...                              │
+│                                                             │
+│    ✅ Se VER: "✅ User roles carregados: X"                │
+│       → Continue procurando...                              │
+│                                                             │
+│    ✅ Se VER: "✅ Lista de usuários atualizada: X"         │
+│       → Dados estão sendo carregados! Problema é visual   │
+│                                                             │
+│    ❌ Se VER: "❌ Erro ao carregar profiles:"             │
+│       → Há erro de RLS policy                              │
+│       → Solução: Execute CORRECAO-ADMIN-PLANOS.sql        │
+│                                                             │
+│    ❌ Se VER: "❌ Erro ao carregar user_roles:"           │
+│       → Há erro ao buscar roles                            │
+│       → Solução: Execute CORRECAO-ADMIN-PLANOS.sql        │
+│                                                             │
+│    ❌ Se NÃO VER NENHUMA MENSAGEM COM 👥:                 │
+│       → fetchUsers() não está sendo chamado                │
+│       → Pode ser que você não é admin                      │
+│       → Procure por "🔐 isAdmin" no console                │
+│       → Se isAdmin: false → Execute CORRECAO-ADMIN-PLANOS.sql
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─ AÇ 4: EXECUTAR SCRIPT NO SUPABASE ──────────────────────┐
+│                                                             │
+│ Se as ações acima não funcionaram:                         │
+│                                                             │
+│ 1. Abra: https://app.supabase.com/                         │
+│ 2. Seu projeto → SQL Editor                                │
+│ 3. Cole este query:                                         │
+│                                                             │
+│ SELECT 'PROFILES:' as check;                               │
+│ SELECT COUNT(*) FROM public.profiles;                      │
+│                                                             │
+│ SELECT 'USER_ROLES:' as check;                             │
+│ SELECT COUNT(*) FROM public.user_roles;                    │
+│                                                             │
+│ Execute (Ctrl+Enter)                                        │
+│                                                             │
+│ Vai mostrar algo como:                                      │
+│ PROFILES: | 7                                               │
+│ USER_ROLES: | 7                                             │
+│                                                             │
+│ ✅ Se ambos mostram números > 0:                           │
+│    → Dados existem no banco                                │
+│    → Problema é de renderização no React                  │
+│    → Cole este comando no Console (F12):                   │
+│       localStorage.clear(); location.reload();             │
+│    → Tente novamente                                        │
+│                                                             │
+│ ❌ Se PROFILES = 0:                                        │
+│    → Nenhum usuário na tabela profiles                     │
+│    → Solução: Execute MIGRACAO-USUARIOS-EXISTENTES.sql    │
+│                                                             │
+│ ❌ Se USER_ROLES = 0:                                      │
+│    → Nenhuma role atribuída                                │
+│    → Solução: Execute MIGRACAO-USUARIOS-EXISTENTES.sql    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 RESUMO DAS POSSÍVEIS CAUSAS:
+
+❌ PROBLEMA: Ícone de pessoas não aparece no header
+   CAUSA: Você não é admin
+   SOLUÇÃO: Execute CORRECAO-ADMIN-PLANOS.sql
+
+❌ PROBLEMA: Modal abre mas lista está vazia
+   CAUSA 1: Dados não estão no banco
+   SOLUÇÃO: Execute MIGRACAO-USUARIOS-EXISTENTES.sql
+   
+   CAUSA 2: RLS policy bloqueando leitura
+   SOLUÇÃO: Execute CORRECAO-ADMIN-PLANOS.sql
+
+❌ PROBLEMA: Console mostra "❌ Erro ao carregar profiles/user_roles"
+   CAUSA: RLS policies incorretas
+   SOLUÇÃO: Execute CORRECAO-ADMIN-PLANOS.sql
+
+❌ PROBLEMA: Console mostra dados (✅) mas interface vazia
+   CAUSA: Problema de renderização React
+   SOLUÇÃO: localStorage.clear(); location.reload();
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📞 SUPORTE:
+
+Se NADA funcionar, faça assim:
+
+1. Abra Console (F12)
+2. Procure por TODOS os logs com ❌ (vermelhos)
+3. Copie a mensagem exato do erro
+4. Compartilhe comigo:
+   - O erro exato
+   - Resultado dos comandos SQL no Supabase
+   - O que você tentou fazer
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎉 Se conseguiu ver os usuários, parabéns! Agora pode:
+   • Editar usuários
+   • Promover para admin
+   • Desativar/Ativar
+   • Deletar usuários
+   • Criar novos usuários
+
+Tudo funcionando! 🚀

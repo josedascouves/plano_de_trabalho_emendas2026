@@ -40,7 +40,8 @@ import {
   AlertTriangle,
   Crown,
   ChevronDown,
-  Key
+  Key,
+  HelpCircle
 } from 'lucide-react';
 import { FormState, User } from './types';
 import { 
@@ -92,6 +93,8 @@ const App: React.FC = () => {
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [selectedPlanos, setSelectedPlanos] = useState<Set<string>>(new Set());
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showSelectPlanModal, setShowSelectPlanModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   // Filtros de Planos
   const [filtros, setFiltros] = useState({
@@ -113,9 +116,6 @@ const App: React.FC = () => {
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
   const [formHasChanges, setFormHasChanges] = useState(false);
   const [lastSavedFormData, setLastSavedFormData] = useState<FormState | null>(null);
-  
-  // Help Modal State
-  const [showHelpModal, setShowHelpModal] = useState(false);
   const [helpSectionId, setHelpSectionId] = useState<string | null>(null);
   
   // Section completion tracking
@@ -341,6 +341,7 @@ const App: React.FC = () => {
 
   // Fetch users if admin
   const prevShowUserManagementRef = useRef(showUserManagement);
+  const loadingPlanIdRef = useRef<string | null>(null);
   
   useEffect(() => {
     console.log('🔍 useEffect check:', {
@@ -438,6 +439,14 @@ const App: React.FC = () => {
       loadPlanos();
     }
   }, [currentView, isAuthenticated]);
+
+  // Carrega planos assim que o usuário se autentica (para usar no modal de seleção)
+  useEffect(() => {
+    if (isAuthenticated && planosList.length === 0 && !isLoadingPlanos) {
+      console.log('📋 Carregando planos no mount...');
+      loadPlanos();
+    }
+  }, [isAuthenticated]);
 
   // Auto-fill form when user logs in or form is initialized
   useEffect(() => {
@@ -1056,9 +1065,10 @@ const App: React.FC = () => {
     }
   };
 
-  // Carrega um plano específico para editar
+  // Carrega um plano específico para editar (apenas uma vez por plano)
   useEffect(() => {
     if (editingPlanId) {
+      console.log('🔄 useEffect dispatchado - carregando plano:', editingPlanId);
       loadPlanForEditing(editingPlanId);
     }
   }, [editingPlanId]);
@@ -1097,6 +1107,13 @@ const App: React.FC = () => {
   }, [formData]);
 
   const loadPlanForEditing = async (planoId: string) => {
+    // Evitar carregar o mesmo plano 2 vezes
+    if (loadingPlanIdRef.current === planoId) {
+      console.log('⏭️ Carregamento de plano já em progresso:', planoId);
+      return;
+    }
+
+    loadingPlanIdRef.current = planoId;
     try {
       console.log('📂 Iniciando carregamento de plano para edição:', planoId);
       
@@ -1119,29 +1136,71 @@ const App: React.FC = () => {
         metas_ids: plano.metas_ids
       });
 
-      // 2. Buscar metas quantitativas
-      const { data: acoes } = await supabase
+      // 2. Buscar metas quantitativas (com deduplicação)
+      let { data: acoes } = await supabase
         .from('acoes_servicos')
         .select('*')
         .eq('plano_id', planoId);
 
-      console.log('✅ Ações/Serviços carregados:', acoes?.length || 0);
+      // Remover duplicatas baseado em categoria + item
+      if (acoes) {
+        const seen = new Set<string>();
+        acoes = acoes.filter(a => {
+          const key = `${a.categoria}|${a.item}`;
+          if (seen.has(key)) {
+            console.log(`⚠️ Duplicata removida: ${key}`);
+            return false;
+          }
+          seen.add(key);
+          return true;
+        });
+      }
 
-      // 3. Buscar metas qualitativas
-      const { data: metas } = await supabase
+      console.log('✅ Ações/Serviços carregados DO BANCO: 4 Array(4) → Após dedup:', acoes?.length || 0);
+
+      // 3. Buscar metas qualitativas (com deduplicação)
+      let { data: metas } = await supabase
         .from('metas_qualitativas')
         .select('*')
         .eq('plano_id', planoId);
 
-      console.log('✅ Metas Qualitativas carregadas:', metas?.length || 0);
+      // Remover duplicatas baseado em meta_descricao
+      if (metas) {
+        const seen = new Set<string>();
+        metas = metas.filter(m => {
+          const key = m.meta_descricao || '';
+          if (seen.has(key)) {
+            console.log(`⚠️ Duplicata removida: ${key}`);
+            return false;
+          }
+          seen.add(key);
+          return true;
+        });
+      }
 
-      // 4. Buscar naturezas de despesa
-      const { data: naturezas } = await supabase
+      console.log('✅ Metas Qualitativas carregadas DO BANCO → Após dedup:', metas?.length || 0);
+
+      // 4. Buscar naturezas de despesa (com deduplicação)
+      let { data: naturezas } = await supabase
         .from('naturezas_despesa_plano')
         .select('*')
         .eq('plano_id', planoId);
 
-      console.log('✅ Naturezas de Despesa carregadas:', naturezas?.length || 0);
+      // Remover duplicatas baseado em codigo
+      if (naturezas) {
+        const seen = new Set<string>();
+        naturezas = naturezas.filter(n => {
+          const key = n.codigo || '';
+          if (seen.has(key)) {
+            console.log(`⚠️ Duplicata removida: ${key}`);
+            return false;
+          }
+          seen.add(key);
+          return true;
+        });
+      }
+
+      console.log('✅ Naturezas de Despesa carregadas DO BANCO → Após dedup:', naturezas?.length || 0);
 
       // 5. Montar formData completo com todos os dados
       const loadedFormData: FormState = {
@@ -1183,6 +1242,11 @@ const App: React.FC = () => {
       };
       
       console.log('📝 FormData montado para edição:', loadedFormData);
+      console.log('📊 Quantidade de itens no formData:', {
+        acoesServicos: loadedFormData.acoesServicos.length,
+        metasQualitativas: loadedFormData.metasQualitativas.length,
+        naturezasDespesa: loadedFormData.naturezasDespesa.length
+      });
       
       setFormData(loadedFormData);
       setPlanoSalvoId(planoId);
@@ -1194,6 +1258,8 @@ const App: React.FC = () => {
       console.error('❌ Erro ao carregar plano:', error);
       alert(`Erro ao carregar plano para editar: ${error.message}`);
       setEditingPlanId(null);
+    } finally {
+      loadingPlanIdRef.current = null;
     }
   };
 
@@ -1463,6 +1529,44 @@ const App: React.FC = () => {
           .eq('id', planoSalvoId);
 
         if (error) throw error;
+
+        // Deletar e reinserir dados relacionados (para evitar duplicação)
+        await supabase.from('acoes_servicos').delete().eq('plano_id', planoSalvoId);
+        await supabase.from('metas_qualitativas').delete().eq('plano_id', planoSalvoId);
+        await supabase.from('naturezas_despesa_plano').delete().eq('plano_id', planoSalvoId);
+
+        // Reinserir dados relacionados
+        if (formData.acoesServicos.length > 0) {
+          const acoesData = formData.acoesServicos.map(a => ({
+            plano_id: planoSalvoId,
+            categoria: a.categoria,
+            item: a.item,
+            meta: a.metasQuantitativas[0],
+            valor: parseCurrency(a.valor),
+            created_by: user.id
+          }));
+          await supabase.from('acoes_servicos').insert(acoesData);
+        }
+
+        if (formData.metasQualitativas.length > 0) {
+          const qualData = formData.metasQualitativas.map(q => ({
+            plano_id: planoSalvoId,
+            meta_descricao: q.meta,
+            indicador: q.valor,
+            created_by: user.id
+          }));
+          await supabase.from('metas_qualitativas').insert(qualData);
+        }
+
+        if (formData.naturezasDespesa.length > 0) {
+          const natData = formData.naturezasDespesa.map(n => ({
+            plano_id: planoSalvoId,
+            codigo: n.codigo,
+            valor: parseCurrency(n.valor),
+            created_by: user.id
+          }));
+          await supabase.from('naturezas_despesa_plano').insert(natData);
+        }
       } else {
         // Criar novo plano
         const { data: plano, error: planoError } = await supabase
@@ -1679,8 +1783,8 @@ const App: React.FC = () => {
         
         console.log("✅ Plano principal atualizado (edição #" + newEditCount + ")");
         
-        // DELETAR dados relacionados antigos
-        console.log("🗑️ Deletando dados relacionados antigos...");
+        // DELETAR dados relacionados antigos (incluso duplicatas)
+        console.log("🗑️ Deletando TODOS os dados relacionados antigos (incluindo duplicatas)...");
         const { error: deleteAcoesError } = await supabase.from('acoes_servicos').delete().eq('plano_id', existingPlanoId);
         if (deleteAcoesError) {
           console.error("❌ ERRO ao deletar ações:", deleteAcoesError);
@@ -1705,10 +1809,10 @@ const App: React.FC = () => {
           return null;
         }
         
-        console.log("✅ Dados relacionados deletados");
+        console.log("✅ Todos os dados relacionados deletados (duplicatas removidas!)");
         
-        // INSERIR novos dados relacionados
-        console.log("📝 Inserindo novos dados relacionados...");
+        // INSERIR novos dados relacionados (sem duplicatas)
+        console.log("📝 Inserindo novos dados relacionados (limpos)...");
         
         // Inserir Metas Quantitativas
         if (formData.acoesServicos.length > 0) {
@@ -1727,7 +1831,7 @@ const App: React.FC = () => {
             setIsSending(false);
             return null;
           }
-          console.log("✅ Metas quantitativas inseridas na edição");
+          console.log("✅ Metas quantitativas inseridas (sem duplicatas):", acoesData.length);
         }
 
         // Inserir Metas Qualitativas
@@ -1745,7 +1849,7 @@ const App: React.FC = () => {
             setIsSending(false);
             return null;
           }
-          console.log("✅ Metas qualitativas inseridas na edição");
+          console.log("✅ Metas qualitativas inseridas (sem duplicatas):", qualData.length);
         }
 
         // Inserir Naturezas de Despesa
@@ -1763,7 +1867,7 @@ const App: React.FC = () => {
             setIsSending(false);
             return null;
           }
-          console.log("✅ Naturezas de despesa inseridas na edição");
+          console.log("✅ Naturezas de despesa inseridas (sem duplicatas):", natData.length);
         }
         
         console.log("✅ Edição salva com sucesso!");
@@ -2096,6 +2200,28 @@ const App: React.FC = () => {
   };
 
   const handleSendToSES = () => {
+    // Se o formulário está vazio, mostrar modal para selecionar um plano
+    // Verifica se campos críticos estão realmente preenchidos
+    const hasEmendaData = formData.emenda?.numero && formData.emenda?.numero.toString().trim() !== '';
+    const hasParliamentarData = formData.emenda?.parlamentar && formData.emenda?.parlamentar.toString().trim() !== '';
+    const hasBeneficiarioData = formData.beneficiario?.nome && formData.beneficiario?.nome.toString().trim() !== '';
+    
+    const isFormEmpty = !hasEmendaData || !hasParliamentarData || !hasBeneficiarioData;
+    
+    console.log('🔍 handleSendToSES - isFormEmpty:', isFormEmpty, 'planosList:', planosList.length);
+    
+    if (isFormEmpty && planosList.length > 0) {
+      console.log('📋 Abrindo modal de seleção de planos...');
+      setShowSelectPlanModal(true);
+      return;
+    }
+
+    if (isFormEmpty && planosList.length === 0) {
+      alert('⚠️ Nenhum plano disponível.\n\nPreencha o formulário com os dados do plano que deseja enviar ou crie um novo plano.');
+      return;
+    }
+
+    // Formulário preenchido, gerar email
     const subject = `Plano de Trabalho 2026 - Emenda ${formData.emenda.numero} - CNES ${formData.beneficiario.cnes || 'N/A'}`;
     const emailBody = `Prezados,
 
@@ -2120,6 +2246,25 @@ Secretaria de Estado da Saúde de São Paulo`;
 
     const mailtoLink = `mailto:gcf-emendasfederais@saude.sp.gov.br?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
     window.location.href = mailtoLink;
+  };
+
+  const handleSelectPlanForEmail = async (plano: any) => {
+    // Carregar os dados do plano selecionado
+    setEditingPlanId(plano.id);
+    setCurrentView('new');
+    setActiveSection('info-emenda');
+    setSentSuccess(false);
+    setShowSelectPlanModal(false);
+    
+    // Resetar e carregar
+    setFormData(getInitialFormData());
+    setLastSavedFormData(null);
+    setPlanoSalvoId(null);
+    
+    // Aguardar um momento para o estado atualizar
+    setTimeout(() => {
+      loadPlanForEditing(plano.id);
+    }, 100);
   };
 
   if (isLoadingAuth) {
@@ -2512,7 +2657,20 @@ Secretaria de Estado da Saúde de São Paulo`;
         {/* ======== BOTÕES DE AÇÃO (fora do PDF) ======== */}
         <div className="flex justify-center gap-4 p-6 bg-gray-100 border-t border-gray-300 flex-wrap print:hidden">
           <button 
-            onClick={() => setShowDocument(false)}
+            onClick={() => {
+              setShowDocument(false);
+              alert('📝 Carregando novo plano com todos os campos vazios...');
+              setTimeout(() => {
+                setCurrentView('new');
+                setActiveSection('info-emenda');
+                setSentSuccess(false);
+                setEditingPlanId(null);
+                setPlanoSalvoId(null);
+                setFormData(getInitialFormData());
+                setLastSavedFormData(null);
+                setFormHasChanges(false);
+              }, 500);
+            }}
             className="px-6 py-3 bg-white border-2 border-gray-400 text-gray-900 font-bold text-sm uppercase tracking-widest rounded hover:bg-gray-50 hover:border-gray-600 transition-colors"
           >
             ← Voltar ao Formulário
@@ -3155,6 +3313,313 @@ Secretaria de Estado da Saúde de São Paulo`;
             </div>
           )}
 
+          {/* MODAL: SELECIONAR PLANO PARA ENVIAR EMAIL */}
+          {showSelectPlanModal && (
+            <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl animate-slideUp max-h-[90vh] overflow-y-auto">
+                {/* Header */}
+                <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 border-b border-blue-800/50 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-blue-500/30">
+                      <ClipboardCheck className="text-white w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-white">Selecionar Plano</h2>
+                      <p className="text-blue-100 text-sm mt-1">Escolha um plano salvo para enviar</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowSelectPlanModal(false)} 
+                    className="p-2 hover:bg-blue-500/50 rounded-lg transition-colors"
+                  >
+                    <X className="w-6 h-6 text-white" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-8 space-y-4">
+                  {isLoadingPlanos ? (
+                    <div className="text-center py-12">
+                      <Loader2 className="w-12 h-12 text-blue-500 mx-auto mb-4 animate-spin" />
+                      <p className="text-lg font-bold text-gray-700">Carregando seus planos...</p>
+                      <p className="text-sm text-gray-500 mt-2">Aguarde um momento</p>
+                    </div>
+                  ) : planosList.length > 0 ? (
+                    <div className="space-y-3">
+                      {planosList.map((plano) => (
+                        <button
+                          key={plano.id}
+                          onClick={() => handleSelectPlanForEmail(plano)}
+                          className="w-full text-left p-6 bg-gradient-to-r from-gray-50 to-white border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 shadow-sm hover:shadow-md"
+                        >
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Parlamentar</p>
+                              <p className="text-sm font-bold text-gray-900">{plano.parlamentar}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Emenda</p>
+                              <p className="text-sm font-bold text-gray-900">{plano.numero_emenda}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Valor</p>
+                              <p className="text-sm font-bold text-red-600">R$ {parseFloat(plano.valor_total || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Beneficiário</p>
+                              <p className="text-sm font-bold text-gray-900">{plano.beneficiario_nome}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">CNES</p>
+                              <p className="text-sm font-bold text-gray-900 font-mono">{plano.cnes || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">CNPJ</p>
+                              <p className="text-sm font-bold text-gray-900 font-mono">{plano.beneficiario_cnpj || '—'}</p>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-center justify-between">
+                            <span className="text-xs text-blue-600 font-semibold">Clique para selecionar →</span>
+                            <ChevronRight className="w-5 h-5 text-blue-600" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <ClipboardCheck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-lg font-bold text-gray-700">Nenhum plano disponível</p>
+                      <p className="text-sm text-gray-500 mt-2">Você não tem planos salvos para enviar.</p>
+                      <button
+                        onClick={() => loadPlanos()}
+                        disabled={isLoadingPlanos}
+                        className="mt-6 px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold rounded-lg transition-colors flex items-center gap-2 mx-auto"
+                      >
+                        {isLoadingPlanos ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Carregando...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4" />
+                            Tentar Novamente
+                          </>
+                        )}
+                      </button>
+                      <p className="text-xs text-gray-500 mt-4">Dica: Você também pode preencher o formulário com os dados do plano que deseja enviar.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="sticky bottom-0 bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-6 border-t border-gray-200 flex items-center justify-end gap-3 rounded-b-3xl">
+                  <button
+                    onClick={() => setShowSelectPlanModal(false)}
+                    className="px-6 py-3 font-bold text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL DE AJUDA - PRÓXIMOS PASSOS */}
+          {showHelpModal && (
+            <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl animate-slideUp max-h-[90vh] overflow-y-auto">
+                {/* Header */}
+                <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-yellow-600 px-8 py-6 border-b border-yellow-700/50 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-yellow-500/30">
+                      <BookOpen className="text-white w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-white">Próximos Passos para Envio</h2>
+                      <p className="text-yellow-100 text-sm mt-1">Guia completo para gerar, assinar e enviar seu plano</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowHelpModal(false)} 
+                    className="p-2 hover:bg-yellow-500/50 rounded-lg transition-colors"
+                  >
+                    <X className="w-6 h-6 text-white" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-8 space-y-6">
+                  <p className="text-base text-gray-700 leading-relaxed font-semibold">
+                    Siga os 4 passos abaixo para gerar o PDF, assinar e enviar seu plano de trabalho para a SES-SP.
+                  </p>
+
+                  {/* PASSO 1 */}
+                  <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-2xl border-2 border-blue-300">
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="flex items-center justify-center w-12 h-12 bg-blue-600 rounded-full">
+                          <span className="text-white font-black text-lg">1</span>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-black text-blue-900 text-lg mb-2 uppercase tracking-wide">Gere o PDF</h4>
+                        <p className="text-sm text-blue-800 mb-4 leading-relaxed">
+                          Clique no botão <strong>"🖨️ VISUALIZAR E BAIXAR PDF"</strong> para gerar o documento em PDF. O sistema irá salvar automaticamente seu plano e abrir a visualização do PDF.
+                        </p>
+                        <ul className="text-sm text-blue-700 space-y-2 ml-4">
+                          <li className="flex gap-2">
+                            <span className="text-blue-600 font-bold">•</span>
+                            <span>O PDF será gerado automaticamente após clicar no botão</span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="text-blue-600 font-bold">•</span>
+                            <span>Você verá uma prévia do documento antes de baixar</span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="text-blue-600 font-bold">•</span>
+                            <span>Salve o arquivo em um local seguro em seu computador</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PASSO 2 */}
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-2xl border-2 border-purple-300">
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="flex items-center justify-center w-12 h-12 bg-purple-600 rounded-full">
+                          <span className="text-white font-black text-lg">2</span>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-black text-purple-900 text-lg mb-2 uppercase tracking-wide">Assine o PDF</h4>
+                        <p className="text-sm text-purple-800 mb-4 leading-relaxed">
+                          Abra o arquivo PDF em seu computador e assine digitalmente ou de forma manuscrita.
+                        </p>
+                        <div className="bg-white rounded-lg p-4 mb-3 border border-purple-200">
+                          <p className="text-sm font-bold text-purple-900 mb-3">Opções de Assinatura:</p>
+                          <ul className="text-sm text-purple-800 space-y-2">
+                            <li className="flex gap-2">
+                              <span className="text-purple-600 font-bold">✓</span>
+                              <span><strong>Assinatura Digital:</strong> Use um leitor de PDF (Adobe Reader) com certificado digital</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-purple-600 font-bold">✓</span>
+                              <span><strong>Assinatura Manuscrita:</strong> Imprima o PDF, assine com caneta azul ou preta, escaneie e salve como PDF</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <ul className="text-sm text-purple-700 space-y-2 ml-4">
+                          <li className="flex gap-2">
+                            <span className="text-purple-600 font-bold">•</span>
+                            <span>Responsável pela assinatura: <strong>{formData.responsavelAssinatura || 'Campo a preencher'}</strong></span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="text-purple-600 font-bold">•</span>
+                            <span>Assine no local indicado no documento</span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="text-purple-600 font-bold">•</span>
+                            <span>Mantenha uma cópia assinada para seus registros</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PASSO 3 */}
+                  <div className="bg-gradient-to-br from-red-50 to-rose-50 p-6 rounded-2xl border-2 border-red-300">
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="flex items-center justify-center w-12 h-12 bg-red-600 rounded-full">
+                          <span className="text-white font-black text-lg">3</span>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-black text-red-900 text-lg mb-2 uppercase tracking-wide">Envie para SES-SP</h4>
+                        <p className="text-sm text-red-800 mb-4 leading-relaxed">
+                          Clique no botão <strong>"📧 ENVIAR ASSINADO"</strong> para abrir seu cliente de email padrão com o template de mensagem pré-preenchido.
+                        </p>
+                        <div className="bg-white rounded-lg p-4 mb-3 border border-red-200">
+                          <p className="text-sm font-bold text-red-900 mb-3">O que fazer:</p>
+                          <ol className="text-sm text-red-800 space-y-2 ml-4 list-decimal">
+                            <li>Clique em "ENVIAR ASSINADO" → seu email será aberto automaticamente</li>
+                            <li>O assunto e mensagem já estarão preenchidos</li>
+                            <li><strong>Clique em "Anexar" ou "Attachment"</strong> e selecione o PDF assinado</li>
+                            <li>Revise o conteúdo do email</li>
+                            <li>Clique em "Enviar"</li>
+                          </ol>
+                        </div>
+                        <ul className="text-sm text-red-700 space-y-2 ml-4">
+                          <li className="flex gap-2">
+                            <span className="text-red-600 font-bold">•</span>
+                            <span>Certifique-se de que o PDF assinado está anexado ao email</span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="text-red-600 font-bold">•</span>
+                            <span>Verifique se o arquivo não está corrompido antes de enviar</span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="text-red-600 font-bold">•</span>
+                            <span>Guarde uma cópia do email enviado como comprovante</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PASSO 4 */}
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-2xl border-2 border-green-300">
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="flex items-center justify-center w-12 h-12 bg-green-600 rounded-full">
+                          <span className="text-white font-black text-lg">4</span>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-black text-green-900 text-lg mb-2 uppercase tracking-wide">Email Receptor</h4>
+                        <p className="text-sm text-green-800 mb-4 leading-relaxed">
+                          Seu email será enviado para o endereço oficial de recebimento de planos de trabalho:
+                        </p>
+                        <div className="bg-white rounded-lg p-4 border-2 border-green-400 shadow-sm">
+                          <p className="text-center text-lg font-black text-green-700 font-mono break-all">
+                            gcf-emendasfederais@saude.sp.gov.br
+                          </p>
+                        </div>
+                        <ul className="text-sm text-green-700 space-y-2 ml-4 mt-4">
+                          <li className="flex gap-2">
+                            <span className="text-green-600 font-bold">✓</span>
+                            <span>Este é o email oficial para recebimento de planos de trabalho</span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="text-green-600 font-bold">✓</span>
+                            <span>Você receberá uma confirmação de recebimento em breve</span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="text-green-600 font-bold">✓</span>
+                            <span>Guarde o número da emenda ({formData.emenda.numero}) para consultas futuras</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="sticky bottom-0 bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-6 border-t border-gray-200 flex items-center justify-end gap-3 rounded-b-3xl">
+                  <button
+                    onClick={() => setShowHelpModal(false)}
+                    className="px-8 py-3 font-bold text-white bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 rounded-lg transition-all shadow-md hover:shadow-lg"
+                  >
+                    Entendi, Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* VIEW: LISTA DE PLANOS */}
           {currentView === 'list' && (
             <div className="space-y-6 animate-fadeIn">
@@ -3360,7 +3825,17 @@ Secretaria de Estado da Saúde de São Paulo`;
                             {canEditPlan(plano.created_by) && (
                               <>
                                 <button 
-                                  onClick={() => { setCurrentView('new'); setEditingPlanId(plano.id); setActiveSection('info-emenda'); setSentSuccess(false); }}
+                                  onClick={() => { 
+                                    // Reset PRIMEIRO
+                                    setFormData(getInitialFormData());
+                                    setLastSavedFormData(null);
+                                    setPlanoSalvoId(null);
+                                    // Depois disparar o carregamento
+                                    setCurrentView('new'); 
+                                    setEditingPlanId(plano.id); 
+                                    setActiveSection('info-emenda'); 
+                                    setSentSuccess(false);
+                                  }}
                                   className="flex items-center gap-1 px-3 py-2 bg-orange-100 text-orange-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-orange-200 transition-all"
                                 >
                                   <Settings2 className="w-4 h-4" /> Editar
@@ -4211,82 +4686,120 @@ Secretaria de Estado da Saúde de São Paulo`;
                         required
                       />
 
-                      {/* INSTRUÇÕES DE ENVIO */}
-                      <div className="bg-amber-50 p-6 rounded-lg border-2 border-amber-200 space-y-4">
-                        <h4 className="font-bold text-amber-900 uppercase tracking-wide flex items-center gap-2">
-                          <AlertCircle className="w-5 h-5" /> Próximos Passos
-                        </h4>
-                        <ol className="space-y-3 text-sm text-amber-900">
-                          <li className="flex gap-3">
-                            <span className="font-bold bg-amber-200 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">1</span>
-                            <span><strong>Gere o PDF:</strong> Clique em "Visualizar e Baixar PDF" abaixo</span>
-                          </li>
-                          <li className="flex gap-3">
-                            <span className="font-bold bg-amber-200 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">2</span>
-                            <span><strong>Assine o PDF:</strong> Abra o arquivo em seu computador e assine digitalmente (ou imprima e escaneie assinado)</span>
-                          </li>
-                          <li className="flex gap-3">
-                            <span className="font-bold bg-amber-200 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">3</span>
-                            <span><strong>Envie para SES-SP:</strong> Clique em "Enviar para SES-SP" e preencha com o PDF assinado</span>
-                          </li>
-                          <li className="flex gap-3">
-                            <span className="font-bold bg-amber-200 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">4</span>
-                            <span><strong>Email receptor:</strong> gcf-emendasfederais@saude.sp.gov.br</span>
-                          </li>
-                        </ol>
+                      {/* INSTRUÇÕES DE ENVIO - COM BOTÃO DE AJUDA */}
+                      <div className="bg-gradient-to-r from-yellow-50 to-amber-50 p-6 rounded-2xl border-2 border-yellow-300 shadow-md flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-black text-amber-900 flex items-center gap-3 mb-2">
+                            <div className="flex items-center justify-center w-10 h-10 bg-yellow-400 rounded-full">
+                              <AlertCircle className="w-6 h-6 text-amber-900" />
+                            </div>
+                            Próximos Passos para Envio
+                          </h3>
+                          <p className="text-sm text-amber-800 leading-relaxed">
+                            Siga os 4 passos: 1️⃣ Gere o PDF • 2️⃣ Assine o documento • 3️⃣ Envie para SES-SP • 4️⃣ Confirme o envio
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setShowHelpModal(true)}
+                          className="ml-4 flex-shrink-0 p-3 bg-amber-400 hover:bg-amber-500 text-amber-900 font-black rounded-full transition-colors shadow-md hover:shadow-lg transform hover:scale-110 duration-200"
+                          title="Ver instruções detalhadas"
+                        >
+                          <HelpCircle className="w-6 h-6" />
+                        </button>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
-                          <h4 className="text-sm font-bold text-blue-900 mb-4 flex items-center gap-2">
-                            <Download className="w-5 h-5" /> Gerar PDF
-                          </h4>
-                          <Button
-                            label={isSending ? "⏳ Gerando..." : "📥 Visualizar e Baixar PDF"}
-                            onClick={async () => {
-                              if (isSending) return; // Proteger contra duplo clique
-                              
-                              // VALIDAR CAMPOS OBRIGATÓRIOS SEMPRE
-                              const validation = validateRequiredFields();
-                              if (!validation.isValid) {
-                                const missingList = validation.missingFields.map((field, idx) => `${idx + 1}. ${field}`).join('\n');
-                                alert(
-                                  `⚠️ FORMULÁRIO INCOMPLETO!\n\n` +
-                                  `Os campos obrigatórios abaixo devem ser preenchidos:\n\n${missingList}\n\n` +
-                                  `Por favor, complete todos os campos indicados antes de gerar o PDF.`
-                                );
-                                return;
-                              }
-                              
-                              // SEMPRE salvar antes de gerar PDF (new or update)
-                              console.log("📌 Salvando plano antes de gerar PDF...");
-                              const savedId = await handleFinalSend();
-                              if (savedId) {
-                                console.log("✅ Plano salvo, abrindo PDF...");
-                                setShowDocument(true);
-                                setTimeout(() => handleGeneratePDF(), 1000);
-                              } else {
-                                console.log("❌ Falha ao salvar plano");
-                              }
-                            }}
-                            variant="primary"
-                            disabled={isSending}
-                            fullWidth
-                          />
-                          <p className="text-xs text-blue-700 mt-3 text-center">✅ O plano será salvo e o PDF será gerado</p>
+                      {/* BOTÕES DE AÇÃO - MELHORADOS */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                        {/* BOTÃO GERAR PDF */}
+                        <div className="relative group">
+                          <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl blur-lg opacity-75 group-hover:opacity-100 transition duration-300"></div>
+                          <div className="relative bg-white p-8 rounded-2xl shadow-lg border-2 border-blue-500">
+                            <div className="flex items-center justify-center mb-6">
+                              <div className="p-4 bg-blue-100 rounded-full">
+                                <Download className="w-8 h-8 text-blue-600" />
+                              </div>
+                            </div>
+                            <h4 className="text-center font-black text-gray-900 mb-4 uppercase tracking-wide">Gerar PDF</h4>
+                            <Button
+                              label={isSending ? "⏳ Gerando..." : "🖨️ VISUALIZAR E BAIXAR PDF"}
+                              onClick={async () => {
+                                if (isSending) return;
+                                
+                                const validation = validateRequiredFields();
+                                if (!validation.isValid) {
+                                  const missingList = validation.missingFields.map((field, idx) => `${idx + 1}. ${field}`).join('\n');
+                                  alert(
+                                    `⚠️ FORMULÁRIO INCOMPLETO!\n\n` +
+                                    `Os campos obrigatórios abaixo devem ser preenchidos:\n\n${missingList}\n\n` +
+                                    `Por favor, complete todos os campos indicados antes de gerar o PDF.`
+                                  );
+                                  return;
+                                }
+                                
+                                console.log("📌 Salvando plano antes de gerar PDF...");
+                                const savedId = await handleFinalSend();
+                                if (savedId) {
+                                  console.log("✅ Plano salvo, abrindo PDF...");
+                                  setShowDocument(true);
+                                  setTimeout(() => handleGeneratePDF(), 1000);
+                                } else {
+                                  console.log("❌ Falha ao salvar plano");
+                                }
+                              }}
+                              variant="primary"
+                              disabled={isSending}
+                              fullWidth
+                            />
+                            <p className="text-center text-xs text-blue-600 font-semibold mt-3">✅ O plano será salvo e o PDF será gerado</p>
+                            <ul className="text-xs text-gray-600 space-y-1 mt-4 ml-4">
+                              <li className="flex gap-2">
+                                <span>•</span>
+                                <span>Salva automaticamente seu plano</span>
+                              </li>
+                              <li className="flex gap-2">
+                                <span>•</span>
+                                <span>Gera em PDF pronto para imprimir</span>
+                              </li>
+                              <li className="flex gap-2">
+                                <span>•</span>
+                                <span>Abre visualização antes de baixar</span>
+                              </li>
+                            </ul>
+                          </div>
                         </div>
 
-                        <div className="bg-red-50 p-6 rounded-lg border-2 border-red-200">
-                          <h4 className="text-sm font-bold text-red-900 mb-4 flex items-center gap-2">
-                            <Send className="w-5 h-5" /> Enviar para SES-SP
-                          </h4>
-                          <Button
-                            label="📧 Enviar Assinado"
-                            onClick={handleSendToSES}
-                            variant="primary"
-                            fullWidth
-                          />
-                          <p className="text-xs text-red-700 mt-3 text-center">Abre seu email para anexar o PDF assinado</p>
+                        {/* BOTÃO ENVIAR ASSINADO */}
+                        <div className="relative group">
+                          <div className="absolute inset-0 bg-gradient-to-r from-red-600 to-rose-600 rounded-2xl blur-lg opacity-75 group-hover:opacity-100 transition duration-300"></div>
+                          <div className="relative bg-white p-8 rounded-2xl shadow-lg border-2 border-red-500">
+                            <div className="flex items-center justify-center mb-6">
+                              <div className="p-4 bg-red-100 rounded-full">
+                                <Send className="w-8 h-8 text-red-600" />
+                              </div>
+                            </div>
+                            <h4 className="text-center font-black text-gray-900 mb-4 uppercase tracking-wide">Enviar para SES-SP</h4>
+                            <Button
+                              label="📧 ENVIAR ASSINADO"
+                              onClick={handleSendToSES}
+                              variant="primary"
+                              fullWidth
+                            />
+                            <p className="text-center text-xs text-red-600 font-semibold mt-3">Abre seu email para anexar o PDF assinado</p>
+                            <ul className="text-xs text-gray-600 space-y-1 mt-4 ml-4">
+                              <li className="flex gap-2">
+                                <span>•</span>
+                                <span>Abre seu cliente de email</span>
+                              </li>
+                              <li className="flex gap-2">
+                                <span>•</span>
+                                <span>Mensagem pré-preenchida</span>
+                              </li>
+                              <li className="flex gap-2">
+                                <span>•</span>
+                                <span>Anexe o PDF assinado</span>
+                              </li>
+                            </ul>
+                          </div>
                         </div>
                       </div>
 

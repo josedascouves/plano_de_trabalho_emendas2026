@@ -371,11 +371,14 @@ const UserManagement: React.FC = () => {
   // ============================================================
 
   const filteredUsers = users.filter(user => {
-    // Filtro de busca
-    if (searchQuery.toLowerCase()) {
-      const query = searchQuery.toLowerCase();
-      if (!user.full_name?.toLowerCase().includes(query) &&
-          !user.email?.toLowerCase().includes(query)) {
+    // Filtro de busca - NOME ou EMAIL
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      const matchName = (user.full_name || '').toLowerCase().includes(query);
+      const matchEmail = (user.email || '').toLowerCase().includes(query);
+      
+      // Se digitou algo, deve fazer match com nome OU email
+      if (!matchName && !matchEmail) {
         return false;
       }
     }
@@ -393,42 +396,37 @@ const UserManagement: React.FC = () => {
   });
 
   const sortedUsers = (() => {
-    // Separar admins e usuários padrão
+    // ⭐ REGRA 1: Separar admins de usuários padrão
     const admins = filteredUsers.filter(u => u.role === 'admin');
-    const otherUsers = filteredUsers.filter(u => u.role !== 'admin');
+    const standards = filteredUsers.filter(u => u.role !== 'admin');
 
-    // Função de comparação
-    const compare = (a: UserProfile, b: UserProfile) => {
-      let val = 0;
+    // Função para comparar dentro de cada grupo
+    const compareUsers = (a: UserProfile, b: UserProfile) => {
+      let comparison = 0;
+
       switch (sortBy) {
         case 'name':
-          val = (a.full_name || '').localeCompare(b.full_name || '');
+          comparison = (a.full_name || '').localeCompare(b.full_name || '');
           break;
         case 'created':
-          val = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           break;
         case 'role':
-          val = (a.full_name || '').localeCompare(b.full_name || '');
+          comparison = (a.full_name || '').localeCompare(b.full_name || '');
           break;
         default:
-          val = 0;
+          comparison = 0;
       }
-      return sortOrder === 'asc' ? val : -val;
+
+      return sortOrder === 'asc' ? comparison : -comparison;
     };
 
-    // Ordenar dentro de cada grupo
-    admins.sort(compare);
-    otherUsers.sort(compare);
+    // Ordenar cada grupo
+    admins.sort(compareUsers);
+    standards.sort(compareUsers);
 
-    // Log para debug
-    console.log('Admins:', admins.length, admins.map(u => u.email));
-    console.log('Users:', otherUsers.length, otherUsers.map(u => u.email));
-
-    // Concatenar: admins sempre primeiro
-    const result = [...admins, ...otherUsers];
-    console.log('Sorted:', result.map((u, i) => `${i}: ${u.email} (${u.role})`));
-    
-    return result;
+    // ⭐ REGRA 2: Concatenar sempre admins primeiro
+    return [...admins, ...standards];
   })();
 
   // ============================================================
@@ -502,19 +500,24 @@ const UserManagement: React.FC = () => {
             ============================================================ */}
         <div className="bg-slate-700 rounded-lg p-6 mb-6 border border-slate-600">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {/* Busca */}
+            {/* Busca - Nome ou Email */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 <Search className="w-4 h-4 inline mr-2" />
-                Buscar
+                Buscar Usuário
               </label>
               <input
                 type="text"
-                placeholder="Nome ou email..."
+                placeholder="Digite nome ou email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 transition"
               />
+              {searchQuery && (
+                <p className="text-xs text-slate-400 mt-1">
+                  🔍 Encontrados: {sortedUsers.length} resultado(s)
+                </p>
+              )}
             </div>
 
             {/* Filtro de Perfil */}
@@ -657,6 +660,35 @@ const UserManagement: React.FC = () => {
         {/* ============================================================
             LISTA COMPACTA DE USUÁRIOS
             ============================================================ */}
+        
+        {/* RESUMO E CONTAGEM */}
+        <div className="mb-4 p-4 bg-slate-700 rounded-lg border border-slate-600">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-slate-300">
+              <span className="font-semibold text-white">{sortedUsers.length}</span> usuário(s) encontrado(s)
+              {searchQuery && (
+                <span className="ml-2 text-slate-400">
+                  • Filtro: "<span className="text-blue-400">{searchQuery}</span>"
+                </span>
+              )}
+            </div>
+            <div className="flex gap-4 text-xs">
+              <div>
+                <span className="text-slate-400">Admins:</span>{' '}
+                <span className="font-semibold text-purple-400">
+                  {sortedUsers.filter(u => u.role === 'admin').length}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400">Usuários:</span>{' '}
+                <span className="font-semibold text-blue-400">
+                  {sortedUsers.filter(u => u.role !== 'admin').length}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <div className="bg-slate-700 rounded-lg border border-slate-600 overflow-hidden">
           {/* CABEÇALHO DA TABELA */}
           <div className="bg-slate-800 border-b border-slate-600 px-6 py-4 flex items-center gap-4 sticky top-0">

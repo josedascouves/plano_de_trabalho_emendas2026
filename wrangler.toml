@@ -1,0 +1,26 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "plano-de-trabalho-ses-sp-2026"
+type = "javascript"
+account_id = ""
+workers_dev = true
+main = "src/index.ts"
+build.command = "npm run build"
+build.cwd = "."
+build.watch_paths = ["src/**/*.ts", "src/**/*.tsx"]
+
+[env.production]
+name = "plano-de-trabalho-ses-sp-2026-prod"
+routes = [
+  {pattern = "plano-ses-sp.pages.dev", zone_name = "pages.dev"}
+]
+
+[env.staging]
+name = "plano-de-trabalho-ses-sp-2026-staging"
+
+[build]
+command = "npm run build"
+cwd = "."
+watch_paths = ["src/**/*.ts", "src/**/*.tsx"]
+
+[build.upload]
+format = "service-worker"

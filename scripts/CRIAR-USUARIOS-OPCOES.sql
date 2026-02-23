@@ -1,0 +1,98 @@
+-- ==============================================================================
+-- ALTERNATIVA: SQL para Criar Usuários (Se você já tem SSH/RPC habilitado)
+-- ==============================================================================
+--
+-- IMPORTANTE: O Supabase não permite criar usuários diretamente via SQL INSERT
+-- Você pode:
+--
+-- OPÇÃO 1: Usar Dashboard (Manual) - Mais seguro
+-- OPÇÃO 2: Usar Python Script - Automático  
+-- OPÇÃO 3: Usar SQL se RPC estiver habilitado
+--
+-- ==============================================================================
+
+-- ===================== OPÇÃO 1: VIA DASHBOARD =====================
+--
+-- 1. Acesse: https://app.supabase.com
+-- 2. Selecione seu projeto
+-- 3. Vá para: Authentication → Users
+-- 4. Clique: "Add user"
+-- 5. Preencha:
+--    Email: (do CSV)
+--    Password: (do CSV, coluna "Senha inicial")
+-- 6. Clique: "Create user"
+-- 7. Repita para cada usuário
+--
+-- OS 26 USUÁRIOS A CRIAR:
+--
+-- 1. institutobezerra.adm@gmail.com / senha: 2084384
+-- 2. convenios@therezaperlatti.com.br / senha: 2790653
+-- 3. administracao.irmadulce@alsf.org.br / senha: 2790998
+-- 4. halena.n@huhsp.org.br / senha: 2077485
+-- 5. rosane@santamarcelina.org / senha: 2077477
+-- 6. vivianeandrade@casaandreluiz.org.br / senha: 2082276
+-- 7. luci.rosa@boldrini.org.br / senha: 2081482
+-- 8. planejamento@consaude.org.br / senha: 2077434
+-- 9. dds.anapaula@amaralcarvalho.org.br / senha: 2083086
+-- 10. camilamarques@bairral.com.br / senha: 2085143
+-- 11. diretoria@hospitalaldebase.com.br / senha: 2077396
+-- 12. alexander.ferreira@hemocentro.fmrp.usp.br / senha: 2047438
+-- 13. gerente.adm@hrcpp.org.br / senha: 7400926
+-- 14. gacc@gacc.com.br / senha: 5869412
+-- 15. m.orlandino@hc.fm.usp.br / senha: 2071568
+-- 16. vmelias@famesp.org.br / senha: 2748223
+-- 17. secretaria.msi@famaesp.org.br / senha: 2790580
+-- 18. financas-hrs@saude.sp.gov.br / senha: 2091313
+-- 19. mariana.leonardo@redesc.org.br / senha: 3028399
+-- 20. controleinterno@santacasacaconde.com.br / senha: 2080222
+-- 21. projetos@santacasafernandopolis.com.br / senha: 2093324
+-- 22. eder.barboza@santacasasp.org.br / senha: 2688689
+-- 23. edilea@sobrapar.org.br / senha: 2084252
+-- 24. convenios.hcmf@hospitalmatao.com.br / senha: 2090961
+-- 25. contabilidade11@santacasavotuporanga.com.br / senha: 2081377
+-- 26. klesio@unicamp.br / senha: 2079798
+--
+-- ==============================================================================
+
+-- ===================== OPÇÃO 2: VIA PYTHON SCRIPT =====================
+--
+-- Execute no Terminal/PowerShell:
+--
+-- $env:SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRscG1zcGZuc3dheHdxem13c2tpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDMwMDk1OCwiZXhwIjoyMDg1ODc2OTU4fQ.enjDo9Ob3SwsINnUenmXos81XYf1WE-Bpm_NsG4G-ys"
+--
+-- python scripts/import_users_simple.py usuarios.csv --auto
+--
+-- ==============================================================================
+
+-- ===================== OPÇÃO 3: VIA SQL RPC =====================
+--
+-- Se você habilitou extensões RPC no Supabase, pode executar:
+-- Mas PRIMEIRO, execute o arquivo CREATE-USERS-COMPLETO.sql
+--
+-- Depois, copie e cole CADA bloco abaixo UM POR UM:
+-- ==============================================================================
+
+-- USUÁRIO 1
+SELECT auth.uid() -- Verificar se está autenticado como admin
+
+-- Se for admin, pode tentar:
+-- SELECT 
+--   email,
+--   password HASH
+-- FROM dados_temp
+-- WHERE email = 'institutobezerra.adm@gmail.com'
+
+-- ==============================================================================
+-- ⚠️ RECOMENDAÇÃO FINAL
+-- ==============================================================================
+--
+-- Para importar 26 usuários, a forma MAIS FÁCIL é:
+--
+-- 1. Execute o arquivo: CREATE-USERS-COMPLETO.sql (prepara o banco)
+-- 2. Execute o script Python: import_users_simple.py --auto (cria usuários)
+-- 3. Pronto! Os dados aparecem no Dashboard
+--
+-- Tempo total: 5-10 minutos
+-- Sem erros: 100% (se o trigger estiver correto)
+--
+-- ==============================================================================

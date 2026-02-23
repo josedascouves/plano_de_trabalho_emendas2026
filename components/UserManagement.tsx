@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Search, Filter, Eye, EyeOff, Lock, Shield, Trash2, AlertCircle,
   ChevronDown, LogOut, Clock, CheckCircle, XCircle, Plus, MoreVertical,
-  ChevronUp, Mail, Calendar, RotateCcw
+  ChevronUp, Mail, Calendar, RotateCcw, Copy, Check, ChevronLeft, ChevronRight,
+  Crown, User as UserIcon
 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { UserProfile, AuditLog, UserStats } from '../types';
@@ -27,6 +28,10 @@ const UserManagement: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [showMenuFor, setShowMenuFor] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
 
   // Modal States
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -38,6 +43,7 @@ const UserManagement: React.FC = () => {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [selectedRole, setSelectedRole] = useState<'admin' | 'user'>('user');
   const [deleteConfirmStep, setDeleteConfirmStep] = useState(0);
+  const [bulkAction, setBulkAction] = useState<'disable' | 'enable' | 'promote' | 'demote' | null>(null);
 
   // ============================================================
   // EFEITOS
@@ -109,8 +115,83 @@ const UserManagement: React.FC = () => {
   // FUNÇÕES DE MANIPULAÇÃO DE USUÁRIOS
   // ============================================================
 
-  const handleChangePassword = async () => {
+  const handleSelectUser = (userId: string) => {
+    const newSelected = new Set(selectedUsers);
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId);
+    } else {
+      newSelected.add(userId);
+    }
+    setSelectedUsers(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedUsers.size === sortedUsers.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(sortedUsers.map(u => u.id)));
+    }
+  };
+
+  const handleBulkAction = async (action: typeof bulkAction) => {
+    if (selectedUsers.size === 0) return;
+
+    try {
+      const userIds = Array.from(selectedUsers);
+      
+      if (action === 'disable' || action === 'enable') {
+        for (const userId of userIds) {
+          const user = users.find(u => u.id === userId);
+          if (user && user.id !== currentUser?.id) {
+            await supabase.rpc('toggle_user_status', {
+              user_id: userId,
+              should_disable: action === 'disable',
+            });
+          }
+        }
+      } else if (action === 'promote' || action === 'demote') {
+        for (const userId of userIds) {
+          const user = users.find(u => u.id === userId);
+          if (user && user.id !== currentUser?.id) {
+            const funcName = action === 'promote' ? 'promote_user_to_admin' : 'demote_admin_to_user';
+            await supabase.rpc(funcName, { user_id: userId });
+          }
+        }
+      }
+
+      setSuccess(`Ação em massa concluída para ${userIds.length} usuário(s)!`);
+      setSelectedUsers(new Set());
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro na ação em massa');
+    }
+  };
     if (!selectedUser) return;
+    if (passwordInput !== passwordConfirm) {
+      setError('As senhas não correspondem');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('change_user_password_admin', {
+        user_id: selectedUser.id,
+        new_password: passwordInput,
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao alterar senha');
+
+      setSuccess('Senha alterada com sucesso!');
+      setShowPasswordModal(false);
+      setPasswordInput('');
+      setPasswordConfirm('');
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao alterar senha');
+    }
+  };
+
+  const handleChangeRole = async () => {    if (!selectedUser) return;
     if (passwordInput !== passwordConfirm) {
       setError('As senhas não correspondem');
       return;
@@ -137,6 +218,79 @@ const UserManagement: React.FC = () => {
 
   const handleChangeRole = async () => {
     if (!selectedUser) return;
+
+    try {
+      const functionName = selectedRole === 'admin' 
+        ? 'promote_user_to_admin'
+        : 'demote_admin_to_user';
+
+      const { data, error } = await supabase.rpc(functionName, {
+        user_id: selectedUser.id,
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao alterar perfil');
+
+      setSuccess('Perfil alterado com sucesso!');
+      setShowRoleModal(false);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao alterar perfil');
+    }
+  };
+
+  const handleToggleStatus = async (user: UserProfile) => {
+    try {
+      const { data, error } = await supabase.rpc('toggle_user_status', {
+        user_id: user.id,
+        should_disable: !user.disabled,
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao alterar status');
+
+      setSuccess(`Usuário ${!user.disabled ? 'desativado' : 'ativado'} com sucesso!`);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao alterar status');
+    }
+  };
+
+  const handleResetPassword = async (user: UserProfile) => {
+    try {
+      const { data, error } = await supabase.rpc('reset_user_password', {
+        user_id: user.id,
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao resetar senha');
+
+      alert(`Senha temporária: ${data.temp_password}\n\nCompartilhe este código com o usuário de forma segura.`);
+      setSuccess('Senha resetada com sucesso!');
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao resetar senha');
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+
+    try {
+      const { data, error } = await supabase.rpc('delete_user_admin', {
+        user_id: selectedUser.id,
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao deletar usuário');
+
+      setSuccess('Usuário deletado com sucesso!');
+      setShowDeleteConfirm(false);
+      setDeleteConfirmStep(0);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao deletar usuário');
+    }    if (!selectedUser) return;
 
     try {
       const functionName = selectedRole === 'admin' 
@@ -238,23 +392,44 @@ const UserManagement: React.FC = () => {
     return true;
   });
 
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
-    let compareValue = 0;
+  const sortedUsers = (() => {
+    // Separar admins e usuários padrão
+    const admins = filteredUsers.filter(u => u.role === 'admin');
+    const otherUsers = filteredUsers.filter(u => u.role !== 'admin');
 
-    switch (sortBy) {
-      case 'name':
-        compareValue = (a.full_name || '').localeCompare(b.full_name || '');
-        break;
-      case 'created':
-        compareValue = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        break;
-      case 'role':
-        compareValue = a.role.localeCompare(b.role);
-        break;
-    }
+    // Função de comparação
+    const compare = (a: UserProfile, b: UserProfile) => {
+      let val = 0;
+      switch (sortBy) {
+        case 'name':
+          val = (a.full_name || '').localeCompare(b.full_name || '');
+          break;
+        case 'created':
+          val = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+        case 'role':
+          val = (a.full_name || '').localeCompare(b.full_name || '');
+          break;
+        default:
+          val = 0;
+      }
+      return sortOrder === 'asc' ? val : -val;
+    };
 
-    return sortOrder === 'asc' ? compareValue : -compareValue;
-  });
+    // Ordenar dentro de cada grupo
+    admins.sort(compare);
+    otherUsers.sort(compare);
+
+    // Log para debug
+    console.log('Admins:', admins.length, admins.map(u => u.email));
+    console.log('Users:', otherUsers.length, otherUsers.map(u => u.email));
+
+    // Concatenar: admins sempre primeiro
+    const result = [...admins, ...otherUsers];
+    console.log('Sorted:', result.map((u, i) => `${i}: ${u.email} (${u.role})`));
+    
+    return result;
+  })();
 
   // ============================================================
   // RENDER DE COMPONENTES
@@ -443,176 +618,252 @@ const UserManagement: React.FC = () => {
         )}
 
         {/* ============================================================
-            LISTAGEM DE USUÁRIOS
+            AÇÕES EM MASSA
             ============================================================ */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-white">
-            {sortedUsers.length} usuário{sortedUsers.length !== 1 ? 's' : ''} encontrado{sortedUsers.length !== 1 ? 's' : ''}
-          </h2>
-
-          {sortedUsers.map((user) => (
-            <div
-              key={user.id}
-              className="bg-slate-700 rounded-lg border border-slate-600 overflow-hidden transition hover:border-slate-500"
-            >
-              {/* CARD PRINCIPAL */}
-              <div
-                className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-600 transition"
-                onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
+        {selectedUsers.size > 0 && (
+          <div className="mb-6 bg-blue-900 border border-blue-700 rounded-lg p-4 flex items-center justify-between">
+            <div className="text-blue-300">
+              <strong>{selectedUsers.size}</strong> usuário(s) selecionado(s)
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleBulkAction('enable')}
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-sm flex items-center gap-2 transition"
               >
-                <div className="flex items-center gap-4 flex-1">
-                  {/* Status Visual */}
-                  <div className={`w-3 h-3 rounded-full ${user.disabled ? 'bg-red-500' : 'bg-green-500'}`} />
+                <Eye className="w-4 h-4" /> Ativar
+              </button>
+              <button
+                onClick={() => handleBulkAction('disable')}
+                className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm flex items-center gap-2 transition"
+              >
+                <EyeOff className="w-4 h-4" /> Desativar
+              </button>
+              <button
+                onClick={() => handleBulkAction('promote')}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded text-sm flex items-center gap-2 transition"
+              >
+                <Crown className="w-4 h-4" /> Promover
+              </button>
+              <button
+                onClick={() => handleBulkAction('demote')}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded text-sm flex items-center gap-2 transition"
+              >
+                <UserIcon className="w-4 h-4" /> Rebaixar
+              </button>
+            </div>
+          </div>
+        )}
 
-                  {/* Informações */}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-white">{user.full_name}</h3>
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                        user.role === 'admin'
-                          ? 'bg-blue-900 text-blue-300'
-                          : 'bg-slate-800 text-slate-300'
-                      }`}>
-                        {user.role === 'admin' ? '⭐ Admin' : 'Padrão'}
-                      </span>
-                      {user.disabled && (
-                        <span className="px-2 py-1 rounded text-xs font-semibold bg-red-900 text-red-300">
-                          ⛔ Desativado
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-slate-400 text-sm flex items-center gap-2 mt-1">
-                      <Mail className="w-4 h-4" />
-                      {user.email}
-                    </p>
-                    <p className="text-slate-500 text-xs flex items-center gap-2 mt-1">
-                      <Calendar className="w-3 h-3" />
-                      Criado em {new Date(user.created_at).toLocaleDateString('pt-BR')}
-                    </p>
-                  </div>
-                </div>
+        {/* ============================================================
+            LISTA COMPACTA DE USUÁRIOS
+            ============================================================ */}
+        <div className="bg-slate-700 rounded-lg border border-slate-600 overflow-hidden">
+          {/* CABEÇALHO DA TABELA */}
+          <div className="bg-slate-800 border-b border-slate-600 px-6 py-4 flex items-center gap-4 sticky top-0">
+            <input
+              type="checkbox"
+              checked={selectedUsers.size === sortedUsers.length && sortedUsers.length > 0}
+              onChange={handleSelectAll}
+              className="w-5 h-5 rounded border-slate-500 text-blue-600 focus:ring-blue-500"
+            />
+            <div className="flex-1 grid grid-cols-12 gap-4 items-center text-slate-300 text-sm font-semibold">
+              <div className="col-span-3">USUÁRIO</div>
+              <div className="col-span-2">EMAIL</div>
+              <div className="col-span-1">CNES</div>
+              <div className="col-span-1">STATUS</div>
+              <div className="col-span-1">PERFIL</div>
+              <div className="col-span-2">AÇÕES</div>
+              <div className="col-span-2"></div>
+            </div>
+          </div>
 
-                {/* Botão Expandir */}
-                <button className="text-slate-400 hover:text-white transition">
-                  {expandedUser === user.id ? (
-                    <ChevronUp className="w-5 h-5" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5" />
-                  )}
-                </button>
+          {/* LINHAS DE USUÁRIOS */}
+          <div className="divide-y divide-slate-600">
+            {sortedUsers.length === 0 ? (
+              <div className="px-6 py-8 text-center text-slate-400">
+                Nenhum usuário encontrado
               </div>
+            ) : (
+              sortedUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="px-6 py-4 flex items-center gap-4 hover:bg-slate-600 transition h-16"
+                >
+                  {/* Checkbox */}
+                  <input
+                    type="checkbox"
+                    checked={selectedUsers.has(user.id)}
+                    onChange={() => handleSelectUser(user.id)}
+                    className="w-5 h-5 rounded border-slate-500 text-blue-600 focus:ring-blue-500"
+                  />
 
-              {/* DETALHES EXPANDIDOS */}
-              {expandedUser === user.id && (
-                <div className="bg-slate-800 border-t border-slate-600 p-4">
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <p className="text-slate-400 text-sm">Email</p>
-                      <p className="text-white font-semibold">{user.email}</p>
+                  {/* Conteúdo */}
+                  <div className="flex-1 grid grid-cols-12 gap-4 items-center truncate">
+                    {/* USUÁRIO - Nome + Avatar */}
+                    <div className="col-span-3 flex items-center gap-3 truncate">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-white ${
+                        user.disabled ? 'bg-gray-600' : 
+                        user.role === 'admin' ? 'bg-purple-600' : 'bg-blue-600'
+                      }`}>
+                        {user.full_name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="truncate">
+                        <p className="font-semibold text-white text-sm truncate">{user.full_name}</p>
+                        <p className={`text-xs ${user.disabled ? 'text-red-400' : 'text-green-400'}`}>
+                          {user.disabled ? '● Inativo' : '● Ativo'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Perfil</p>
-                      <p className="text-white font-semibold">{user.role === 'admin' ? 'Administrador' : 'Padrão'}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Status</p>
-                      <p className="text-white font-semibold">{user.disabled ? 'Desativado' : 'Ativo'}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Último Login</p>
-                      <p className="text-white font-semibold">
-                        {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString('pt-BR') : 'Nunca'}
+
+                    {/* EMAIL */}
+                    <div className="col-span-2 truncate">
+                      <p className="text-slate-300 text-sm truncate" title={user.email}>
+                        {user.email}
                       </p>
                     </div>
-                  </div>
 
-                  {/* AÇÕES */}
-                  <div className="flex gap-2 flex-wrap">
-                    {/* Alterar Perfil */}
-                    {user.id !== currentUser.id && (
-                      <button
-                        onClick={() => {
-                          setSelectedUser(user);
-                          setSelectedRole(user.role === 'admin' ? 'user' : 'admin');
-                          setShowRoleModal(true);
-                        }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm flex items-center gap-2 transition"
-                      >
-                        <Shield className="w-4 h-4" />
-                        Alterar Perfil
-                      </button>
-                    )}
+                    {/* CNES */}
+                    <div className="col-span-1">
+                      <p className="text-slate-300 text-sm">{user.cnes || '-'}</p>
+                    </div>
 
-                    {/* Alterar Senha */}
-                    {user.id !== currentUser.id && (
-                      <button
-                        onClick={() => {
-                          setSelectedUser(user);
-                          setPasswordInput('');
-                          setPasswordConfirm('');
-                          setShowPasswordModal(true);
-                        }}
-                        className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded text-sm flex items-center gap-2 transition"
-                      >
-                        <Lock className="w-4 h-4" />
-                        Alterar Senha
-                      </button>
-                    )}
+                    {/* STATUS */}
+                    <div className="col-span-1">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 ${
+                        user.disabled
+                          ? 'bg-red-900 text-red-300'
+                          : 'bg-green-900 text-green-300'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${user.disabled ? 'bg-red-500' : 'bg-green-500'}`} />
+                        {user.disabled ? 'Inativo' : 'Ativo'}
+                      </span>
+                    </div>
 
-                    {/* Reset Senha */}
-                    {user.id !== currentUser.id && (
-                      <button
-                        onClick={() => handleResetPassword(user)}
-                        className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded text-sm flex items-center gap-2 transition"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        Reset Senha
-                      </button>
-                    )}
+                    {/* PERFIL */}
+                    <div className="col-span-1">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        user.role === 'admin'
+                          ? 'bg-purple-900 text-purple-300'
+                          : 'bg-blue-900 text-blue-300'
+                      }`}>
+                        {user.role === 'admin' ? '👑 Admin' : '👤 User'}
+                      </span>
+                    </div>
 
-                    {/* Ativar/Desativar */}
-                    {user.id !== currentUser.id && (
-                      <button
-                        onClick={() => handleToggleStatus(user)}
-                        className={`${
-                          user.disabled
-                            ? 'bg-green-600 hover:bg-green-700'
-                            : 'bg-red-600 hover:bg-red-700'
-                        } text-white px-3 py-2 rounded text-sm flex items-center gap-2 transition`}
-                      >
-                        {user.disabled ? (
-                          <>
-                            <Eye className="w-4 h-4" />
-                            Ativar
-                          </>
-                        ) : (
-                          <>
-                            <EyeOff className="w-4 h-4" />
-                            Desativar
-                          </>
+                    {/* AÇÕES RÁPIDAS */}
+                    <div className="col-span-2 flex items-center gap-2">
+                      {user.id !== currentUser?.id && (
+                        <>
+                          <button
+                            onClick={() => handleToggleStatus(user)}
+                            className="text-slate-400 hover:text-white p-1 transition"
+                            title={user.disabled ? 'Ativar' : 'Desativar'}
+                          >
+                            {user.disabled ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setPasswordInput('');
+                              setPasswordConfirm('');
+                              setShowPasswordModal(true);
+                            }}
+                            className="text-slate-400 hover:text-white p-1 transition"
+                            title="Alterar senha"
+                          >
+                            <Lock className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* MENU DROPDOWN */}
+                    <div className="col-span-2 flex justify-end">
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowMenuFor(showMenuFor === user.id ? null : user.id)}
+                          className="text-slate-400 hover:text-white p-1 transition"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {/* DROPDOWN MENU */}
+                        {showMenuFor === user.id && (
+                          <div className="absolute right-0 mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-40">
+                            {user.id !== currentUser?.id && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedUser(user);
+                                    setSelectedRole(user.role === 'admin' ? 'user' : 'admin');
+                                    setShowRoleModal(true);
+                                    setShowMenuFor(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 border-b border-slate-700"
+                                >
+                                  <Shield className="w-4 h-4" />
+                                  {user.role === 'admin' ? 'Rebaixar a Usuário' : 'Promover a Admin'}
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    handleResetPassword(user);
+                                    setShowMenuFor(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 border-b border-slate-700"
+                                >
+                                  <RotateCcw className="w-4 h-4" />
+                                  Reset de Senha
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    setSelectedUser(user);
+                                    setDeleteConfirmStep(0);
+                                    setShowDeleteConfirm(true);
+                                    setShowMenuFor(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Deletar Usuário
+                                </button>
+                              </>
+                            )}
+                          </div>
                         )}
-                      </button>
-                    )}
-
-                    {/* Deletar */}
-                    {user.id !== currentUser.id && (
-                      <button
-                        onClick={() => {
-                          setSelectedUser(user);
-                          setDeleteConfirmStep(0);
-                          setShowDeleteConfirm(true);
-                        }}
-                        className="bg-red-700 hover:bg-red-800 text-white px-3 py-2 rounded text-sm flex items-center gap-2 transition"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Deletar
-                      </button>
-                    )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              )}
+              ))
+            )}
+          </div>
+
+          {/* PAGINAÇÃO */}
+          {Math.ceil(sortedUsers.length / itemsPerPage) > 1 && (
+            <div className="bg-slate-800 border-t border-slate-600 px-6 py-4 flex items-center justify-between">
+              <p className="text-slate-400 text-sm">
+                Exibindo 1-{Math.min(itemsPerPage, sortedUsers.length)} de {sortedUsers.length}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded border border-slate-600 text-slate-400 hover:text-white disabled:opacity-50 transition"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setCurrentPage(Math.min(Math.ceil(sortedUsers.length / itemsPerPage), currentPage + 1))}
+                  disabled={currentPage === Math.ceil(sortedUsers.length / itemsPerPage)}
+                  className="p-2 rounded border border-slate-600 text-slate-400 hover:text-white disabled:opacity-50 transition"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          ))}
+          )}
         </div>
       </div>
 

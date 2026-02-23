@@ -68,6 +68,7 @@ import {
   maskPercentage,
   formatPercentageDisplay
 } from './utils/masks';
+import { initializeSecurity } from './utils/security';
 
 const App: React.FC = () => {
   // Authentication & Session State
@@ -291,6 +292,9 @@ const App: React.FC = () => {
 
   // Check session on mount
   useEffect(() => {
+    // ⚠️ INICIALIZAR SEGURANÇA - Desabilitar console e DevTools
+    initializeSecurity();
+
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -302,8 +306,6 @@ const App: React.FC = () => {
             .eq('id', session.user.id)
             .single();
           
-          console.log('🔍 Debug - Query resultado:', { profile, error: profileError });
-          
           if (!profileError && profile) {
             const userData = {
               id: session.user.id,
@@ -312,11 +314,9 @@ const App: React.FC = () => {
               role: profile.role,
               cnes: profile.cnes || ''
             };
-            console.log('✅ LOGIN SUCESSO:', userData);
             setCurrentUser(userData);
             setIsAuthenticated(true);
           } else if (profileError) {
-            console.warn("Perfil não encontrado. O usuário pode existir no Auth mas não na tabela profiles. Rode o script SQL.");
             // Tenta forçar o usuário a ver a tela de login ou exibe erro se for admin
             if (session.user.email === 'sessp.css3@gmail.com') {
                setCurrentUser({
@@ -331,7 +331,7 @@ const App: React.FC = () => {
           }
         }
       } catch (e) {
-        console.error("Erro ao verificar sessão:", e);
+        // Erro ao verificar sessão - silenciado por segurança
       } finally {
         setIsLoadingAuth(false);
       }
@@ -410,8 +410,18 @@ const App: React.FC = () => {
               };
             });
             
-            setUsersList(usersList);
-            console.log('✅ Lista de usuários atualizada:', usersList.length, usersList);
+            // ⭐ ORDENAR: Admins sempre primeiro
+            const sortedUsersList = usersList.sort((a, b) => {
+              // Prioridade 1: Admins sempre primeiro
+              if (a.role !== b.role) {
+                return a.role === 'admin' ? -1 : 1;
+              }
+              // Prioridade 2: Por nome dentro do mesmo role
+              return (a.name || '').localeCompare(b.name || '');
+            });
+            
+            setUsersList(sortedUsersList);
+            console.log('✅ Lista de usuários atualizada (ADMINS PRIMEIRO):', sortedUsersList.length, sortedUsersList);
           } else {
             console.warn('⚠️ Profiles ou userRoles vazios:', { profiles_count: profiles?.length, roles_count: userRoles?.length });
             setUsersList([]);

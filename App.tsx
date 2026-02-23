@@ -41,7 +41,8 @@ import {
   Crown,
   ChevronDown,
   Key,
-  HelpCircle
+  HelpCircle,
+  Search
 } from 'lucide-react';
 import { FormState, User } from './types';
 import { 
@@ -84,6 +85,7 @@ const App: React.FC = () => {
   // Admin & User Management
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as const, cnes: '' });
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
@@ -2940,10 +2942,41 @@ Secretaria de Estado da Saúde de São Paulo`;
                         </div>
                       </div>
 
-                      {/* Lista de Usuários em Cards Modernos */}
-                      <div className="space-y-3">
-                        {usersList && usersList.length > 0 ? (
-                          usersList.map((u, i) => (
+                      {/* CAMPO DE BUSCA */}
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="🔍 Digite nome ou email..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 transition-all"
+                        />
+                      </div>
+
+                      {/* Lista filtrada e ordenada */}
+                      {(() => {
+                        const filtered = usersList.filter(u => 
+                          u.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          u.email?.toLowerCase().includes(searchQuery.toLowerCase())
+                        );
+                        const sorted = filtered.sort((a, b) => {
+                          // Admins primeiro
+                          if (a.role === 'admin' && b.role !== 'admin') return -1;
+                          if (a.role !== 'admin' && b.role === 'admin') return 1;
+                          // Depois por nome
+                          return (a.name || '').localeCompare(b.name || '');
+                        });
+                        return (
+                          <>
+                            {searchQuery && sorted.length > 0 && (
+                              <p className="text-sm text-gray-500 font-semibold">📋 {sorted.length} resultado{sorted.length !== 1 ? 's' : ''} encontrado{sorted.length !== 1 ? 's' : ''}</p>
+                            )}
+
+                            {/* Lista de Usuários em Cards Modernos */}
+                            <div className="space-y-3">
+                              {sorted && sorted.length > 0 ? (
+                                sorted.map((u, i) => (
                             <div 
                               key={i} 
                               className="group p-6 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200"
@@ -3080,20 +3113,22 @@ Secretaria de Estado da Saúde de São Paulo`;
                               </div>
                             </div>
                           ))
-                        ) : (
-                          <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-dashed border-gray-300 shadow-sm">
-                            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <p className="text-lg font-bold text-gray-600">Nenhum usuário encontrado</p>
-                            <p className="text-sm text-gray-500 mt-2">
-                              {usersList === null ? '⏳ Carregando...' : usersList.length === 0 ? '📭 Nenhum usuário cadastrado' : ''}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-3 max-w-sm mx-auto">
-                              Abra o DevTools (F12) e vá à aba "Console" para ver detalhes do carregamento.
-                              Procure por logs com 👥, ✅ ou ❌
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                          ) : (
+                            <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-dashed border-gray-300 shadow-sm">
+                              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                              <p className="text-lg font-bold text-gray-600">Nenhum usuário encontrado</p>
+                              <p className="text-sm text-gray-500 mt-2">
+                                {searchQuery ? '🔍 Nenhum resultado' : (usersList === null ? '⏳ Carregando...' : usersList.length === 0 ? '📭 Nenhum usuário cadastrado' : '')}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-3 max-w-sm mx-auto">
+                                Abra o DevTools (F12) e vá à aba "Console" para ver detalhes do carregamento.
+                                Procure por logs com 👥, ✅ ou ❌
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )})()}
                     </div>
 
                   </div>

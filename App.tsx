@@ -2459,11 +2459,13 @@ Secretaria de Estado da Saúde de São Paulo`;
                     )}
                     
                     {/* Metas */}
-                    {selectedObjetivo && selectedObjetivo.metas && selectedObjetivo.metas.length > 0 && (
+                    {selectedObjetivo && selectedObjetivo.metas && formData.planejamento.metaIds.length > 0 && (
                       <div className="border-l-4 border-green-600 pl-4">
                         <label className="block text-[10px] font-bold uppercase text-gray-600 tracking-widest mb-2">Metas Relacionadas</label>
                         <ul className="space-y-2">
-                          {selectedObjetivo.metas.map((meta, idx) => (
+                          {selectedObjetivo.metas
+                            .filter(meta => formData.planejamento.metaIds.includes(meta.id))
+                            .map((meta, idx) => (
                             <li key={idx} className="text-xs text-gray-800 flex items-start gap-2">
                               <span className="text-green-600 font-bold mt-0.5">•</span>
                               <span>{meta.descricao}</span>

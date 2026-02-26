@@ -14,7 +14,7 @@
 -- 1. CRIAR TABELA user_roles (se não existir)
 CREATE TABLE IF NOT EXISTS public.user_roles (
   user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  role text DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  role text DEFAULT 'user' CHECK (role IN ('admin', 'user', 'intermediate')),
   disabled boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now())
@@ -77,6 +77,7 @@ SELECT
   COUNT(*) as total_users,
   COUNT(CASE WHEN role = 'admin' THEN 1 END) as admin_count,
   COUNT(CASE WHEN role = 'user' THEN 1 END) as user_count,
+  COUNT(CASE WHEN role = 'intermediate' THEN 1 END) as intermediate_count,
   COUNT(CASE WHEN disabled = false THEN 1 END) as active_count
 FROM public.user_roles;
 

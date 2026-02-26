@@ -85,8 +85,10 @@ const App: React.FC = () => {
   // Admin & User Management
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [inactiveUsersList, setInactiveUsersList] = useState<any[]>([]);
+  const [showInactiveUsers, setShowInactiveUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as const, cnes: '' });
+  const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as 'user' | 'admin' | 'intermediate', cnes: '' });
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
 
@@ -192,12 +194,17 @@ const App: React.FC = () => {
   
   const canEditPlan = (planCreatedBy: string): boolean => {
     if (!currentUser) return false;
-    return isAdmin() || planCreatedBy === currentUser.id;
+    // Only admin e owner (user) podem editar
+    // Intermediate users NÃO podem editar
+    return isAdmin() || (currentUser.role === 'user' && planCreatedBy === currentUser.id);
   };
   
   const canViewPlan = (planCreatedBy: string): boolean => {
     if (!currentUser) return false;
-    return isAdmin() || planCreatedBy === currentUser.id;
+    // Admin, intermediate e owner (user) podem visualizar
+    if (isAdmin()) return true; // Admin vê tudo
+    if (currentUser.role === 'intermediate') return true; // Intermediate vê todos os planos
+    return planCreatedBy === currentUser.id; // User vê só seus planos
   };
 
   // Help Content for each section
@@ -304,18 +311,26 @@ const App: React.FC = () => {
           // Query explícita para todas as colunas que precisamos
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
-            .select('id, full_name, email, role, cnes, disabled, created_at, updated_at, password_changed_at, last_login_at')
+            .select('id, full_name, email, cnes, disabled, created_at, updated_at, password_changed_at, last_login_at')
             .eq('id', session.user.id)
             .single();
           
           if (!profileError && profile) {
+            // Pegar role de user_roles (fonte de verdade)
+            const { data: userRole, error: roleError } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', session.user.id)
+              .single();
+            
             const userData = {
               id: session.user.id,
               username: session.user.email || '',
               name: profile.full_name,
-              role: profile.role,
+              role: userRole?.role || 'user',
               cnes: profile.cnes || ''
             };
+            console.log('🔐 checkSession - Usuário carregado:', userData);
             setCurrentUser(userData);
             setIsAuthenticated(true);
           } else if (profileError) {
@@ -444,6 +459,112 @@ const App: React.FC = () => {
     // Update ref
     prevShowUserManagementRef.current = showUserManagement;
   }, [isAuthenticated, showUserManagement]);
+
+  // Carregar usuários inativos/desativados
+  const loadInactiveUsers = async () => {
+    try {
+      console.log('👻 loadInactiveUsers() - Carregando usuários desativados');
+      
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cnes, created_at')
+        .order('full_name');
+      
+      if (profileError) {
+        console.error('❌ Erro ao carregar profiles:', profileError);
+        return;
+      }
+
+      const { data: userRoles, error: roleError } = await supabase
+        .from('user_roles')
+        .select('user_id, role, disabled');
+      
+      if (roleError) {
+        console.error('❌ Erro ao carregar user_roles:', roleError);
+        return;
+      }
+
+      // Filtrar APENAS os desativados
+      if (profiles && userRoles) {
+        const usersByRole: { [key: string]: { role: string; disabled: boolean } } = {};
+        userRoles.forEach(ur => {
+          usersByRole[ur.user_id] = { role: ur.role, disabled: ur.disabled };
+        });
+        
+        const inactiveList = profiles
+          .filter(p => usersByRole[p.id]?.disabled === true)
+          .map(p => {
+            const role = usersByRole[p.id]?.role || 'user';
+            return {
+              id: p.id,
+              username: p.email || '',
+              email: p.email || '',
+              name: p.full_name,
+              role: role,
+              cnes: p.cnes || '',
+              disabled: true
+            };
+          })
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        
+        setInactiveUsersList(inactiveList);
+        console.log('✅ Usuários inativos carregados:', inactiveList.length, inactiveList);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar usuários inativos:', error);
+      alert(`Erro ao carregar inativos: ${error.message}`);
+    }
+  };
+
+  // Reativar usuário desativado
+  const handleReactivateUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Deseja reativar ${userName}?`)) return;
+
+    try {
+      console.log('🔄 Reativando usuário:', userId);
+      
+      const { error } = await supabase
+        .from('user_roles')
+        .update({ disabled: false, updated_at: new Date().toISOString() })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      alert(`✅ ${userName} foi reativado com sucesso!`);
+      console.log('✅ Reativação concluída');
+
+      // Recarregar ambas as listas
+      loadInactiveUsers();
+      
+      // Recarregar lista ativa também
+      const { data: profiles2 } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cnes, created_at')
+        .order('full_name');
+      const { data: userRoles2 } = await supabase
+        .from('user_roles')
+        .select('user_id, role, disabled');
+      
+      if (profiles2 && userRoles2) {
+        const usersByRole: { [key: string]: any } = {};
+        userRoles2.forEach(ur => {
+          usersByRole[ur.user_id] = ur;
+        });
+        setUsersList(profiles2.map(p => ({
+          id: p.id,
+          username: p.email || '',
+          email: p.email || '',
+          name: p.full_name,
+          role: usersByRole[p.id]?.role || 'user',
+          cnes: p.cnes || '',
+          disabled: usersByRole[p.id]?.disabled || false
+        })).sort((a, b) => a.role !== b.role ? (a.role === 'admin' ? -1 : 1) : (a.name || '').localeCompare(b.name || '')));
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao reativar usuário:', error);
+      alert(`❌ Erro ao reativar: ${error.message}`);
+    }
+  };
 
   // Carrega planos quando muda para view de listagem ou dashboard
   useEffect(() => {
@@ -769,6 +890,57 @@ const App: React.FC = () => {
     }
   };
 
+  // Alterar papel do usuário de forma genérica
+  const handleChangeUserRole = async (userId: string, userName: string, newRole: 'user' | 'intermediate' | 'admin') => {
+    try {
+      const roleNames = {
+        'user': 'USUÁRIO PADRÃO',
+        'intermediate': 'USUÁRIO INTERMEDIÁRIO',
+        'admin': 'ADMINISTRADOR'
+      };
+
+      console.log(`🔄 Alterando papel de ${userName} para ${newRole}:`, userId);
+      
+      const { error } = await supabase
+        .from('user_roles')
+        .update({ role: newRole })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      alert(`✅ ${userName} foi alterado para ${roleNames[newRole]}!`);
+      console.log('✅ Alteração de papel concluída');
+
+      // Recarregar lista
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cnes, created_at')
+        .order('full_name');
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role, disabled');
+      
+      if (profiles && userRoles) {
+        const usersByRole: { [key: string]: any } = {};
+        userRoles.forEach(ur => {
+          usersByRole[ur.user_id] = ur;
+        });
+        setUsersList(profiles.map(p => ({
+          id: p.id,
+          username: p.email || '',
+          email: p.email || '',
+          name: p.full_name,
+          role: usersByRole[p.id]?.role || 'user',
+          cnes: p.cnes || '',
+          disabled: usersByRole[p.id]?.disabled || false
+        })));
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao alterar papel do usuário:', error);
+      alert(`❌ Erro ao alterar papel: ${error.message}`);
+    }
+  };
+
   // Excluir usuário - Delete direto na tabela
   const handleDeleteUser = async (userId: string, userEmail: string) => {
     if (!confirm(`Tem certeza que deseja excluir o usuário? Esta ação não pode ser desfeita.`)) return;
@@ -851,13 +1023,22 @@ const App: React.FC = () => {
 
       if (profileError) throw profileError;
 
-      // Se houver nova senha, alterar no Auth
+      // Se houver nova senha, enviar email de reset
       if (editingUser.password && editingUser.password.length >= 6) {
-        const { error: passwordError } = await supabase.auth.admin.updateUserById(
-          editingUser.id,
-          { password: editingUser.password }
-        );
-        if (passwordError) throw passwordError;
+        try {
+          // Usar RPC function para atualizar senha
+          const { error: passwordError } = await supabase.rpc('update_user_password', {
+            user_id: editingUser.id,
+            new_password: editingUser.password
+          });
+          if (passwordError) throw passwordError;
+        } catch (err) {
+          console.warn('⚠️ Não foi possível atualizar senha via RPC, tentando email de reset...');
+          // Fallback: enviar email de reset
+          await supabase.auth.resetPasswordForEmail(editingUser.email, {
+            redirectTo: `${window.location.origin}/reset-password`
+          });
+        }
       }
 
       alert('✅ Usuário atualizado com sucesso!');
@@ -987,8 +1168,9 @@ const App: React.FC = () => {
       console.log('✅ Role atribuído:', newUser.role);
 
       // Sucesso
-      alert(`✅ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nCNES: ${newUser.cnes}\nPerfil: ${newUser.role === 'admin' ? 'Administrador' : 'Usuário Padrão'}`);
-      setNewUser({ email: '', password: '', name: '', role: 'user', cnes: '' });
+      const roleName = newUser.role === 'admin' ? 'Administrador' : newUser.role === 'intermediate' ? 'Usuário Intermediário' : 'Usuário Padrão';
+      alert(`✅ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nCNES: ${newUser.cnes}\nPerfil: ${roleName}`);
+      setNewUser({ email: '', password: '', name: '', role: 'user' as 'user' | 'admin' | 'intermediate', cnes: '' });
       
       // Recarregar lista de usuários
       const { data: profiles, error: fetchError } = await supabase
@@ -1037,12 +1219,13 @@ const App: React.FC = () => {
 
       let query = supabase.from('planos_trabalho').select('*');
 
-      // Se não for admin, filtrar apenas pelos planos do usuário
-      if (!isAdmin()) {
+      // Se for admin ou intermediário, carregar TODOS os planos
+      // Se for usuário padrão, filtrar apenas pelos planos do usuário
+      if (isAdmin() || currentUser?.role === 'intermediate') {
+        console.log('📋 Carregando planos: TODOS os planos (Admin ou Intermediário)');
+      } else {
         console.log('📋 Filtrando planos: apenas do usuário', user.id);
         query = query.eq('created_by', user.id);
-      } else {
-        console.log('📋 Carregando planos: ADMIN - todos os planos');
       }
 
       const { data: planos, error } = await query.order('created_at', { ascending: false });
@@ -2744,7 +2927,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                   >
                     Meus Planos
                   </button>
-                  {isAdmin() && (
+                  {(isAdmin() || currentUser?.role === 'intermediate') && (
                     <button 
                       onClick={() => setCurrentView('dashboard')}
                       className={`text-sm font-bold uppercase tracking-wide transition-colors ${
@@ -2884,10 +3067,11 @@ Secretaria de Estado da Saúde de São Paulo`;
                             <select 
                               className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 text-base font-medium transition-all"
                               value={newUser.role}
-                              onChange={(e) => setNewUser({...newUser, role: e.target.value as 'user' | 'admin'})}
+                              onChange={(e) => setNewUser({...newUser, role: e.target.value as 'user' | 'admin' | 'intermediate'})}
                             >
                               <option value="">Selecione um perfil</option>
                               <option value="user">Usuário Padrão</option>
+                              <option value="intermediate">Usuário Intermediário</option>
                               <option value="admin">Administrador SES</option>
                             </select>
                           </div>
@@ -2900,6 +3084,8 @@ Secretaria de Estado da Saúde de São Paulo`;
                             <p className="text-sm text-blue-800 mt-2 leading-relaxed">
                               {newUser.role === 'user' 
                                 ? '✓ Criar e gerenciar seus próprios planos de trabalho • ✓ Visualizar relatórios pessoais • ✓ Editar dados básicos da conta'
+                                : newUser.role === 'intermediate'
+                                ? '✓ Visualizar todos os planos de trabalho do sistema • ✗ Não pode criar novos planos • ✗ Não pode editar ou apagar planos • ✓ Apenas leitura'
                                 : '✓ Acesso total ao sistema • ✓ Gerenciar todos os usuários e permissões • ✓ Visualizar relatórios globais • ✓ Configurar sistema'
                               }
                             </p>
@@ -2942,6 +3128,22 @@ Secretaria de Estado da Saúde de São Paulo`;
                           </h3>
                           <p className="text-sm text-gray-500 mt-2">{usersList.length} usuário{usersList.length !== 1 ? 's' : ''} cadastrado{usersList.length !== 1 ? 's' : ''}</p>
                         </div>
+                        <button
+                          onClick={() => {
+                            setShowInactiveUsers(!showInactiveUsers);
+                            if (!showInactiveUsers) {
+                              loadInactiveUsers();
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-lg font-bold text-xs uppercase transition-colors ${
+                            showInactiveUsers
+                              ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                          title={showInactiveUsers ? 'Ocultar usuários inativos' : 'Mostrar usuários inativos'}
+                        >
+                          👻 {inactiveUsersList.length > 0 ? `Inativos (${inactiveUsersList.length})` : 'Sem inativos'}
+                        </button>
                       </div>
 
                       {/* CAMPO DE BUSCA */}
@@ -3012,9 +3214,11 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   <div className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
                                     u.role === 'admin'
                                       ? 'bg-red-100 text-red-700'
+                                      : u.role === 'intermediate'
+                                      ? 'bg-purple-100 text-purple-700'
                                       : 'bg-blue-100 text-blue-700'
                                   }`}>
-                                    {u.role === 'admin' ? 'Admin' : 'Usuário'}
+                                    {u.role === 'admin' ? 'Admin' : u.role === 'intermediate' ? 'Intermediário' : 'Usuário'}
                                   </div>
                                 </div>
                               </div>
@@ -3050,34 +3254,27 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   Editar
                                 </button>
 
-                                {/* Promover/Rebaixar */}
-                                {u.role === 'user' ? (
-                                  <button 
-                                    onClick={() => {
-                                      if (window.confirm(`Deseja promover ${u.name} a ADMINISTRADOR?`)) {
-                                        handlePromoteUserToAdmin(u.id, u.name);
-                                      }
-                                    }}
-                                    className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-yellow-700 bg-yellow-100 hover:bg-yellow-200 transition-colors flex items-center justify-center gap-2"
-                                    title="Promover a administrador"
-                                  >
-                                    <Crown className="w-4 h-4" />
-                                    Promover
-                                  </button>
-                                ) : (
-                                  <button 
-                                    onClick={() => {
-                                      if (window.confirm(`Deseja rebaixar ${u.name} para USUÁRIO PADRÃO?`)) {
-                                        handleDemoteUserToRegular(u.id, u.name);
-                                      }
-                                    }}
-                                    className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-purple-700 bg-purple-100 hover:bg-purple-200 transition-colors flex items-center justify-center gap-2"
-                                    title="Rebaixar para usuário padrão"
-                                  >
-                                    <ChevronDown className="w-4 h-4" />
-                                    Rebaixar
-                                  </button>
-                                )}
+                                {/* Alterar Papel do Usuário */}
+                                <select 
+                                  value={u.role}
+                                  onChange={(e) => {
+                                    const newRole = e.target.value as 'user' | 'intermediate' | 'admin';
+                                    const roleNames: {[key: string]: string} = {
+                                      'user': 'USUÁRIO PADRÃO',
+                                      'intermediate': 'USUÁRIO INTERMEDIÁRIO',
+                                      'admin': 'ADMINISTRADOR'
+                                    };
+                                    if (window.confirm(`Deseja alterar ${u.name} para ${roleNames[newRole]}?`)) {
+                                      handleChangeUserRole(u.id, u.name, newRole);
+                                    }
+                                  }}
+                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-indigo-700 bg-indigo-100 hover:bg-indigo-200 transition-colors"
+                                  title="Alterar papel do usuário"
+                                >
+                                  <option value="user">Padrão</option>
+                                  <option value="intermediate">Intermediário</option>
+                                  <option value="admin">Admin</option>
+                                </select>
 
                                 {/* Ativar/Desativar */}
                                 <button 
@@ -3132,6 +3329,55 @@ Secretaria de Estado da Saúde de São Paulo`;
                       </>
                     )})()}
                     </div>
+
+                    {/* SEÇÃO 3: USUÁRIOS INATIVOS/DESATIVADOS */}
+                    {showInactiveUsers && (
+                      <>
+                        <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
+                        <div className="space-y-6 p-6 bg-orange-50 rounded-xl border-2 border-orange-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="text-lg font-black text-orange-900 flex items-center gap-3">
+                                👻 Usuários Inativos
+                              </h3>
+                              <p className="text-sm text-orange-700 mt-2">{inactiveUsersList.length} usuário{inactiveUsersList.length !== 1 ? 's' : ''} inativo{inactiveUsersList.length !== 1 ? 's' : ''}</p>
+                            </div>
+                          </div>
+
+                          {inactiveUsersList.length > 0 ? (
+                            <div className="space-y-4">
+                              {inactiveUsersList.map((u: any) => (
+                                <div key={u.id} className="p-4 bg-white rounded-lg border border-orange-200 hover:border-orange-300 transition-colors">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <h4 className="font-bold text-gray-900">{u.name || u.email}</h4>
+                                      <p className="text-sm text-gray-600">{u.email}</p>
+                                      {u.cnes && (
+                                        <p className="text-xs text-gray-500 mt-1">CNES: {u.cnes}</p>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 ml-4">
+                                      <button
+                                        onClick={() => handleReactivateUser(u.id, u.name || u.email)}
+                                        className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-bold text-xs uppercase hover:bg-green-200 transition-colors"
+                                        title="Reativar usuário"
+                                      >
+                                        ♻️ Reativar
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8">
+                              <Users className="w-12 h-12 text-orange-300 mx-auto mb-3" />
+                              <p className="text-sm font-bold text-orange-700">Carregando usuários inativos...</p>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
 
                   </div>
                 </div>
@@ -3909,11 +4155,11 @@ Secretaria de Estado da Saúde de São Paulo`;
 
           {/* VIEW: DASHBOARD */}
           {currentView === 'dashboard' && (
-            !isAdmin() ? (
+            !(isAdmin() || currentUser?.role === 'intermediate') ? (
               <div className="text-center py-20 bg-red-50 rounded-2xl border-2 border-red-200 p-8">
                 <Lock className="w-20 h-20 text-red-600 mx-auto mb-6" />
                 <h2 className="text-3xl font-bold text-red-900 mb-4">🔒 Acesso Negado</h2>
-                <p className="text-lg text-red-700 mb-6">O Dashboard é exclusivo para administradores.</p>
+                <p className="text-lg text-red-700 mb-6">O Dashboard é exclusivo para administradores e usuários intermediários.</p>
                 <p className="text-sm text-red-600 mb-8">Contacte um administrador se você acredita que deveria ter acesso.</p>
                 <Button
                   label="Voltar para Meus Planos"

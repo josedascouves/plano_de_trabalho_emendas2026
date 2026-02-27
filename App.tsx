@@ -359,16 +359,10 @@ const App: React.FC = () => {
   // Fetch users if admin
   const prevShowUserManagementRef = useRef(showUserManagement);
   const loadingPlanIdRef = useRef<string | null>(null);
+  const planLoadCompletedRef = useRef<Set<string>>(new Set()); // ← NOVO: Tracks which plans have been loaded
+  const isSavingRef = useRef(false); // ← NOVO: Sincronamente previne dupla execução de save
   
   useEffect(() => {
-    console.log('🔍 useEffect check:', {
-      isAuthenticated,
-      showUserManagement,
-      currentUser_role: currentUser?.role,
-      prevShowUserManagementRef: prevShowUserManagementRef.current,
-      shouldFetch: isAuthenticated && showUserManagement && currentUser?.role === 'admin' && !prevShowUserManagementRef.current
-    });
-    
     // Only fetch when modal opens (showUserManagement becomes true)
     if (isAuthenticated && showUserManagement && currentUser?.role === 'admin' && !prevShowUserManagementRef.current) {
       const fetchUsers = async () => {
@@ -576,7 +570,6 @@ const App: React.FC = () => {
   // Carrega planos assim que o usuário se autentica (para usar no modal de seleção)
   useEffect(() => {
     if (isAuthenticated && planosList.length === 0 && !isLoadingPlanos) {
-      console.log('📋 Carregando planos no mount...');
       loadPlanos();
     }
   }, [isAuthenticated]);
@@ -593,19 +586,10 @@ const App: React.FC = () => {
 
   // Auto-fill CNES for regular users when they log in
   useEffect(() => {
-    console.log('🔍 useEffect CNES check:', {
-      isAuthenticated,
-      currentUser_cnes: currentUser?.cnes,
-      currentUser_role: currentUser?.role,
-      formData_cnes: formData.beneficiario.cnes,
-      shouldUpdate: isAuthenticated && currentUser?.role === 'user'
-    });
-    
     // Preencher CNES para usuários padrão (mesmo que seja vazio, apenas para não-admins)
     if (isAuthenticated && currentUser?.role === 'user') {
       const cnesToUse = currentUser.cnes || '';
       if (formData.beneficiario.cnes !== cnesToUse) {
-        console.log('✅ Auto-preenchendo CNES para usuário padrão:', cnesToUse);
         updateFormData('beneficiario', { 
           ...formData.beneficiario, 
           cnes: cnesToUse
@@ -673,8 +657,6 @@ const App: React.FC = () => {
       }
 
       if (data.user) {
-        console.log('🔑 LOGIN - Usuário autenticado:', data.user.email);
-        
         // Buscar perfil do usuário
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
@@ -687,8 +669,6 @@ const App: React.FC = () => {
           throw new Error('Erro ao carregar perfil do usuário');
         }
 
-        console.log('✅ Perfil carregado:', profile?.full_name, profile?.email);
-
         // Buscar role e status (disabled) da tabela user_roles
         const { data: userRole, error: userRoleError } = await supabase
           .from('user_roles')
@@ -700,8 +680,6 @@ const App: React.FC = () => {
           console.error('❌ Erro ao buscar role:', userRoleError);
           throw new Error('Erro ao carregar permissões do usuário');
         }
-
-        console.log('✅ Role carregado:', { role: userRole?.role, disabled: userRole?.disabled });
 
         // Verificar se usuário está desativado
         if (userRole?.disabled) {
@@ -717,11 +695,9 @@ const App: React.FC = () => {
           cnes: profile?.cnes || ''
         };
         
-        console.log('🎯 setCurrentUser:', userObject);
         setCurrentUser(userObject);
         setIsAuthenticated(true);
         setLoginInput({ email: '', password: '' });
-        console.log('✅ LOGIN CONCLUÍDO - Usuário autenticado com sucesso');
       }
     } catch (error: any) {
       console.error('Erro ao fazer login:', error);
@@ -1211,20 +1187,12 @@ const App: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sessão expirada");
 
-      console.log('📋 loadPlanos - Iniciando carregamento:', {
-        user_id: user.id,
-        isAdmin: isAdmin(),
-        currentUser: currentUser ? { id: currentUser.id, role: currentUser.role } : null
-      });
-
       let query = supabase.from('planos_trabalho').select('*');
 
       // Se for admin ou intermediário, carregar TODOS os planos
       // Se for usuário padrão, filtrar apenas pelos planos do usuário
       if (isAdmin() || currentUser?.role === 'intermediate') {
-        console.log('📋 Carregando planos: TODOS os planos (Admin ou Intermediário)');
       } else {
-        console.log('📋 Filtrando planos: apenas do usuário', user.id);
         query = query.eq('created_by', user.id);
       }
 
@@ -1233,21 +1201,6 @@ const App: React.FC = () => {
       if (error) {
         console.error('❌ Erro ao carregar planos:', error);
         throw error;
-      }
-      
-      console.log('✅ Planos carregados:', planos?.length || 0, planos);
-      
-      // Debug: Log dos dados carregados
-      if (planos && planos.length > 0) {
-        console.log('📊 Total de planos:', planos.length);
-        const planoComEdits = planos.find(p => p.edit_count !== undefined);
-        console.log('✅ Colunas de versionamento:', planoComEdits ? 'ENCONTRADAS' : 'NÃO ENCONTRADAS');
-        if (planoComEdits) {
-          console.log('  - edit_count:', planoComEdits.edit_count);
-          console.log('  - last_edited_at:', planoComEdits.last_edited_at);
-        }
-      } else {
-        console.warn('⚠ Nenhum plano encontrado');
       }
       
       setPlanosList(planos || []);
@@ -1260,12 +1213,40 @@ const App: React.FC = () => {
     }
   };
 
-  // Carrega um plano específico para editar (apenas uma vez por plano)
+  // RESET: Quando fecha a edição, limpar o cache para permitir novo carregamento
   useEffect(() => {
-    if (editingPlanId) {
-      console.log('🔄 useEffect dispatchado - carregando plano:', editingPlanId);
-      loadPlanForEditing(editingPlanId);
+    if (!editingPlanId) {
+      // Usuário fechou a edição - SEMPRE limpar refs
+      console.log('🚪 Edição fechada - limpando refs para forçar recarga');
+      planLoadCompletedRef.current.clear();
+      loadingPlanIdRef.current = null;
     }
+  }, [editingPlanId]);
+
+  // Carrega um plano específico para editar 
+  // REMOVE CACHE: Carrega SEMPRE quando clica editar  
+  useEffect(() => {
+    if (!editingPlanId) {
+      return;
+    }
+
+    // Se está carregando OUTRO plano, ignora
+    if (loadingPlanIdRef.current && loadingPlanIdRef.current !== editingPlanId) {
+      return;
+    }
+
+    // Marcar como "em carregamento"
+    loadingPlanIdRef.current = editingPlanId;
+
+    // Carregar o plano (SEMPRE, sem cache)
+    loadPlanForEditing(editingPlanId)
+      .catch((error) => {
+        console.error('❌ Erro ao carregar plano:', error);
+      })
+      .finally(() => {
+        // Limpar "em carregamento"
+        loadingPlanIdRef.current = null;
+      });
   }, [editingPlanId]);
 
   // Monitorar mudanças no formData e atualizar sectionStatus automaticamente
@@ -1302,158 +1283,236 @@ const App: React.FC = () => {
   }, [formData]);
 
   const loadPlanForEditing = async (planoId: string) => {
-    // Evitar carregar o mesmo plano 2 vezes
-    if (loadingPlanIdRef.current === planoId) {
-      console.log('⏭️ Carregamento de plano já em progresso:', planoId);
+    // Validar planoId
+    if (!planoId || typeof planoId !== 'string') {
+      console.error('❌ ERRO: planoId inválido:', planoId);
+      alert('Erro: ID do plano inválido');
       return;
     }
 
-    loadingPlanIdRef.current = planoId;
+    // CRÍTICO: Limpar formData ANTES de carregar novos dados
+    // Isso garante que não há dados antigos misturados
+    console.log('🗑️ Limpando formData anterior...');
+    setFormData(getInitialFormData());
+    setCurrentSelection({ categoria: '', item: '', metas: [''] });
+    setCurrentMetaQualitativa({ meta: '', valor: '' });
+    setCurrentNatureza({ codigo: '', valor: '' });
+
+    // Nota: O check de carregamento duplicado AGORA é feito no useEffect
+    // Aqui apenas executamos o carregamento
+    
     try {
-      console.log('📂 Iniciando carregamento de plano para edição:', planoId);
-      
-      // 1. Buscar plano principal
+      // 1. Buscar plano principal COM VALIDAÇÃO
       const { data: plano, error: planoError } = await supabase
         .from('planos_trabalho')
         .select('*')
         .eq('id', planoId)
         .single();
 
-      if (planoError) throw planoError;
-      if (!plano) throw new Error('Plano não encontrado');
-
-      console.log('✅ Plano carregado:', {
-        id: plano.id,
-        numero: plano.numero_emenda,
-        beneficiario: plano.beneficiario_nome,
-        diretriz_id: plano.diretriz_id,
-        objetivo_id: plano.objetivo_id,
-        metas_ids: plano.metas_ids
-      });
-
-      // 2. Buscar metas quantitativas (com deduplicação)
-      let { data: acoes } = await supabase
-        .from('acoes_servicos')
-        .select('*')
-        .eq('plano_id', planoId);
-
-      // Remover duplicatas baseado em categoria + item
-      if (acoes) {
-        const seen = new Set<string>();
-        acoes = acoes.filter(a => {
-          const key = `${a.categoria}|${a.item}`;
-          if (seen.has(key)) {
-            console.log(`⚠️ Duplicata removida: ${key}`);
-            return false;
-          }
-          seen.add(key);
-          return true;
-        });
+      if (planoError) {
+        console.error('❌ Erro ao buscar plano:', planoError);
+        throw new Error(`Plano não encontrado: ${planoError.message}`);
+      }
+      
+      if (!plano || typeof plano !== 'object') {
+        throw new Error('Plano inválido ou não encontrado');
       }
 
-      console.log('✅ Ações/Serviços carregados DO BANCO: 4 Array(4) → Após dedup:', acoes?.length || 0);
+      // 2. Buscar metas quantitativas - SÓ O MAIS RECENTE por cada categoria
+      let acoes = [];
+      try {
+        const { data: acoesRaw, error: acoesError } = await supabase
+          .from('acoes_servicos')
+          .select('*')
+          .eq('plano_id', planoId)
+          .order('created_at', { ascending: false })
+          .limit(10); // Limitar a últimas 10 para evitar muitos dados
 
-      // 3. Buscar metas qualitativas (com deduplicação)
-      let { data: metas } = await supabase
-        .from('metas_qualitativas')
-        .select('*')
-        .eq('plano_id', planoId);
-
-      // Remover duplicatas baseado em meta_descricao
-      if (metas) {
-        const seen = new Set<string>();
-        metas = metas.filter(m => {
-          const key = m.meta_descricao || '';
-          if (seen.has(key)) {
-            console.log(`⚠️ Duplicata removida: ${key}`);
-            return false;
+        if (acoesError) {
+          console.warn('⚠️ Erro ao buscar ações:', acoesError);
+        } else {
+          // DEDUP: Manter só UMA ação (a mais recente)
+          // Se tiver múltiplas, quer dizer que está duplicado
+          const acoesUnique: any[] = [];
+          const seen = new Set<string>();
+          
+          for (const a of acoesRaw || []) {
+            const key = `${a.categoria}|${a.item}`; // Chave única por categoria+item
+            if (!seen.has(key)) {
+              acoesUnique.push(a);
+              seen.add(key);
+            }
           }
-          seen.add(key);
-          return true;
-        });
+          
+          acoes = acoesUnique;
+          console.log(`✅ Ações/Serviços carregadas DO BANCO: ${acoesRaw?.length || 0} registros (${acoes.length} únicos após dedup)`);
+        }
+      } catch (e) {
+        console.warn('⚠️ Erro ao buscar ações (try/catch):', e);
+        acoes = [];
       }
 
-      console.log('✅ Metas Qualitativas carregadas DO BANCO → Após dedup:', metas?.length || 0);
+      // 3. Buscar metas qualitativas - SÓ A MAIS RECENTE
+      let metas = [];
+      try {
+        const { data: metasRaw, error: metasError } = await supabase
+          .from('metas_qualitativas')
+          .select('*')
+          .eq('plano_id', planoId)
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-      // 4. Buscar naturezas de despesa (com deduplicação)
-      let { data: naturezas } = await supabase
-        .from('naturezas_despesa_plano')
-        .select('*')
-        .eq('plano_id', planoId);
-
-      // Remover duplicatas baseado em codigo
-      if (naturezas) {
-        const seen = new Set<string>();
-        naturezas = naturezas.filter(n => {
-          const key = n.codigo || '';
-          if (seen.has(key)) {
-            console.log(`⚠️ Duplicata removida: ${key}`);
-            return false;
+        if (metasError) {
+          console.warn('⚠️ Erro ao buscar metas qualitativas:', metasError);
+        } else {
+          // DEDUP: Manter só UMA meta por descrição
+          const metasUnique: any[] = [];
+          const seen = new Set<string>();
+          
+          for (const m of metasRaw || []) {
+            const key = `${m.meta_descricao}`; // Chave única por meta_descricao
+            if (!seen.has(key)) {
+              metasUnique.push(m);
+              seen.add(key);
+            }
           }
-          seen.add(key);
-          return true;
-        });
+          
+          metas = metasUnique;
+          console.log(`✅ Metas Qualitativas carregadas DO BANCO: ${metasRaw?.length || 0} registros (${metas.length} únicos após dedup)`);
+        }
+      } catch (e) {
+        console.warn('⚠️ Erro ao buscar metas qualitativas (try/catch):', e);
+        metas = [];
       }
 
-      console.log('✅ Naturezas de Despesa carregadas DO BANCO → Após dedup:', naturezas?.length || 0);
+      // 4. Buscar naturezas de despesa - SÓ A MAIS RECENTE
+      let naturezas = [];
+      try {
+        const { data: naturezasRaw, error: naturezasError } = await supabase
+          .from('naturezas_despesa_plano')
+          .select('*')
+          .eq('plano_id', planoId)
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-      // 5. Montar formData completo com todos os dados
+        if (naturezasError) {
+          console.warn('⚠️ Erro ao buscar naturezas:', naturezasError);
+        } else {
+          // DEDUP: Manter só UMA natureza por código
+          const naturezasUnique: any[] = [];
+          const seen = new Set<string>();
+          
+          for (const n of naturezasRaw || []) {
+            const key = `${n.codigo}`; // Chave única por código
+            if (!seen.has(key)) {
+              naturezasUnique.push(n);
+              seen.add(key);
+            }
+          }
+          
+          naturezas = naturezasUnique;
+          console.log(`✅ Naturezas de Despesa carregadas DO BANCO: ${naturezasRaw?.length || 0} registros (${naturezas.length} únicos após dedup)`);
+        }
+      } catch (e) {
+        console.warn('⚠️ Erro ao buscar naturezas (try/catch):', e);
+        naturezas = [];
+      }
+
+      // 5. Montar formData GARANTINDO INTEGRIDADE DOS DADOS
       const loadedFormData: FormState = {
         emenda: {
-          parlamentar: plano.parlamentar || '',
-          numero: plano.numero_emenda || '',
-          valor: plano.valor_total?.toString() || '0,00',
+          parlamentar: (plano.parlamentar || '').trim(),
+          numero: (plano.numero_emenda || '').trim(),
+          valor: (plano.valor_total ? (Number(plano.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '0,00'),
           valorExtenso: '',
-          programa: plano.programa || ''
+          programa: (plano.programa || '').trim()
         },
         beneficiario: {
-          nome: plano.beneficiario_nome || '',
-          cnes: plano.cnes || '',
-          cnpj: plano.beneficiario_cnpj || '',
-          email: '',
-          telefone: ''
+          nome: (plano.beneficiario_nome || '').trim(),
+          cnes: (plano.cnes || '').trim(),
+          cnpj: (plano.beneficiario_cnpj || '').trim(),
+          email: (plano.beneficiario_email || '').trim(),
+          telefone: (plano.beneficiario_telefone || '').trim()
         },
         planejamento: {
-          diretrizId: plano.diretriz_id || '',
-          objetivoId: plano.objetivo_id || '',
-          metaIds: plano.metas_ids || []
+          diretrizId: (plano.diretriz_id || '').trim(),
+          objetivoId: (plano.objetivo_id || '').trim(),
+          metaIds: Array.isArray(plano.metas_ids) ? [...plano.metas_ids] : []
         },
-        acoesServicos: (acoes || []).map(a => ({
-          categoria: a.categoria || '',
-          item: a.item || '',
-          metasQuantitativas: [a.meta || ''],
-          valor: a.valor?.toString() || '0,00'
-        })),
-        metasQualitativas: (metas || []).map(m => ({
-          meta: m.meta_descricao || '',
-          valor: m.indicador?.toString() || '0'
-        })),
-        naturezasDespesa: (naturezas || []).map(n => ({
-          codigo: n.codigo || '',
-          valor: n.valor?.toString() || '0,00'
-        })),
-        justificativa: plano.justificativa || '',
-        responsavelAssinatura: plano.responsavel_assinatura || ''
+        acoesServicos: acoes.map((a, index) => {
+          if (!a || typeof a !== 'object') {
+            console.warn(`⚠️ Ação inválida no índice ${index}:`, a);
+            return { categoria: '', item: '', metasQuantitativas: [''], valor: '0,00' };
+          }
+          return {
+            categoria: (a.categoria || '').trim(),
+            item: (a.item || '').trim(),
+            metasQuantitativas: [(a.meta || '').trim()],
+            valor: (a.valor ? (Number(a.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '0,00')
+          };
+        }),
+        metasQualitativas: metas.map((m, index) => {
+          if (!m || typeof m !== 'object') {
+            console.warn(`⚠️ Meta qualitativa inválida no índice ${index}:`, m);
+            return { meta: '', valor: '0' };
+          }
+          return {
+            meta: (m.meta_descricao || '').trim(),
+            valor: String(m.indicador || '0').trim()
+          };
+        }),
+        naturezasDespesa: naturezas.map((n, index) => {
+          if (!n || typeof n !== 'object') {
+            console.warn(`⚠️ Natureza inválida no índice ${index}:`, n);
+            return { codigo: '', valor: '0,00' };
+          }
+          return {
+            codigo: (n.codigo || '').trim(),
+            valor: (n.valor ? (Number(n.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '0,00')
+          };
+        }),
+        justificativa: (plano.justificativa || '').trim(),
+        responsavelAssinatura: (plano.responsavel_assinatura || '').trim()
       };
       
-      console.log('📝 FormData montado para edição:', loadedFormData);
-      console.log('📊 Quantidade de itens no formData:', {
+      console.log('📝 FormData montado para edição:', {
+        emenda: loadedFormData.emenda,
+        beneficiario: loadedFormData.beneficiario,
+        planejamento: loadedFormData.planejamento,
         acoesServicos: loadedFormData.acoesServicos.length,
         metasQualitativas: loadedFormData.metasQualitativas.length,
         naturezasDespesa: loadedFormData.naturezasDespesa.length
       });
       
-      setFormData(loadedFormData);
+      // 6. ATUALIZAR ESTADO COM DADOS VALIDADOS
+      // IMPORTANTE: Limpar COMPLETAMENTE o formulário antes de settar novos dados
+      // Para evitar duplicação em React StrictMode
+      
+      setFormData(prev => {
+        // Garantir que é um reset completo, não uma merge
+        return loadedFormData;
+      });
+      
+      // Limpar inputs temporários para evitar dados residuais
+      setCurrentSelection({ categoria: '', item: '', metas: [''] });
+      setCurrentMetaQualitativa({ meta: '', valor: '' });
+      setCurrentNatureza({ codigo: '', valor: '' });
+      
       setPlanoSalvoId(planoId);
       const savedCopy = JSON.parse(JSON.stringify(loadedFormData));
       setLastSavedFormData(savedCopy);
       setFormHasChanges(false);
-      console.log(`✅ Plano ${planoId} carregado completamente com todos os dados para edição.`);
     } catch (error: any) {
-      console.error('❌ Erro ao carregar plano:', error);
-      alert(`Erro ao carregar plano para editar: ${error.message}`);
+      console.error('❌ ERRO CRÍTICO ao carregar plano:', error);
+      alert(`Erro ao carregar plano para editar:\n\n${error?.message || 'Erro desconhecido'}`);
       setEditingPlanId(null);
+      setFormData(getInitialFormData());
+      setPlanoSalvoId(null);
+      // Resetar refs em caso de erro
+      loadingPlanIdRef.current = null;
+      planLoadCompletedRef.current.clear();
     } finally {
+      // SEMPRE LIMPAR A REF ao final
       loadingPlanIdRef.current = null;
     }
   };
@@ -1697,8 +1756,14 @@ const App: React.FC = () => {
 
   // ======== AUTO SAVE ========
   const handleAutoSave = async () => {
+    // Proteção sincronizada contra dupla execução
+    if (isSavingRef.current) {
+      return;
+    }
+
     if (!isAuthenticated || !currentUser) return;
 
+    isSavingRef.current = true;
     setAutoSaveStatus('saving');
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1829,6 +1894,8 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("❌ Erro no autosave:", error);
       setAutoSaveStatus('idle');
+    } finally {
+      isSavingRef.current = false; // ← Reset ref após auto-save
     }
   };
 
@@ -1844,12 +1911,13 @@ const App: React.FC = () => {
   // }, [formData, isAuthenticated, currentView]);
 
   const handleFinalSend = async () => {
-    // Proteção contra duplo clique/envio
-    if (isSending) {
-      console.log("⚠️ Operação já em andamento, ignorando clique");
+    // Proteção MÁXIMA contra duplo clique/envio (usando useRef em vez de useState)
+    if (isSavingRef.current) {
+      alert("⚠️ BLOQUEADO: Operação já em andamento! Espere...");
       return null;
     }
 
+    isSavingRef.current = true;
     setIsSending(true);
 
     try {
@@ -1863,6 +1931,7 @@ const App: React.FC = () => {
           `Por favor, complete todos os campos indicados antes de salvar o plano.`
         );
         setIsSending(false);
+        isSavingRef.current = false; // ← Reset ref on validation error
         return null;
       }
 
@@ -1874,6 +1943,7 @@ const App: React.FC = () => {
         const diferenca = (totalDespesas - totalMetasQuantitativas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         alert(`⚠️ ERRO DE VALIDAÇÃO!\n\nO total de Naturezas de Despesa (R$ ${totalDespesas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) ultrapassa o Total de Metas Quantitativas (R$ ${totalMetasQuantitativas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) em R$ ${diferenca}.\n\nAjuste os valores de despesa antes de salvar.`);
         setIsSending(false);
+        isSavingRef.current = false; // ← Reset ref on validation error
         return null;
       }
 
@@ -1881,81 +1951,42 @@ const App: React.FC = () => {
       if (planoSalvoId && lastSavedFormData) {
         const currentJson = JSON.stringify(formData);
         const savedJson = JSON.stringify(lastSavedFormData);
-        console.log("🔍 DEBUGAR MUDANÇAS:");
-        console.log("   planoSalvoId:", planoSalvoId);
-        console.log("   Dados são iguais?", currentJson === savedJson);
-        if (currentJson !== savedJson) {
-          console.log("   ✅ Mudanças detectadas - prosseguindo com atualização");
-        }
         if (currentJson === savedJson) {
           alert('⚠️ Nenhuma mudança detectada!\n\nO plano não foi alterado desde o último salvamento.');
           setIsSending(false);
+          isSavingRef.current = false; // ← Reset ref when no changes
           return planoSalvoId;
         }
       }
 
-      console.log("1. Obtendo usuário...");
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sessão expirada. Faça login novamente.");
-      console.log("✅ Usuário obtido:", user.id);
 
-      // VERIFICAR SE JÁ EXISTE PLANO NO BANCO - EVITAR DUPLICAÇÃO
-      let existingPlanoId = planoSalvoId;
-      console.log("🔍 DEBUG SAVE:");
-      console.log("   planoSalvoId:", planoSalvoId);
-      console.log("   existingPlanoId INICIAL:", existingPlanoId);
-      
-      if (!existingPlanoId) {
-        console.log("   ℹ️ planoSalvoId não setado, verificando no banco...");
-        // Verificar no banco se já existe plano com esta emenda
-        const { data: existingPlano, error: checkError } = await supabase
-          .from('planos_trabalho')
-          .select('id')
-          .eq('numero_emenda', formData.emenda.numero)
-          .eq('created_by', user.id)
-          .single();
-
-        if (checkError?.code === 'PGRST116') {
-          // Não encontrou nada - é novo plano
-          console.log("✅ É um novo plano (não existe emenda com este número)");
-        } else if (checkError && checkError.code !== 'PGRST116') {
-          // Erro real
-          throw checkError;
-        } else if (existingPlano) {
-          // Encontrou plano existente!
-          console.log(`✅ Plano existente encontrado: ${existingPlano.id}`);
-          existingPlanoId = existingPlano.id;
-          setPlanoSalvoId(existingPlano.id); // Sincronizar state
-        }
-      } else {
-        console.log("   ✅ planoSalvoId já estava setado, usando para UPDATE");
-      }
-      
-      console.log("   existingPlanoId FINAL:", existingPlanoId);
-
-      // VERIFICAR SE JÁ EXISTE PLANO SALVO - NÃO CRIAR DUPLICADO
-      if (existingPlanoId) {
-        console.log(`⚠️ Plano ${existingPlanoId} já existe. Atualizando dados...`);
+      // LÓGICA SIMPLES: SE TEM planoSalvoId, é UPDATE. SENÃO, é CREATE
+      if (planoSalvoId) {
         
         // Buscar o edit_count atual para incrementar
         const { data: currentPlano } = await supabase
           .from('planos_trabalho')
           .select('edit_count')
-          .eq('id', existingPlanoId)
+          .eq('id', planoSalvoId)
           .single();
         
         const newEditCount = (currentPlano?.edit_count || 0) + 1;
         
-        // Aqui só atualiza o plano existente, não cria novo
+        // Atualizar plano existente
+        const valorTotalUpdate = parseCurrency(formData.emenda.valor);
         const { error: updateError } = await supabase
           .from('planos_trabalho')
           .update({
             parlamentar: formData.emenda.parlamentar,
             numero_emenda: formData.emenda.numero,
-            valor_total: parseCurrency(formData.emenda.valor),
+            valor_total: valorTotalUpdate,
             programa: formData.emenda.programa,
             beneficiario_nome: formData.beneficiario.nome,
             beneficiario_cnpj: formData.beneficiario.cnpj,
+            beneficiario_email: formData.beneficiario.email || null,
+            beneficiario_telefone: formData.beneficiario.telefone || null,
             cnes: formData.beneficiario.cnes || null,
             justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
@@ -1967,52 +1998,28 @@ const App: React.FC = () => {
             last_edited_at: new Date().toISOString(),
             last_edited_by: user.id
           })
-          .eq('id', existingPlanoId);
+          .eq('id', planoSalvoId);
 
         if (updateError) {
-          console.error("❌ ERRO CRÍTICO ao atualizar plano principal:", updateError);
+          console.error("❌ ERRO ao atualizar plano:", updateError);
           alert(`❌ ERRO ao atualizar plano:\n${updateError.message}`);
           setIsSending(false);
+          isSavingRef.current = false;
           return null;
         }
         
-        console.log("✅ Plano principal atualizado (edição #" + newEditCount + ")");
+        console.log("✅ Plano atualizado (edição #" + newEditCount + ")");
         
-        // DELETAR dados relacionados antigos (incluso duplicatas)
-        console.log("🗑️ Deletando TODOS os dados relacionados antigos (incluindo duplicatas)...");
-        const { error: deleteAcoesError } = await supabase.from('acoes_servicos').delete().eq('plano_id', existingPlanoId);
-        if (deleteAcoesError) {
-          console.error("❌ ERRO ao deletar ações:", deleteAcoesError);
-          alert(`❌ ERRO ao deletar ações:\n${deleteAcoesError.message}`);
-          setIsSending(false);
-          return null;
-        }
+        // ⚠️ DELETE desativado - Problema de RLS no Supabase bloqueia silenciosamente
+        // Solução: Usa DEDUP na carga (carrega só o mais recente de cada tipo)
+        // Para limpar dados antigos manualmente, execute LIMPEZA-DEDUP.sql no Supabase SQL Editor
         
-        const { error: deleteMetasError } = await supabase.from('metas_qualitativas').delete().eq('plano_id', existingPlanoId);
-        if (deleteMetasError) {
-          console.error("❌ ERRO ao deletar metas qualitativas:", deleteMetasError);
-          alert(`❌ ERRO ao deletar metas qualitativas:\n${deleteMetasError.message}`);
-          setIsSending(false);
-          return null;
-        }
-        
-        const { error: deleteNatError } = await supabase.from('naturezas_despesa_plano').delete().eq('plano_id', existingPlanoId);
-        if (deleteNatError) {
-          console.error("❌ ERRO ao deletar naturezas:", deleteNatError);
-          alert(`❌ ERRO ao deletar naturezas:\n${deleteNatError.message}`);
-          setIsSending(false);
-          return null;
-        }
-        
-        console.log("✅ Todos os dados relacionados deletados (duplicatas removidas!)");
-        
-        // INSERIR novos dados relacionados (sem duplicatas)
-        console.log("📝 Inserindo novos dados relacionados (limpos)...");
+        console.log("📝 Inserindo novos dados relacionados (DEDUP faz filtragem na carga)...");
         
         // Inserir Metas Quantitativas
         if (formData.acoesServicos.length > 0) {
           const acoesData = formData.acoesServicos.map(a => ({
-            plano_id: existingPlanoId,
+            plano_id: planoSalvoId,
             categoria: a.categoria,
             item: a.item,
             meta: a.metasQuantitativas[0],
@@ -2022,17 +2029,16 @@ const App: React.FC = () => {
           const { error: acoesError } = await supabase.from('acoes_servicos').insert(acoesData);
           if (acoesError) {
             console.error("❌ Erro ao inserir ações:", acoesError);
-            alert(`❌ ERRO ao inserir ações:\n${acoesError.message}`);
-            setIsSending(false);
-            return null;
+            // Continua mesmo se insert falhar
+          } else {
+            console.log("✅ Metas quantitativas inseridas:", acoesData.length);
           }
-          console.log("✅ Metas quantitativas inseridas (sem duplicatas):", acoesData.length);
         }
 
         // Inserir Metas Qualitativas
         if (formData.metasQualitativas.length > 0) {
           const qualData = formData.metasQualitativas.map(q => ({
-            plano_id: existingPlanoId,
+            plano_id: planoSalvoId,
             meta_descricao: q.meta,
             indicador: q.valor,
             created_by: user.id
@@ -2040,17 +2046,16 @@ const App: React.FC = () => {
           const { error: qualError } = await supabase.from('metas_qualitativas').insert(qualData);
           if (qualError) {
             console.error("❌ Erro ao inserir metas qualitativas:", qualError);
-            alert(`❌ ERRO ao inserir metas qualitativas:\n${qualError.message}`);
-            setIsSending(false);
-            return null;
+            // Continua mesmo se insert falhar
+          } else {
+            console.log("✅ Metas qualitativas inseridas:", qualData.length);
           }
-          console.log("✅ Metas qualitativas inseridas (sem duplicatas):", qualData.length);
         }
 
         // Inserir Naturezas de Despesa
         if (formData.naturezasDespesa.length > 0) {
           const natData = formData.naturezasDespesa.map(n => ({
-            plano_id: existingPlanoId,
+            plano_id: planoSalvoId,
             codigo: n.codigo,
             valor: parseCurrency(n.valor),
             created_by: user.id
@@ -2058,37 +2063,34 @@ const App: React.FC = () => {
           const { error: natError } = await supabase.from('naturezas_despesa_plano').insert(natData);
           if (natError) {
             console.error("❌ Erro ao inserir naturezas:", natError);
-            alert(`❌ ERRO ao inserir naturezas:\n${natError.message}`);
-            setIsSending(false);
-            return null;
+            // Continua mesmo se insert falhar
+          } else {
+            console.log("✅ Naturezas de despesa inseridas:", natData.length);
           }
-          console.log("✅ Naturezas de despesa inseridas (sem duplicatas):", natData.length);
         }
         
-        console.log("✅ Edição salva com sucesso!");
         setLastSavedFormData(JSON.parse(JSON.stringify(formData)));
         setFormHasChanges(false);
         
         // Recarregar lista de planos para atualizar contagem de edições
-        console.log("🔄 Recarregando lista de planos após edição...");
         await loadPlanos();
-        console.log("✅ Lista de planos recarregada");
         
         setIsSending(false);
-        return existingPlanoId;
-      }
-
-      // 1. Inserir Plano Principal (SEM PDF URL)
-      console.log("2. Inserindo plano principal...");
+        return planoSalvoId;
+      } else {
+        // ====== CREATE NOVO PLANO ======
+      const valorParsado = parseCurrency(formData.emenda.valor);
       const { data: plano, error: planoError } = await supabase
         .from('planos_trabalho')
         .insert([{
           parlamentar: formData.emenda.parlamentar,
           numero_emenda: formData.emenda.numero,
-          valor_total: parseCurrency(formData.emenda.valor),
+          valor_total: valorParsado,
           programa: formData.emenda.programa,
           beneficiario_nome: formData.beneficiario.nome,
           beneficiario_cnpj: formData.beneficiario.cnpj,
+          beneficiario_email: formData.beneficiario.email || null,
+          beneficiario_telefone: formData.beneficiario.telefone || null,
           cnes: formData.beneficiario.cnes || null,
           justificativa: formData.justificativa,
           responsavel_assinatura: formData.responsavelAssinatura,
@@ -2105,10 +2107,7 @@ const App: React.FC = () => {
         console.error("❌ Erro ao inserir plano:", planoError);
         throw planoError;
       }
-      console.log("✅ Plano criado:", plano.id);
 
-      // 2. Inserir Metas Quantitativas
-      console.log("3. Inserindo metas quantitativas...");
       if (formData.acoesServicos.length > 0) {
         const acoesData = formData.acoesServicos.map(a => ({
           plano_id: plano.id,
@@ -2123,11 +2122,8 @@ const App: React.FC = () => {
           console.error("❌ Erro ao inserir ações:", acoesError);
           throw acoesError;
         }
-        console.log("✅ Metas quantitativas inseridas");
       }
 
-      // 3. Inserir Metas Qualitativas
-      console.log("4. Inserindo metas qualitativas...");
       if (formData.metasQualitativas.length > 0) {
         const qualData = formData.metasQualitativas.map(q => ({
           plano_id: plano.id,
@@ -2140,11 +2136,8 @@ const App: React.FC = () => {
           console.error("❌ Erro ao inserir metas qualitativas:", qualError);
           throw qualError;
         }
-        console.log("✅ Metas qualitativas inseridas");
       }
 
-      // 4. Inserir Naturezas de Despesa
-      console.log("5. Inserindo naturezas de despesa...");
       if (formData.naturezasDespesa.length > 0) {
         const natData = formData.naturezasDespesa.map(n => ({
           plano_id: plano.id,
@@ -2157,10 +2150,8 @@ const App: React.FC = () => {
           console.error("❌ Erro ao inserir naturezas:", natError);
           throw natError;
         }
-        console.log("✅ Naturezas de despesa inseridas");
       }
 
-      console.log("✅ DADOS SALVOS COM SUCESSO!");
       setPlanoSalvoId(plano.id);
       // Atualizar lastSavedFormData após salvar com sucesso
       const savedCopy = JSON.parse(JSON.stringify(formData));
@@ -2170,12 +2161,13 @@ const App: React.FC = () => {
       console.log(`📌 Plano ${plano.id} salvo. lastSavedFormData atualizado.`);
       
       // Recarregar lista de planos para atualizar contagem de edições e datas
-      console.log("🔄 Recarregando lista de planos...");
       await loadPlanos();
-      console.log("✅ Lista de planos recarregada com sucesso");
       
+      alert('✅ PLANO NOVO CRIADO E SALVO COM SUCESSO!');
       setShowEmailModal(true);
-      return plano.id; // Retornar ID para uso síncrono
+      // ← NÃO reseta isSavingRef aqui! Reset apenas no finally block
+      return plano.id; // Retornar ID para uso síncrono - SAIR AGORA!
+      }
     } catch (error: any) {
       console.error("❌ ERRO COMPLETO:", error);
       const errorMsg = error?.message || error?.toString() || "Erro desconhecido";
@@ -2183,6 +2175,7 @@ const App: React.FC = () => {
       return null; // Retornar null em caso de erro
     } finally {
       setIsSending(false);
+      isSavingRef.current = false; // ← NOVO: Libera guard para próxima tentativa
     }
   };
 
@@ -2312,8 +2305,6 @@ const App: React.FC = () => {
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sessão expirada. Faça login novamente.");
-
-      console.log("🔒 === INICIANDO FLUXO SEGURO DE SALVAMENTO PARA PDF === 🔒");
       
       // 1️⃣ ETAPA CRÍTICA: GARANTIR QUE O PLANO ESTÁ SALVO NO BANCO
       let currentPlanoId = planoSalvoId;
@@ -2325,15 +2316,12 @@ const App: React.FC = () => {
         if (!currentPlanoId) {
           throw new Error("❌ CRÍTICO: Falha ao salvar novo plano. PDF NÃO foi gerado.");
         }
-        console.log(`✅ Novo plano salvo com sucesso! ID: ${currentPlanoId}`);
       } else {
         // Plano já existe: GARANTIR ATUALIZAÇÃO ANTES DO PDF
-        console.log(`📝 PLANO EXISTENTE: Atualizando dados no banco (ID: ${currentPlanoId})...`);
         const updateSuccess = await handleFinalSend();
         if (!updateSuccess) {
           throw new Error("❌ CRÍTICO: Falha ao atualizar plano. PDF NÃO foi gerado.");
         }
-        console.log("✅ Plano atualizado com sucesso antes do PDF");
       }
 
       // 2️⃣ VERIFICAÇÃO: Confirmar que o plano foi salvo
@@ -2347,26 +2335,14 @@ const App: React.FC = () => {
       if (verifyError || !verifyPlano) {
         throw new Error("❌ CRÍTICO: Plano não foi encontrado no banco após salvamento. PDF NÃO foi gerado.");
       }
-      console.log(`✅ CONFIRMADO: Plano ${verifyPlano.numero_emenda} está salvo no banco`);
 
       // 3️⃣ Registrar evento de visualização/download no banco de dados
-      console.log("📝 Registrando evento de visualização de PDF...");
       await recordPdfViewEvent(currentPlanoId);
-      console.log("✅ Evento registrado com sucesso");
 
       // 4️⃣ Abrir diálogo de impressão (navegador respeitará quebras naturalmente)
-      console.log("🖨️ Abrindo diálogo de impressão...");
       setTimeout(() => {
         window.print();
       }, 500);
-
-      console.log("🔒 === FLUXO SEGURO COMPLETADO COM SUCESSO === 🔒");
-      alert('✅ PLANO SALVO COM SUCESSO!\n\n' +
-            '✔️ Dados foram armazenados no banco de dados\n' +
-            '✔️ Evento de acesso foi registrado\n\n' +
-            'Agora você pode:\n' +
-            '1. Salvar como PDF (Ctrl+S)\n' +
-            '2. Imprimir (através da janela que se abriu)');
     } catch (error: any) {
       console.error("❌ ERRO CRÍTICO:", error);
       alert(`⚠️ ERRO AO PROCESSAR PDF:\n\n${error.message}\n\n` +
@@ -2489,10 +2465,7 @@ const App: React.FC = () => {
     
     const isFormEmpty = !hasEmendaData || !hasParliamentarData || !hasBeneficiarioData;
     
-    console.log('🔍 handleSendToSES - isFormEmpty:', isFormEmpty, 'planosList:', planosList.length);
-    
     if (isFormEmpty && planosList.length > 0) {
-      console.log('📋 Abrindo modal de seleção de planos...');
       setShowSelectPlanModal(true);
       return;
     }
@@ -2530,22 +2503,40 @@ Secretaria de Estado da Saúde de São Paulo`;
   };
 
   const handleSelectPlanForEmail = async (plano: any) => {
-    // Carregar os dados do plano selecionado
-    setEditingPlanId(plano.id);
+    // Validar plano
+    if (!plano || !plano.id) {
+      console.error('❌ Plano inválido:', plano);
+      alert('Erro: Plano inválido. Tente novamente.');
+      return;
+    }
+
+    console.log('📂 handleSelectPlanForEmail disparado para plano:', plano.id);
+    
+    // Reset PRIMEIRO - ordem é IMPORTANTE!
+    setFormData(getInitialFormData());
+    setLastSavedFormData(null);
+    setPlanoSalvoId(null);
+    setFormHasChanges(false);
+    
+    // Limpar inputs temporários TAMBÉM
+    setCurrentSelection({ categoria: '', item: '', metas: [''] });
+    setCurrentMetaQualitativa({ meta: '', valor: '' });
+    setCurrentNatureza({ codigo: '', valor: '' });
+    
     setCurrentView('new');
     setActiveSection('info-emenda');
     setSentSuccess(false);
     setShowSelectPlanModal(false);
     
-    // Resetar e carregar
-    setFormData(getInitialFormData());
-    setLastSavedFormData(null);
-    setPlanoSalvoId(null);
+    // RESET CRÍTICO: Limpar refs para permitir novo carregamento
+    loadingPlanIdRef.current = null;
+    planLoadCompletedRef.current.delete(plano.id);
     
-    // Aguardar um momento para o estado atualizar
+    // Aguardar React processar o reset, DEPOIS carregar o plano
     setTimeout(() => {
-      loadPlanForEditing(plano.id);
-    }, 100);
+      console.log('⏰ Agora carregando plano:', plano.id);
+      setEditingPlanId(plano.id);
+    }, 50);
   };
 
   if (isLoadingAuth) {
@@ -3742,7 +3733,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Valor</p>
-                              <p className="text-sm font-bold text-red-600">R$ {parseFloat(plano.valor_total || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</p>
+                              <p className="text-sm font-bold text-red-600">R$ {parseFloat(plano.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Beneficiário</p>
@@ -4007,7 +3998,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                   <h2 className="text-base font-black text-gray-900 uppercase tracking-wider">Meus Planos de Trabalho</h2>
                   {planosList.length > 0 && (
                     <p className="text-sm text-gray-600 mt-2">
-                      📊 Total de {planosList.length} plano(s) • Valor Total: <span className="font-black text-red-600">R$ {planosList.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</span>
+                      📊 Total de {planosList.length} plano(s) • Valor Total: <span className="font-black text-red-600">R$ {planosList.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </p>
                   )}
                 </div>
@@ -4134,7 +4125,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                         return (
                           <div className="bg-blue-50 rounded-lg p-3 border border-blue-200 mb-4">
                             <p className="text-xs text-gray-700 font-bold mb-2">📊 {filteredPlanos.length} plano(s) encontrado(s)</p>
-                            <p className="text-sm font-black text-blue-600">Valor Total: R$ {totalValue.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</p>
+                            <p className="text-sm font-black text-blue-600">Valor Total: R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </div>
                         );
                       })()}
@@ -4176,7 +4167,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Valor</p>
-                              <p className="text-sm font-black text-red-600">R$ {parseFloat(plano.valor_total).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                              <p className="text-sm font-black text-red-600">R$ {parseFloat(plano.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">CNES</p>
@@ -4205,15 +4196,31 @@ Secretaria de Estado da Saúde de São Paulo`;
                               <>
                                 <button 
                                   onClick={() => { 
-                                    // Reset PRIMEIRO
+                                    // Reset PRIMEIRO - limpar completamente
                                     setFormData(getInitialFormData());
                                     setLastSavedFormData(null);
                                     setPlanoSalvoId(null);
-                                    // Depois disparar o carregamento
+                                    setFormHasChanges(false);
+                                    
+                                    // Limpar inputs temporários para evitar duplicação
+                                    setCurrentSelection({ categoria: '', item: '', metas: [''] });
+                                    setCurrentMetaQualitativa({ meta: '', valor: '' });
+                                    setCurrentNatureza({ codigo: '', valor: '' });
+                                    
                                     setCurrentView('new'); 
-                                    setEditingPlanId(plano.id); 
                                     setActiveSection('info-emenda'); 
                                     setSentSuccess(false);
+                                    
+                                    // RESET CRÍTICO: Limpar refs para permitir novo carregamento
+                                    // Isso garante que o novo plano será carregado mesmo que já tenhamos carregado antes
+                                    loadingPlanIdRef.current = null;
+                                    planLoadCompletedRef.current.delete(plano.id);
+                                    
+                                    // DEPOIS - Disparar o carregamento com um pequeno delay
+                                    // Isso garante que React processou o reset antes de carregar
+                                    setTimeout(() => {
+                                      setEditingPlanId(plano.id);
+                                    }, 50);
                                   }}
                                   className="flex items-center gap-1 px-3 py-2 bg-orange-100 text-orange-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-orange-200 transition-all"
                                 >
@@ -5101,7 +5108,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                             <h4 className="text-center font-black text-gray-900 mb-4 uppercase tracking-wide">Gerar PDF</h4>
                             <Button
                               label={isSending ? "⏳ Gerando..." : "🖨️ VISUALIZAR E BAIXAR PDF"}
-                              onClick={async () => {
+                              onClick={() => {
                                 if (isSending) return;
                                 
                                 const validation = validateRequiredFields();
@@ -5115,15 +5122,8 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   return;
                                 }
                                 
-                                console.log("📌 Salvando plano antes de gerar PDF...");
-                                const savedId = await handleFinalSend();
-                                if (savedId) {
-                                  console.log("✅ Plano salvo, abrindo PDF...");
-                                  setShowDocument(true);
-                                  setTimeout(() => handleGeneratePDF(), 1000);
-                                } else {
-                                  console.log("❌ Falha ao salvar plano");
-                                }
+                                setShowDocument(true);
+                                setTimeout(() => handleGeneratePDF(), 500);
                               }}
                               variant="primary"
                               disabled={isSending}

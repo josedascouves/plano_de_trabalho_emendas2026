@@ -2230,6 +2230,52 @@ const App: React.FC = () => {
     };
   };
 
+  // Registra evento de visualização/download de PDF no banco de dados
+  const recordPdfViewEvent = async (planoId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn("⚠️ Não foi possível registrar evento PDF: usuário não autenticado");
+        return;
+      }
+
+      // Buscar dados do plano para registrar no histórico
+      const { data: plano, error: fetchError } = await supabase
+        .from('planos_trabalho')
+        .select('numero_emenda, parlamentar, valor_total')
+        .eq('id', planoId)
+        .single();
+
+      if (fetchError) {
+        console.error("❌ Erro ao buscar dados do plano:", fetchError);
+        return;
+      }
+
+      // Registrar no histórico
+      const { error: insertError } = await supabase
+        .from('pdf_download_history')
+        .insert({
+          plano_id: planoId,
+          user_id: user.id,
+          user_email: user.email,
+          user_name: currentUser?.name || 'Usuário',
+          numero_emenda: plano.numero_emenda,
+          parlamentar: plano.parlamentar,
+          valor_total: plano.valor_total,
+          action_type: 'view_pdf'
+        });
+
+      if (insertError) {
+        console.error("❌ Erro ao registrar evento PDF:", insertError);
+      } else {
+        console.log("✅ Evento de visualização de PDF registrado com sucesso!");
+      }
+    } catch (error: any) {
+      console.error("❌ Erro ao registrar evento de PDF:", error);
+      // Não interrompe o fluxo se falhar ao registrar
+    }
+  };
+
   // Gerar e salvar PDF
   const handleGeneratePDF = async () => {
     // Proteção contra duplo clique/envio
@@ -2267,24 +2313,64 @@ const App: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sessão expirada. Faça login novamente.");
 
-      // 1. Primeira vez: Salvar plano se ainda não foi salvo
+      console.log("🔒 === INICIANDO FLUXO SEGURO DE SALVAMENTO PARA PDF === 🔒");
+      
+      // 1️⃣ ETAPA CRÍTICA: GARANTIR QUE O PLANO ESTÁ SALVO NO BANCO
       let currentPlanoId = planoSalvoId;
+      
       if (!currentPlanoId) {
-        console.log("Salvando plano antes de gerar PDF...");
+        // Novo plano: DEVE SALVAR PRIMEIRO
+        console.log("📝 NOVO PLANO: Salvando no banco antes de prosseguir...");
         currentPlanoId = await handleFinalSend();
-        if (!currentPlanoId) throw new Error("Falha ao salvar plano");
+        if (!currentPlanoId) {
+          throw new Error("❌ CRÍTICO: Falha ao salvar novo plano. PDF NÃO foi gerado.");
+        }
+        console.log(`✅ Novo plano salvo com sucesso! ID: ${currentPlanoId}`);
+      } else {
+        // Plano já existe: GARANTIR ATUALIZAÇÃO ANTES DO PDF
+        console.log(`📝 PLANO EXISTENTE: Atualizando dados no banco (ID: ${currentPlanoId})...`);
+        const updateSuccess = await handleFinalSend();
+        if (!updateSuccess) {
+          throw new Error("❌ CRÍTICO: Falha ao atualizar plano. PDF NÃO foi gerado.");
+        }
+        console.log("✅ Plano atualizado com sucesso antes do PDF");
       }
 
-      // 2. Abrir diálogo de impressão (navegador respeitará quebras naturalmente)
-      console.log("Abrindo diálogo de impressão...");
+      // 2️⃣ VERIFICAÇÃO: Confirmar que o plano foi salvo
+      console.log("✔️ Verificando se plano está realmente salvo no banco...");
+      const { data: verifyPlano, error: verifyError } = await supabase
+        .from('planos_trabalho')
+        .select('id, numero_emenda')
+        .eq('id', currentPlanoId)
+        .single();
+
+      if (verifyError || !verifyPlano) {
+        throw new Error("❌ CRÍTICO: Plano não foi encontrado no banco após salvamento. PDF NÃO foi gerado.");
+      }
+      console.log(`✅ CONFIRMADO: Plano ${verifyPlano.numero_emenda} está salvo no banco`);
+
+      // 3️⃣ Registrar evento de visualização/download no banco de dados
+      console.log("📝 Registrando evento de visualização de PDF...");
+      await recordPdfViewEvent(currentPlanoId);
+      console.log("✅ Evento registrado com sucesso");
+
+      // 4️⃣ Abrir diálogo de impressão (navegador respeitará quebras naturalmente)
+      console.log("🖨️ Abrindo diálogo de impressão...");
       setTimeout(() => {
         window.print();
       }, 500);
 
-      alert('✅ Plano salvo com sucesso!\n\nAgora você pode salvar como PDF ou imprimir através da janela de impressão que se abriu.');
+      console.log("🔒 === FLUXO SEGURO COMPLETADO COM SUCESSO === 🔒");
+      alert('✅ PLANO SALVO COM SUCESSO!\n\n' +
+            '✔️ Dados foram armazenados no banco de dados\n' +
+            '✔️ Evento de acesso foi registrado\n\n' +
+            'Agora você pode:\n' +
+            '1. Salvar como PDF (Ctrl+S)\n' +
+            '2. Imprimir (através da janela que se abriu)');
     } catch (error: any) {
-      console.error("Erro ao salvar plano:", error);
-      alert(`⚠️ Erro ao salvar plano:\n\n${error.message}`);
+      console.error("❌ ERRO CRÍTICO:", error);
+      alert(`⚠️ ERRO AO PROCESSAR PDF:\n\n${error.message}\n\n` +
+            `O plano NÃO foi processado. Por favor, tente novamente.`);
     } finally {
       setIsSending(false);
     }

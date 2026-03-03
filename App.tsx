@@ -1100,53 +1100,116 @@ const App: React.FC = () => {
 
       if (authError) {
         if (authError.message.includes('already registered')) {
-          throw new Error('Este e-mail já está registrado no sistema');
+          // Usuário já existe no Auth - TENTAR COMPLETAR AS ENTRADAS FALTANTES
+          console.log('⚠️ Usuário já registrado no Auth, tentando completar registros faltantes...');
+          
+          // 1. Buscar se o usuário já existe em profiles
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', newUser.email)
+            .single();
+          
+          if (!existingProfile) {
+            // Profile não existe - não conseguimos obter o user_id do Auth sem admin API
+            // Então precisamos que o usuário execute o script SQL
+            throw new Error(
+              `Este e-mail já foi registrado no Auth, mas falta o perfil no banco de dados.\n\n` +
+              `Para resolver: Execute o arquivo CORRIGIR-USUARIO-GABRIELA.sql no Supabase SQL Editor.\n\n` +
+              `Depois tente novamente.`
+            );
+          }
+          
+          const userId = existingProfile.id;
+          console.log('✅ Usuário encontrado em profiles:', userId);
+          
+          // 2. Verificar e criar/atualizar role
+          const { data: existingRole } = await supabase
+            .from('user_roles')
+            .select('user_id')
+            .eq('user_id', userId)
+            .single();
+          
+          if (!existingRole) {
+            // Role não existe - criar
+            const { error: roleError } = await supabase
+              .from('user_roles')
+              .insert([{
+                user_id: userId,
+                role: newUser.role,
+                disabled: false
+              }]);
+            
+            if (roleError && !roleError.message.includes('duplicate')) {
+              throw new Error(`Erro ao atribuir perfil do usuário: ${roleError.message}`);
+            }
+            console.log('✅ Role criada para usuário existente');
+          } else {
+            // Role existe - atualizar (desativar = false)
+            const { error: updateError } = await supabase
+              .from('user_roles')
+              .update({ disabled: false, role: newUser.role })
+              .eq('user_id', userId);
+            
+            if (updateError) {
+              throw new Error(`Erro ao atualizar role: ${updateError.message}`);
+            }
+            console.log('✅ Role atualizada (reativada)');
+          }
+          
+          // Sucesso com usuário existente
+          const roleName = newUser.role === 'admin' ? 'Administrador' : newUser.role === 'intermediate' ? 'Usuário Intermediário' : 'Usuário Padrão';
+          alert(`✅ Usuário recuperado e completado!\n\nE-mail: ${newUser.email}\nPerfil: ${roleName}\n\nO usuário agora pode fazer login.`);
+        } else {
+          throw new Error(authError.message || 'Erro ao criar usuário');
         }
-        throw new Error(authError.message || 'Erro ao criar usuário');
+      } else if (authData.user) {
+        // Novo usuário criado normalmente
+        console.log('✅ Usuário criado no Auth:', authData.user.id);
+
+        // 2. Inserir perfil na tabela profiles (apenas dados pessoais)
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: authData.user.id,
+              email: newUser.email,
+              full_name: newUser.name,
+              cnes: newUser.cnes.trim()
+            }
+          ]);
+
+        if (profileError && !profileError.message.includes('duplicate')) {
+          throw new Error(`Erro ao criar perfil: ${profileError.message}`);
+        }
+
+        console.log('✅ Perfil criado');
+
+        // 3. Inserir role na tabela user_roles (separado - CRUCIAL para RBAC)
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .insert([
+            {
+              user_id: authData.user.id,
+              role: newUser.role,
+              disabled: false
+            }
+          ]);
+
+        if (roleError && !roleError.message.includes('duplicate')) {
+          throw new Error(`Erro ao atribuir perfil: ${roleError.message}`);
+        }
+
+        console.log('✅ Role atribuído:', newUser.role);
+
+        // Sucesso - novo usuário
+        const roleName = newUser.role === 'admin' ? 'Administrador' : newUser.role === 'intermediate' ? 'Usuário Intermediário' : 'Usuário Padrão';
+        alert(`✅ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nCNES: ${newUser.cnes}\nPerfil: ${roleName}`);
+      } else {
+        throw new Error('Falha ao criar ou completar usuário');
       }
-
-      if (!authData.user) throw new Error('Falha ao criar usuário (ID não retornado)');
-
-      console.log('✅ Usuário criado no Auth:', authData.user.id);
-
-      // 2. Inserir perfil na tabela profiles (apenas dados pessoais)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: authData.user.id,
-            email: newUser.email,
-            full_name: newUser.name,
-            cnes: newUser.cnes.trim()
-          }
-        ]);
-
-      if (profileError && !profileError.message.includes('duplicate')) {
-        throw new Error(`Erro ao criar perfil: ${profileError.message}`);
-      }
-
-      console.log('✅ Perfil criado');
-
-      // 3. Inserir role na tabela user_roles (separado - CRUCIAL para RBAC)
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert([
-          {
-            user_id: authData.user.id,
-            role: newUser.role,
-            disabled: false
-          }
-        ]);
-
-      if (roleError && !roleError.message.includes('duplicate')) {
-        throw new Error(`Erro ao atribuir perfil: ${roleError.message}`);
-      }
-
-      console.log('✅ Role atribuído:', newUser.role);
-
-      // Sucesso
-      const roleName = newUser.role === 'admin' ? 'Administrador' : newUser.role === 'intermediate' ? 'Usuário Intermediário' : 'Usuário Padrão';
-      alert(`✅ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nCNES: ${newUser.cnes}\nPerfil: ${roleName}`);
+      
+      // Reset do formulário
       setNewUser({ email: '', password: '', name: '', role: 'user' as 'user' | 'admin' | 'intermediate', cnes: '' });
       
       // Recarregar lista de usuários

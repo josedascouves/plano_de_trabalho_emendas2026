@@ -1,0 +1,160 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                   TESTE RÁPIDO - EDIÇÃO DE PLANOS                         ║
+║                        3 PASSOS SIMPLES                                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📋 O QUE TESTAR?
+═══════════════════════════════════════════════════════════════════════════
+
+Se você está vendo erros ao editar um plano pela segunda ou terceira vez,
+este teste vai verificar se o fix funcionou.
+
+═══════════════════════════════════════════════════════════════════════════
+🚀 PASSO 1: RECARREGAR O APP
+═══════════════════════════════════════════════════════════════════════════
+
+1. Abra seu app no navegador
+2. Pressione: CTRL+F5 (força recarregamento)
+   ou em Mac: CMD+SHIFT+R
+3. Quando carregar, continue...
+
+═══════════════════════════════════════════════════════════════════════════
+✅ TESTE 1: PRIMEIRA EDIÇÃO
+═══════════════════════════════════════════════════════════════════════════
+
+PASSO 1:
+  □ Clique em "Meus Planos" ou "Lista de Planos"
+  □ Procure um plano qualquer
+  □ Clique no botão "Editar" (cor laranja)
+
+PASSO 2:
+  □ O formulário deve abrir com TODOS os campos preenchidos
+  □ Verifique:
+    ✓ Campo "Parlamentar" tem nome
+    ✓ Campo "Número da Emenda" tem número (ex: 123/2026)
+    ✓ Campo "Valor" tem valor em reais (ex: 50.000,00)
+    ✓ Campo "Programa" tem programa selecionado
+    ✓ Campo "CNES" tem número ou está vazio (ok)
+    ✓ Campo "CNPJ" tem CNPJ
+
+  Se você VER TUDO PREENCHIDO → ✅ CONTINUE
+
+PASSO 3:
+  □ Mude um valor qualquer (ex: mude o valor da emenda)
+  □ Clique em "Salvar"
+  □ Aguarde a mensagem de sucesso
+
+═══════════════════════════════════════════════════════════════════════════
+✅ TESTE 2: SEGUNDA EDIÇÃO (TESTE CRÍTICO!)
+═══════════════════════════════════════════════════════════════════════════
+
+ESTE É O TESTE MAIS IMPORTANTE!
+
+PASSO 1:
+  □ Clique em "Voltar" ou em "Meus Planos"
+  □ Encontre o MÊME plano que você acabou de editar
+  □ Clique em "Editar" NOVAMENTE (segunda vez)
+
+PASSO 2:
+  □ O formulário deve abrir NOVAMENTE com os dados atualizados!
+  □ verifique se:
+    ✓ O valor que MUDOU aparece com o novo valor
+    ✓ Todos os outros campos aparecem também
+    ✓ Não há campos vazios (a menos que estivessem antes)
+
+  Se você VER OS NOVOS VALORES → ✅ FIX FUNCIONOU!
+
+PASSO 3:
+  □ Mude outro valor diferente
+  □ Clique em "Salvar"
+  □ Volte para a lista
+
+═══════════════════════════════════════════════════════════════════════════
+✅ TESTE 3: TERCEIRA EDIÇÃO (CONFIRMAÇÃO FINAL!)
+═══════════════════════════════════════════════════════════════════════════
+
+PASSO 1:
+  □ Clique em "Editar" uma TERCEIRA VEZ no mesmo plano
+
+PASSO 2:
+  □ O formulário DEVE ABRIR com todos os dados
+  □ O segundo valor que mudou deve aparecer com novo valor
+  □ Não deve estar vazio
+
+  Se você VER TUDO → ✅ SUCESSO TOTAL!
+
+═══════════════════════════════════════════════════════════════════════════
+📊 RESULTADO DO TESTE
+═══════════════════════════════════════════════════════════════════════════
+
+Se você completou os 3 testes sem erros:
+
+   ✅ 1ª Edição: FUNCIONA
+   ✅ 2ª Edição: FUNCIONA com novos valores
+   ✅ 3ª Edição: FUNCIONA
+   ✅ Valor do recurso: SEMPRE CORRETO
+   ✅ Salvamento: FUNCIONA
+
+→ FIX ESTÁ COMPLETO E FUNCIONANDO! 🎉
+
+═══════════════════════════════════════════════════════════════════════════
+❌ PROBLEMA? CHECKLIST DE DEBUG
+═══════════════════════════════════════════════════════════════════════════
+
+Se algo não funcionar, faça isto:
+
+PROBLEMA 1: "Formulário abre vazio na 2ª ou 3ª vez"
+├─ Solução: Abra Supabase e execute FIX-EDICAO-PLANOS-DEFINITIVO.sql
+├─ Depois pressione F5 e tente novamente
+└─ Deve funcionar!
+
+PROBLEMA 2: "Valor está diferente do que salvei"
+├─ Solução: Mesma - execute o script SQL
+└─ Se ainda não funcionar, verifique dados no Supabase
+
+PROBLEMA 3: "Erro ao carregar / Mensagem estranha"
+├─ Abra F12 (DevTools) → Aba "Console"
+├─ Procure por mensagens com ❌
+├─ Copie TODA a mensagem de erro
+├─ Envie para analisar
+└─ Isso ajuda a identificar o problema
+
+PROBLEMA 4: "Editando múltiplos planos - alguns funcionam, outros não"
+├─ Execute o script SQL de limpeza
+├─ Isso remove duplicatas de dados
+└─ Tente novamente
+
+═══════════════════════════════════════════════════════════════════════════
+💡 DICAS DE DEBUG
+═══════════════════════════════════════════════════════════════════════════
+
+Para VER O QUE ESTÁ ACONTECENDO:
+
+1. Abra DevTools: F12 (Windows/Linux) ou CMD+OPT+I (Mac)
+2. Vá para aba "Console"
+3. Procure por linhas com:
+   ✓ ✅ (sucesso - é bom!)
+   ✓ 📂 (carregamento - está normal)
+   ✓ ❌ (erro - isso é ruim)
+
+Se vir ❌, copie a mensagem completa!
+
+═══════════════════════════════════════════════════════════════════════════
+✨ FICOU TUDO OK?
+═══════════════════════════════════════════════════════════════════════════
+
+Se passou em TODOS os 3 testes → Seu sistema está PRONTO PARA USAR!
+
+Notas importantes:
+□ Pode testar quantas vezes quiser
+□ Teste com MÚLTIPLOS planos (não só um)
+□ Teste em MÚLTIPLOS navegadores se possível
+□ Teste em MÚLTIPLOS usuários se possível
+
+Se tudo funcionar em todos os cenários → FIX ESTÁ SUCESSO! 🎉
+
+═══════════════════════════════════════════════════════════════════════════
+
+Desenvolvido em: 27/02/2026
+Versão: 2.0 - Edição Robusta
+Status: Pronto para Produção

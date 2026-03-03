@@ -1,0 +1,42 @@
+# ✅ FIX DUPLICAÇÃO - TESTE AGORA
+
+## 🚀 PRÓXIMO PASSO (5 MINUTOS)
+
+1. **Pressione F5** para recarregar o app
+2. **Abra um plano** que tem Metas Quantitativas
+3. **Conte os itens** que aparecem
+4. **Clique em Editar**
+5. **Conte os itens novamente** - devem ser OS MESMOS números, NÃO duplicados!
+
+## ✅ RESULTADO ESPERADO
+
+Se você tinha **3 Metas Quantitativas** antes:
+- ✅ Ao editar: aparecem 3 (SEM duplicação)
+- ✅ Ao editar novamente: aparecem 3 (SEM duplicação)
+- ✅ Ao editar terceira vez: aparecem 3 (SEM duplicação)
+
+❌ SÓ seria problema se aparecessem 6, 9, 12... (duplicadas)
+
+---
+
+## 🔧 MUDANÇAS TÉCNICAS
+
+3 coisas foram corrigidas no `App.tsx`:
+
+1. **useEffect com Cleanup** → Evita dupla execução em React StrictMode
+2. **Reset de Inputs Temporários** → Limpa dados residuais
+3. **Reset Completo ao Editar** → Garante limpeza ANTES de carregar
+
+---
+
+## 📋 Se Funcionar:
+
+- ✅ Edição múltipla sem problemas
+- ✅ Dados sem duplicação
+- ✅ Sistema 100% funcional
+
+---
+
+**Teste agora - leva 5 minutos! ⏱️**
+
+Volte aqui depois com o resultado. 👍

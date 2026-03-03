@@ -635,6 +635,115 @@ export const METAS_QUALITATIVAS_OPTIONS = [
   'TEMPO MÉDIO DE REALIZAÇÃO DE PROCEDIMENTOS'
 ];
 
+export const METAS_QUANTITATIVAS_OPTIONS: Record<string, string[]> = {
+  'ALTA COMPLEXIDADE': [
+    'Acidente Vascular Cerebral',
+    'Cardiovascular',
+    'Centro de Queimados',
+    'Deficiência Auditiva',
+    'Deformidade Craniofacial',
+    'Hemodiálise',
+    'Mamografia Móvel',
+    'Neurocirurgia',
+    'Neuromusculares',
+    'Obesidade',
+    'Oftalmologia',
+    'Onco - Diagnóstico Câncer do Colo de Útero',
+    'Onco - Diagnóstico de Câncer de Mama',
+    'Onco - Oncologia',
+    'Procedimentos Cirúrgicos',
+    'Procedimentos Clínicos',
+    'Procedimentos com Finalidade Diagnóstica',
+    'Processo Transexualizador',
+    'Serviço de Atenção Hematológica e ou Hemoterapica',
+    'Terapia Nutricional, Enteral e Parenteral',
+    'Terapia Renal Substitutiva',
+    'Transplantes',
+    'Tratamento da Lipoatrofia Facial HIV/Aids',
+    'Traumatologia e Ortopedia'
+  ],
+  'ATENÇÃO DOMICILIAR': [
+    'Equipe Multiprofissional de Atenção Domiciliar',
+    'Equipe de Cuidados Paliativos',
+    'Programa Melhor Em Casa - Telessaúde'
+  ],
+  'CENTRAL DE REGULAÇÃO': [
+    'Central de Regulação'
+  ],
+  'METAS QUALITATIVAS': [
+    'Adequação de Ambiência',
+    'Adoção de Políticas de Humanização',
+    'Aperfeiçoamento de Práticas',
+    'Condições de Funcionamento das Unidades',
+    'Correto Funcionamento das Comissões Hospitalares',
+    'Implantação de Protocolos',
+    'Média de Permanência',
+    'Satisfação do Usuário',
+    'Taxa de Ocupação',
+    'Tempo Médio de Realização de Procedimentos'
+  ],
+  'MÉDIA COMPLEXIDADE': [
+    'Policlínica/ Clínica/ Centro De Especialidade',
+    'Procedimentos Cirúrgicos',
+    'Procedimentos Clínicos',
+    'Procedimentos com Finalidade Diagnóstica',
+    'Procedimentos de Reabilitação',
+    'Serviço de Atenção Domiciliar (Programa Melhor em Casa)',
+    'Órteses, Próteses e Materiais Especiais (Não Relacionadas ao Ato Cirúrgico)'
+  ],
+  'PESSOA COM DEFICIÊNCIA': [
+    'CER - Centro Especializado em Reabilitação',
+    'Núcleo de Atenção a Criança e Adolescente com Transtorno do Especto Autista',
+    'Oficina Ortopédica',
+    'Transporte Sanitário Adaptado'
+  ],
+  'REDE DE URGÊNCIA': [
+    'CIATox',
+    'Leitos de Retaguarda',
+    'Porta de Entrada',
+    'UPA - Unidade de Pronto Atendimento'
+  ],
+  'REDE MATERNA INFANTIL': [
+    'Ambulatório Gestação E Puerpério Alto Risco',
+    'Ambulatório Seguimento Recém-nascido E Criança',
+    'CGBP - Casa De Gestante, Bebê e Puérpera',
+    'CPN - Centro Parto Normal',
+    'Central de Regulação do Acesso - Qualificação Rede Alyne',
+    'Leitos Gestação Alto Risco',
+    'Leitos Obstétricos Clínicos e Cirúrgicos',
+    'Transporte inter-hospitalar da Rede Alyne',
+    'Unidade Cuidados Intermediários Neonatal Canguru',
+    'Unidade Cuidados Intermediários Neonatal Convencional'
+  ],
+  'SAÚDE DO TRABALHADOR': [
+    'Centro de Referência em Saúde do Trabalhador'
+  ],
+  'SAÚDE MENTAL': [
+    'CAPS - Centro de Atenção Psicossocial',
+    'Centro de Convivência',
+    'Equipes de Atenção Psicossocial para Deinstitucionalização',
+    'Leitos de Saúde Mental (Hospital Geral)',
+    'Serviço Residencial Terapêutico',
+    'UA - Unidade de Acolhimento'
+  ],
+  'SERVIÇO DE ATENDIMENTO MÓVEL DE URGÊNCIA - SAMU': [
+    'SAMU - Serviço de Atendimento Móvel de Urgência',
+    'SAMU MTT - Medicamento Trombolítico Tenecteplase'
+  ],
+  'UNIDADE DE CUIDADOS PROLONGADOS': [
+    'Leitos UCP'
+  ],
+  'UNIDADE DE TERAPIA INTENSIVA': [
+    'Leitos UTI Adulto',
+    'Leitos UTI Neonatal',
+    'Leitos UTI Pediátrico',
+    'Leitos UTI Queimados',
+    'Leitos Unidade Coronariana - UCO',
+    'Leitos de Unidade de Cuidados Intermediário Adulto - UCIa',
+    'Leitos de Unidade de Cuidados Intermediário Pediátrico - UCIp'
+  ]
+};
+
 export const NATUREZAS_DESPESA: NaturezaDespesa[] = [
   { codigo: '339004', descricao: 'CONTRATACAO POR TEMPO DETERMINADO - PES.CIVIL' },
   { codigo: '339092', descricao: 'DESPESAS DE EXERCICIOS ANTERIORES' },

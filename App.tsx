@@ -49,7 +49,8 @@ import {
   DIRETRIZES, 
   PROGRAMAS,
   ACOES_SERVICOS_POR_PROGRAMA,
-  METAS_QUALITATIVAS_OPTIONS, 
+  METAS_QUALITATIVAS_OPTIONS,
+  METAS_QUANTITATIVAS_OPTIONS,
   NATUREZAS_DESPESA 
 } from './constants';
 import { supabase } from './supabase';
@@ -2367,6 +2368,15 @@ const App: React.FC = () => {
     [formData.emenda.programa]
   );
 
+  // Metas Quantitativas - Convert to same format as availableAcoes
+  const availableMetasQuantitativas = useMemo(() => 
+    Object.entries(METAS_QUANTITATIVAS_OPTIONS).map(([categoria, itens]) => ({
+      categoria,
+      itens
+    })),
+    []
+  );
+
   const updateFormData = (section: keyof FormState, value: any) => {
     if (section === 'beneficiario' && value?.cnes) {
       console.log('🔄 updateFormData - beneficiario:', value);
@@ -4636,13 +4646,13 @@ Secretaria de Estado da Saúde de São Paulo`;
                           label="Grupo de Ação"
                           value={currentSelection.categoria}
                           onChange={(e) => setCurrentSelection({ ...currentSelection, categoria: e.target.value, item: '', metas: [''] })}
-                          options={availableAcoes.map(cat => ({ value: cat.categoria, label: cat.categoria }))}
+                          options={availableMetasQuantitativas.map(cat => ({ value: cat.categoria, label: cat.categoria }))}
                         />
                         <Select
                           label="Ação Específica"
                           value={currentSelection.item}
                           onChange={(e) => setCurrentSelection({ ...currentSelection, item: e.target.value })}
-                          options={availableAcoes.find(c => c.categoria === currentSelection.categoria)?.itens.map(item => ({ value: item, label: item })) || []}
+                          options={availableMetasQuantitativas.find(c => c.categoria === currentSelection.categoria)?.itens.map(item => ({ value: item, label: item })) || []}
                           disabled={!currentSelection.categoria}
                         />
                       </div>

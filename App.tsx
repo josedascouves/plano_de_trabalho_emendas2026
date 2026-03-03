@@ -2826,8 +2826,8 @@ Secretaria de Estado da Saúde de São Paulo`;
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="bg-gray-200 print:bg-gray-100">
-                      <th className="border border-gray-400 px-3 py-2 text-left font-black uppercase text-gray-900 text-[10px]">Serviço / Ação</th>
-                      <th className="border border-gray-400 px-3 py-2 text-left font-black uppercase text-gray-900 text-[10px]">Meta Quantitativa</th>
+                      <th className="border border-gray-400 px-3 py-2 text-left font-black uppercase text-gray-900 text-[10px]">Grupo de Ação</th>
+                      <th className="border border-gray-400 px-3 py-2 text-left font-black uppercase text-gray-900 text-[10px]">Ação Específica</th>
                       <th className="border border-gray-400 px-3 py-2 text-right font-black uppercase text-gray-900 text-[10px]">Valor (R$)</th>
                     </tr>
                   </thead>
@@ -2836,8 +2836,8 @@ Secretaria de Estado da Saúde de São Paulo`;
                       <>
                         {formData.acoesServicos.map((acao, i) => (
                           <tr key={i} className="border-b border-gray-300">
+                            <td className="border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">{acao.categoria}</td>
                             <td className="border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">{acao.item}</td>
-                            <td className="border border-gray-300 px-3 py-2 text-xs text-gray-800">{acao.metasQuantitativas[0]}</td>
                             <td className="border border-gray-300 px-3 py-2 text-right text-xs font-mono font-bold text-gray-900">R$ {acao.valor}</td>
                           </tr>
                         ))}
@@ -4740,7 +4740,10 @@ Secretaria de Estado da Saúde de São Paulo`;
                         {formData.acoesServicos.map((acao, idx) => (
                           <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between">
                             <div className="flex-1">
-                              <p className="font-semibold text-gray-900">{acao.item}</p>
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Grupo de Ação</p>
+                              <p className="font-semibold text-gray-900 mb-2">{acao.categoria}</p>
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Ação Específica</p>
+                              <p className="text-sm text-gray-700">{acao.item}</p>
                             </div>
                             <div className="flex items-center gap-3">
                               <InputField

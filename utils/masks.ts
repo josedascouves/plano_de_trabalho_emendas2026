@@ -85,16 +85,31 @@ export const validateCNPJ = (cnpj: string): boolean => {
   return true;
 };
 
-// Valor Monetário: R$ 1.234,56
+// Valor Monetário: R$ 1.234,56 - Suporta valores de qualquer tamanho
 export const maskCurrency = (value: string): string => {
+  // Remove tudo que não é número
   const cleaned = value.replace(/\D/g, '');
-  const num = (Number(cleaned) / 100).toFixed(2);
-  return num.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  
+  // Se vazio, retorna vazio
+  if (!cleaned) return '';
+  
+  // Adiciona zeros à esquerda se necessário (para divisão por 100)
+  const padded = cleaned.padStart(3, '0');
+  
+  // Separa inteiro e decimal
+  const integer = padded.slice(0, -2) || '0';
+  const decimal = padded.slice(-2);
+  
+  // Formata o inteiro com separador de milhares
+  const formatted = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  
+  // Retorna no formato brasileiro
+  return `${formatted},${decimal}`;
 };
 
-export const unmaskCurrency = (value: string): number => {
-  const cleaned = value.replace(/\D/g, '');
-  return Number(cleaned) / 100;
+export const unmaskCurrency = (value: string): string => {
+  // Retorna apenas números, preservando precisão
+  return value.replace(/\D/g, '');
 };
 
 // Email validation

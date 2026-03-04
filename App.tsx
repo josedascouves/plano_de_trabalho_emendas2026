@@ -309,35 +309,48 @@ const App: React.FC = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          // Query explícita para todas as colunas que precisamos
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('id, full_name, email, cnes, disabled, created_at, updated_at, password_changed_at, last_login_at')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (!profileError && profile) {
-            // Pegar role de user_roles (fonte de verdade)
-            const { data: userRole, error: roleError } = await supabase
-              .from('user_roles')
-              .select('role')
-              .eq('user_id', session.user.id)
-              .single();
+          try {
+            // Query SIMPLIFICADA - apenas colunas que existem com certeza
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('id, full_name, email, cnes')
+              .eq('id', session.user.id)
+              .maybeSingle();
             
-            const userData = {
-              id: session.user.id,
-              username: session.user.email || '',
-              name: profile.full_name,
-              role: userRole?.role || 'user',
-              cnes: profile.cnes || ''
-            };
-            console.log('🔐 checkSession - Usuário carregado:', userData);
-            setCurrentUser(userData);
-            setIsAuthenticated(true);
-          } else if (profileError) {
-            // Tenta forçar o usuário a ver a tela de login ou exibe erro se for admin
-            if (session.user.email === 'sessp.css3@gmail.com') {
-               setCurrentUser({
+            if (!profileError && profile) {
+              try {
+                // Pegar role de user_roles (fonte de verdade)
+                const { data: userRole } = await supabase
+                  .from('user_roles')
+                  .select('role')
+                  .eq('user_id', session.user.id)
+                  .maybeSingle();
+                
+                const userData = {
+                  id: session.user.id,
+                  username: session.user.email || '',
+                  name: profile.full_name || profile.email,
+                  role: userRole?.role || 'user',
+                  cnes: profile.cnes || ''
+                };
+                console.log('🔐 checkSession - Usuário carregado:', userData);
+                setCurrentUser(userData);
+                setIsAuthenticated(true);
+              } catch (roleError) {
+                // Se não conseguir pegar role, usa 'user' como padrão
+                const userData = {
+                  id: session.user.id,
+                  username: session.user.email || '',
+                  name: profile.full_name || profile.email,
+                  role: 'user',
+                  cnes: profile.cnes || ''
+                };
+                setCurrentUser(userData);
+                setIsAuthenticated(true);
+              }
+            } else if (profileError && session.user.email === 'sessp.css3@gmail.com') {
+              // Admin provisório se erro mas é admin padrão
+              setCurrentUser({
                 id: session.user.id,
                 username: session.user.email,
                 name: 'Admin Provisório',
@@ -346,6 +359,9 @@ const App: React.FC = () => {
               });
               setIsAuthenticated(true);
             }
+          } catch (err) {
+            // Catch all para qualquer erro de query
+            console.warn('⚠️ Erro ao carregar profile:', err);
           }
         }
       } catch (e) {
@@ -373,7 +389,7 @@ const App: React.FC = () => {
           // Buscar profiles com user_roles (LEFT JOIN)
           const { data: profiles, error: profileError } = await supabase
             .from('profiles')
-            .select('id, full_name, email, cnes, created_at')
+            .select('id, full_name, email, cnes')
             .order('full_name');
           
           if (profileError) {
@@ -462,7 +478,7 @@ const App: React.FC = () => {
       
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
-        .select('id, full_name, email, cnes, created_at')
+        .select('id, full_name, email, cnes')
         .order('full_name');
       
       if (profileError) {
@@ -534,7 +550,7 @@ const App: React.FC = () => {
       // Recarregar lista ativa também
       const { data: profiles2 } = await supabase
         .from('profiles')
-        .select('id, full_name, email, cnes, created_at')
+        .select('id, full_name, email, cnes')
         .order('full_name');
       const { data: userRoles2 } = await supabase
         .from('user_roles')
@@ -658,47 +674,61 @@ const App: React.FC = () => {
       }
 
       if (data.user) {
-        // Buscar perfil do usuário
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-        
-        if (profileError) {
-          console.error('❌ Erro ao buscar perfil:', profileError);
-          throw new Error('Erro ao carregar perfil do usuário');
-        }
+        try {
+          // Buscar perfil do usuário - APENAS colunas que existem
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, cnes')
+            .eq('id', data.user.id)
+            .maybeSingle();
+          
+          if (profileError) {
+            console.error('❌ Erro ao buscar perfil:', profileError);
+            throw new Error('Erro ao carregar perfil do usuário');
+          }
 
-        // Buscar role e status (disabled) da tabela user_roles
-        const { data: userRole, error: userRoleError } = await supabase
-          .from('user_roles')
-          .select('role, disabled')
-          .eq('user_id', data.user.id)
-          .single();
-        
-        if (userRoleError) {
-          console.error('❌ Erro ao buscar role:', userRoleError);
-          throw new Error('Erro ao carregar permissões do usuário');
-        }
+          if (!profile) {
+            console.error('❌ Perfil não encontrado para user:', data.user.id);
+            throw new Error('Perfil do usuário não encontrado');
+          }
 
-        // Verificar se usuário está desativado
-        if (userRole?.disabled) {
-          await supabase.auth.signOut();
-          throw new Error('Este usuário foi desativado. Contate um administrador.');
-        }
+          // Buscar role e status (disabled) da tabela user_roles
+          const { data: userRole, error: userRoleError } = await supabase
+            .from('user_roles')
+            .select('role, disabled')
+            .eq('user_id', data.user.id)
+            .maybeSingle();
+          
+          if (userRoleError) {
+            console.error('❌ Erro ao buscar role:', userRoleError);
+            throw new Error('Erro ao carregar permissões do usuário');
+          }
 
-        const userObject = {
-          id: data.user.id,
-          username: data.user.email || '',
-          name: profile?.full_name || 'Usuário',
-          role: userRole?.role || 'user',
-          cnes: profile?.cnes || ''
-        };
-        
-        setCurrentUser(userObject);
-        setIsAuthenticated(true);
-        setLoginInput({ email: '', password: '' });
+          // Verificar se usuário está desativado
+          if (userRole?.disabled) {
+            await supabase.auth.signOut();
+            throw new Error('Este usuário foi desativado. Contate um administrador.');
+          }
+
+          const userObject = {
+            id: data.user.id,
+            username: data.user.email || '',
+            name: profile.full_name || 'Usuário',
+            role: userRole?.role || 'user',
+            cnes: profile.cnes || ''
+          };
+          
+          console.log('🔐 handleLogin - Usuário carregado:', userObject);
+          setCurrentUser(userObject);
+          setIsAuthenticated(true);
+          setLoginInput({ email: '', password: '' });
+        } catch (loginQueryError: any) {
+          // Erro ao fazer queries - muito provável que seja RLS
+          console.error('❌ Erro ao fazer queries de login:', loginQueryError);
+          setLoginError(`Erro ao carregar dados do usuário: ${loginQueryError.message || 'Acesso negado'}`);
+          setIsSending(false);
+          return;
+        }
       }
     } catch (error: any) {
       console.error('Erro ao fazer login:', error);
@@ -735,7 +765,7 @@ const App: React.FC = () => {
       // Recarregar lista
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email, cnes, created_at')
+        .select('id, full_name, email, cnes')
         .order('full_name');
       const { data: userRoles } = await supabase
         .from('user_roles')
@@ -795,7 +825,7 @@ const App: React.FC = () => {
       // Recarregar lista
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email, cnes, created_at')
+        .select('id, full_name, email, cnes')
         .order('full_name');
       const { data: userRoles } = await supabase
         .from('user_roles')
@@ -840,7 +870,7 @@ const App: React.FC = () => {
       // Recarregar lista
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email, cnes, created_at')
+        .select('id, full_name, email, cnes')
         .order('full_name');
       const { data: userRoles } = await supabase
         .from('user_roles')
@@ -891,7 +921,7 @@ const App: React.FC = () => {
       // Recarregar lista
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email, cnes, created_at')
+        .select('id, full_name, email, cnes')
         .order('full_name');
       const { data: userRoles } = await supabase
         .from('user_roles')
@@ -944,7 +974,7 @@ const App: React.FC = () => {
       // Recarregar lista
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email, cnes, created_at')
+        .select('id, full_name, email, cnes')
         .order('full_name');
       const { data: userRoles } = await supabase
         .from('user_roles')
@@ -1025,7 +1055,7 @@ const App: React.FC = () => {
       // Recarregar lista
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email, cnes, created_at')
+        .select('id, full_name, email, cnes')
         .order('full_name');
       const { data: userRoles } = await supabase
         .from('user_roles')
@@ -1087,126 +1117,31 @@ const App: React.FC = () => {
 
       console.log('👤 Criando novo usuário:', { email: newUser.email, name: newUser.name, role: newUser.role });
 
-      // 1. Criar usuário no Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newUser.email,
-        password: newUser.password,
-        options: {
-          data: {
-            full_name: newUser.name
-          }
+      // 1. Criar usuário automaticamente em auth.users via RPC
+      const { data: authData, error: authError } = await supabase.rpc(
+        'criar_usuario_automático',
+        {
+          p_email: newUser.email,
+          p_password: newUser.password,
+          p_full_name: newUser.name,
+          p_cnes: newUser.cnes.trim(),
+          p_role: newUser.role
         }
-      });
+      );
 
       if (authError) {
-        if (authError.message.includes('already registered')) {
-          // Usuário já existe no Auth - TENTAR COMPLETAR AS ENTRADAS FALTANTES
-          console.log('⚠️ Usuário já registrado no Auth, tentando completar registros faltantes...');
-          
-          // 1. Buscar se o usuário já existe em profiles
-          const { data: existingProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('email', newUser.email)
-            .single();
-          
-          if (!existingProfile) {
-            // Profile não existe - não conseguimos obter o user_id do Auth sem admin API
-            // Então precisamos que o usuário execute o script SQL
-            throw new Error(
-              `Este e-mail já foi registrado no Auth, mas falta o perfil no banco de dados.\n\n` +
-              `Para resolver: Execute o arquivo CORRIGIR-USUARIO-GABRIELA.sql no Supabase SQL Editor.\n\n` +
-              `Depois tente novamente.`
-            );
-          }
-          
-          const userId = existingProfile.id;
-          console.log('✅ Usuário encontrado em profiles:', userId);
-          
-          // 2. Verificar e criar/atualizar role
-          const { data: existingRole } = await supabase
-            .from('user_roles')
-            .select('user_id')
-            .eq('user_id', userId)
-            .single();
-          
-          if (!existingRole) {
-            // Role não existe - criar
-            const { error: roleError } = await supabase
-              .from('user_roles')
-              .insert([{
-                user_id: userId,
-                role: newUser.role,
-                disabled: false
-              }]);
-            
-            if (roleError && !roleError.message.includes('duplicate')) {
-              throw new Error(`Erro ao atribuir perfil do usuário: ${roleError.message}`);
-            }
-            console.log('✅ Role criada para usuário existente');
-          } else {
-            // Role existe - atualizar (desativar = false)
-            const { error: updateError } = await supabase
-              .from('user_roles')
-              .update({ disabled: false, role: newUser.role })
-              .eq('user_id', userId);
-            
-            if (updateError) {
-              throw new Error(`Erro ao atualizar role: ${updateError.message}`);
-            }
-            console.log('✅ Role atualizada (reativada)');
-          }
-          
-          // Sucesso com usuário existente
-          const roleName = newUser.role === 'admin' ? 'Administrador' : newUser.role === 'intermediate' ? 'Usuário Intermediário' : 'Usuário Padrão';
-          alert(`✅ Usuário recuperado e completado!\n\nE-mail: ${newUser.email}\nPerfil: ${roleName}\n\nO usuário agora pode fazer login.`);
-        } else {
-          throw new Error(authError.message || 'Erro ao criar usuário');
-        }
-      } else if (authData.user) {
-        // Novo usuário criado normalmente
-        console.log('✅ Usuário criado no Auth:', authData.user.id);
-
-        // 2. Inserir perfil na tabela profiles (apenas dados pessoais)
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: authData.user.id,
-              email: newUser.email,
-              full_name: newUser.name,
-              cnes: newUser.cnes.trim()
-            }
-          ]);
-
-        if (profileError && !profileError.message.includes('duplicate')) {
-          throw new Error(`Erro ao criar perfil: ${profileError.message}`);
-        }
-
-        console.log('✅ Perfil criado');
-
-        // 3. Inserir role na tabela user_roles (separado - CRUCIAL para RBAC)
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .insert([
-            {
-              user_id: authData.user.id,
-              role: newUser.role,
-              disabled: false
-            }
-          ]);
-
-        if (roleError && !roleError.message.includes('duplicate')) {
-          throw new Error(`Erro ao atribuir perfil: ${roleError.message}`);
-        }
-
-        console.log('✅ Role atribuído:', newUser.role);
+        throw new Error(authError.message || 'Erro ao criar usuário');
+      } else if (authData && authData.success) {
+        // Novo usuário criado com sucesso
+        console.log('✅ Usuário criado automaticamente:', authData);
 
         // Sucesso - novo usuário
         const roleName = newUser.role === 'admin' ? 'Administrador' : newUser.role === 'intermediate' ? 'Usuário Intermediário' : 'Usuário Padrão';
-        alert(`✅ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nCNES: ${newUser.cnes}\nPerfil: ${roleName}`);
+        alert(`✅ Usuário registrado com sucesso!\n\nE-mail: ${newUser.email}\nCNES: ${newUser.cnes}\nPerfil: ${roleName}\n\nO usuário pode fazer login imediatamente.`);
+      } else if (authData && !authData.success) {
+        throw new Error(authData.error || 'Erro ao criar usuário');
       } else {
-        throw new Error('Falha ao criar ou completar usuário');
+        throw new Error('Falha ao criar usuário');
       }
       
       // Reset do formulário
@@ -1215,7 +1150,7 @@ const App: React.FC = () => {
       // Recarregar lista de usuários
       const { data: profiles, error: fetchError } = await supabase
         .from('profiles')
-        .select('id, full_name, email, cnes, created_at')
+        .select('id, full_name, email, cnes')
         .order('full_name');
       const { data: userRoles } = await supabase
         .from('user_roles')

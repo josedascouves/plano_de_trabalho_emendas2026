@@ -1,0 +1,92 @@
+✅ CHECKLIST - CRIAR 6 USUÁRIOS INTERMEDIÁRIOS
+
+## FASE 1: PREPARAÇÃO DO BANCO DE DADOS
+
+- [ ] **Passo 1A**: Abrir Supabase (https://app.supabase.com)
+- [ ] **Passo 1B**: Selecionar projeto
+- [ ] **Passo 1C**: Ir para "SQL Editor"
+- [ ] **Passo 1D**: Clicar em "+ New Query"
+- [ ] **Passo 1E**: Abrir arquivo `CRIAR-RPC-SINCRONIZAR.sql`
+- [ ] **Passo 1F**: Copiar TODO o conteúdo
+- [ ] **Passo 1G**: Colar no SQL Editor
+- [ ] **Passo 1H**: Clicar "Run" (Ctrl+Enter)
+- [ ] **Passo 1I**: Verificar mensagem "✅ Funções RPC criadas com sucesso!"
+
+## FASE 2: CRIAR OS 6 USUÁRIOS
+
+- [ ] **Passo 2A**: Clicar em "+ New Query" novamente
+- [ ] **Passo 2B**: Abrir arquivo `CRIAR-6-USUARIOS-COMPLETO.sql`
+- [ ] **Passo 2C**: Copiar TODO o conteúdo
+- [ ] **Passo 2D**: Colar no SQL Editor
+- [ ] **Passo 2E**: Clicar "Run" (Ctrl+Enter)
+- [ ] **Passo 2F**: Verificar resultado "📊 RESULTADO FINAL" com 6 linhas
+
+## FASE 3: VERIFICAÇÃO (IMPORTANTE!)
+
+- [ ] **Verificar**: Resultado mostra 6 usuários?
+- [ ] **Verificar**: Todos têm CNES = 0052124?
+- [ ] **Verificar**: Todos têm role = intermediate?
+- [ ] **Verificar**: Todos têm disabled = false?
+
+## FASE 4: TESTAR NO SISTEMA (OPCIONAL)
+
+- [ ] **Teste 1**: Abrir aplicativo
+- [ ] **Teste 2**: Tentar registrar 1º usuário (mvvasconcelos@saude.sp.gov.br)
+- [ ] **Teste 3**: Deve sincronizar automaticamente (SEM erro)
+- [ ] **Teste 4**: Aparecer mensagem "✅ Usuário sincronizado com sucesso"
+
+## FASE 5: VERIFICAÇÃO FINAL
+
+Execute no SQL Editor:
+
+```sql
+SELECT COUNT(*) as total
+FROM public.profiles
+WHERE email IN (
+  'mvvasconcelos@saude.sp.gov.br',
+  'janete.sgueglia@saude.sp.gov.br',
+  'lhribeiro@saude.sp.gov.br',
+  'gtcosta@saude.sp.gov.br',
+  'casouza@saude.sp.gov.br',
+  'rcloscher@saude.sp.gov.br'
+);
+```
+
+Deve retornar: **6**
+
+---
+
+## RESULTADO ESPERADO
+
+Depois de tudo:
+
+✅ 6 usuários criados em auth.users
+✅ 6 profiles criados
+✅ 6 user_roles com role = 'intermediate'
+✅ Todos podem fazer login com suas senhas
+✅ Sistema NÃO dá erro ao criar novos usuários
+✅ Sincronização automática funciona
+
+---
+
+## SENHAS PADRÃO
+
+Todos os 6 usuários começam com a senha:
+```
+SenhaTemporaria123!
+```
+
+Você pode ressetar as senhas no Supabase Dashboard se quiser.
+
+---
+
+## EM CASO DE ERRO
+
+1. **"Token invalid or expired"**: Faça login novamente no Supabase
+2. **"Query failed"**: Certifique-se de copiar TODO o arquivo (começo e fim)
+3. **Usuários não aparecem**: Execute a query de verificação final acima
+4. **Erro de duplicação**: É normal se executar 2x o script - ignora (ON CONFLICT)
+
+---
+
+**Total de passos: ~15 minutos ⏱️**

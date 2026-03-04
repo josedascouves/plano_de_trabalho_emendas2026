@@ -1,0 +1,173 @@
+%
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    🚨 SOLUÇÃO FINAL - PLANO DE AÇÃO 🚨                     ║
+║     "Database error querying schema" - Resolução Passo a Passo             ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+PROBLEMA RAIZ IDENTIFICADO:
+═════════════════════════════════════════════════════════════════════════════
+❌ Erro AINDA PERSISTE? Significa que UMA OU MAIS dessas coisas estão pendentes:
+
+  1. SOLUCAO-FINAL-DESABILITAR-RLS.sql NÃO foi executado no banco de dados
+  2. App.tsx foi modificado MAS não foi deployado/recarregado na aplicação
+  3. A função RPC sincronizar_usuario_orfao() ainda existe e está com problema
+  4. Browser tem cache de código antigo
+
+═════════════════════════════════════════════════════════════════════════════
+PLANO DE AÇÃO COM 3 ETAPAS (15-20 minutos):
+═════════════════════════════════════════════════════════════════════════════
+
+╔─────────────────────────────────────────────────────────────────────────────╗
+║ ETAPA 1: DIAGNOSTICAR (5 minutos)                                           ║
+╚─────────────────────────────────────────────────────────────────────────────╝
+
+Passo 1A: Abra Supabase SQL Editor
+  URL: https://app.supabase.com
+
+Passo 1B: Execute o diagnóstico
+  1. Clique em "+ New Query"
+  2. Abra o arquivo: DIAGNOSTICO-URGENTE-SCHEMA.sql
+  3. Copie TODO o conteúdo
+  4. Cole no SQL Editor
+  5. Clique em "Ctrl+Enter" para executar
+  6. ANALISE OS RESULTADOS:
+     ✅ Se VER resultados: Banco está OK
+     ❌ Se VER erro tipo "permission denied": RLS está bloqueando
+     ❌ Se VER erro tipo "column ... does not exist": Schema incorreto
+
+Passo 1C: Tire screenshot do resultado (para referência)
+
+═════════════════════════════════════════════════════════════════════════════
+╔─────────────────────────────────────────────────────────────────────────────╗
+║ ETAPA 2: LIMPAR BANCO DE DADOS (10 minutos)                                ║
+╚─────────────────────────────────────────────────────────────────────────────╝
+
+Passo 2A: Execute a limpeza OBRIGATÓRIA
+  1. Clique em "+ New Query" (nova query)
+  2. Abra o arquivo: SOLUCAO-FINAL-DESABILITAR-RLS.sql
+  3. Copie TODO o conteúdo (do INÍCIO ao FIM)
+  4. Cole no SQL Editor
+  5. Clique "Ctrl+Enter" para executar
+  
+  ✅ ESPERADO VER:
+     ✅ PASSO 1: Triggers removidos
+     ✅ PASSO 2: Funções removidas
+     ✅ PASSO 3: Todas as políticas removidas
+     ✅ PASSO 4: RLS desabilitado
+     ✅ PASSO 5A: Dados antigos deletados
+     ✅ PASSO 5B: Profiles recriados
+     ✅ PASSO 5C: User_roles recriados
+     ✅ CONCLUSÃO: RLS desabilitado, triggers removidos, dados sincronizados
+
+     Depois uma tabela mostrando os 4 usuários:
+     
+     janete.sgueglia@saude.sp.gov.br | ... | intermediate | false
+     lhribeiro@saude.sp.gov.br       | ... | intermediate | false
+     gtcosta@saude.sp.gov.br         | ... | intermediate | false
+     casouza@saude.sp.gov.br         | ... | intermediate | false
+
+═════════════════════════════════════════════════════════════════════════════
+╔─────────────────────────────────────────────────────────────────────────────╗
+║ ETAPA 3: RECARREGAR APLICAÇÃO (5 minutos)                                   ║
+╚─────────────────────────────────────────────────────────────────────────────╝
+
+Passo 3A: Fechar e limpar cache do aplicativo
+  1. Feche a aplicação completamente
+  2. Abra o navegador (Chrome, Firefox, Edge)
+  3. Pressione: Ctrl + Shift + Delete
+  4. Selecione "Todos os tempos"
+  5. Marque "Cookies", "Cache"
+  6. Clique "Limpar dados"
+  7. Feche o navegador completamente
+
+Passo 3B: Reabra a aplicação
+  1. Acesse a URL da aplicação
+  2. NÃO deve pedir para fazer login (deve estar em cache)
+  3. Se pedir, faça logout manual primeiro
+
+Passo 3C: Teste login com cada um dos 4 usuários problemáticos
+
+═════════════════════════════════════════════════════════════════════════════
+TESTE DE LOGIN (Após Etapa 3):
+═════════════════════════════════════════════════════════════════════════════
+
+Para CADA usuário abaixo, tente fazer login:
+
+1️⃣ janete.sgueglia@saude.sp.gov.br
+   Senha: SenhaTemporaria123!
+   
+2️⃣ lhribeiro@saude.sp.gov.br
+   Senha: SenhaTemporaria123!
+   
+3️⃣ gtcosta@saude.sp.gov.br
+   Senha: SenhaTemporaria123!
+   
+4️⃣ casouza@saude.sp.gov.br
+   Senha: SenhaTemporaria123!
+
+✅ SUCESSO: Se conseguir fazer login SEM ver "Database error querying schema"
+
+❌ AINDA COM ERRO? Envie:
+   - Screenshot do erro exato
+   - Output do console (F12 > Console tab)
+   - Qual email está falhando específicamente
+
+═════════════════════════════════════════════════════════════════════════════
+TROUBLESHOOTING - SE AINDA TIVER ERRO:
+═════════════════════════════════════════════════════════════════════════════
+
+❌ "Query failed" na ETAPA 2:
+   → Copie TODO o arquivo SOLUCAO-FINAL-DESABILITAR-RLS.sql novamente
+   → Certifique-se que copiou do INÍCIO ao FIM (BEGIN; e COMMIT;)
+   → Experimente fazer 2 queries separadas:
+      1. Primeira: Tudo até a linha do DROP POLICY
+      2. Segunda: Tudo depois (ALTER TABLE, DELETE, INSERT, SELECT)
+
+❌ "Database error" ainda aparece após login:
+   → Abra DevTools (F12)
+   → Vá para Console
+   → Veja a mensagem de erro completa com detalhes
+   → Procure por "CORS", "permission denied", "does not exist"
+   → Compartilhe comigo o erro exato
+
+❌ "Database error loading data" mas conseguiu fazer login:
+   → Significa que a query do checkSession passou ✅
+   → Mas uma query POSTERIOR (ao carregar planos) está com problema
+   → Neste caso, envie o erro do console para análise
+
+═════════════════════════════════════════════════════════════════════════════
+CHECKLIST FINAL:
+═════════════════════════════════════════════════════════════════════════════
+
+☐ ETAPA 1: Diagnosticou e viu os resultados (ou viu um erro específico)
+☐ ETAPA 2: Executou SOLUCAO-FINAL-DESABILITAR-RLS.sql com sucesso
+☐ ETAPA 3: Limpou cache do navegador
+☐ TESTE 1: Conseguiu fazer login com janete.sgueglia@...
+☐ TESTE 2: Conseguiu fazer login com lhribeiro@...
+☐ TESTE 3: Conseguiu fazer login com gtcosta@...
+☐ TESTE 4: Conseguiu fazer login com casouza@...
+☐ TESTE 5: Verificou os 2 usuários que funcionavam (MÁRCIA + ROBERTO)
+
+═════════════════════════════════════════════════════════════════════════════
+
+Quando terminar, me envie uma mensagem assim:
+
+   "✅ ETAPA 1: [Resultado]
+    ✅ ETAPA 2: [Resultado]  
+    ✅ ETAPA 3: [Resultado]
+    ✅ TESTES: [Quantos usuários conseguiram fazer login]"
+
+═════════════════════════════════════════════════════════════════════════════
+Informações úteis:
+═════════════════════════════════════════════════════════════════════════════
+
+App.tsx foi MODIFICADO com:
+  ✅ Simplificação da query checkSession (linha 313-316)
+  ✅ Adição de try-catch melhorado (linha 318-328)
+  ✅ Fallback para role='user' seguro
+  
+Mas ainda precisa:
+  🔴 Executar SOLUCAO-FINAL-DESABILITAR-RLS.sql no Supabase
+  🔴 Recarregar a aplicação (hard refresh ou limpar cache)
+
+═════════════════════════════════════════════════════════════════════════════

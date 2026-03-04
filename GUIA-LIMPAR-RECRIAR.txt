@@ -1,0 +1,145 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║          🔧 OPÇÃO 2: LIMPAR E RECRIAR DO ZERO (Recomendado)                ║
+║     Database error querying schema - Solução Nuclear                        ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+ANTES DE COMEÇAR:
+═════════════════════════════════════════════════════════════════════════════
+Se o erro AINDA persiste após todas as correções, significa que:
+
+1. ✅ Banco de dados foi limpado (SOLUCAO-FINAL-DESABILITAR-RLS.sql)
+2. ✅ App.tsx foi corrigido (queries simplificadas)
+3. ❌ MAS o erro CONTINUA
+
+OPÇÃO A: Verificar onde EXATAMENTE está o erro
+═════════════════════════════════════════════════════════════════════════════
+
+Passo 1: Abra DevTools (F12)
+  1. Pressione F12 no navegador
+  2. Vá para aba "Console"
+  3. Tente fazer login com janete.sgueglia@saude.sp.gov.br
+  4. Screenshot do ERRO EXATO
+
+Passo 2: Procure por uma dessas mensagens:
+  ❌ "permission denied" - RLS está bloqueando
+  ❌ "column ... does not exist" - Falta coluna em profiles
+  ❌ "relation ... does not exist" - Falta tabela
+  ❌ "Database error querying schema" - Erro genérico de query
+
+Passo 3: Envie o erro EXATO para análise
+
+═════════════════════════════════════════════════════════════════════════════
+
+OPÇÃO B: LIMPAR E RECRIAR DO ZERO (Solução Rápida)
+═════════════════════════════════════════════════════════════════════════════
+
+Isto VAI deletar os 4 usuários completamente e recriar do zero.
+
+Passo 1: Abrir Supabase SQL Editor
+  URL: https://app.supabase.com
+  
+Passo 2: Executar SQL de Limpeza
+  1. Clique em "+ New Query"
+  2. Abra: LIMPAR-E-RECRIAR-4-USUARIOS.sql
+  3. Copie TODO o conteúdo
+  4. Cole no SQL Editor
+  5. Clique "Ctrl+Enter" para executar
+  
+  ✅ ESPERADO VER:
+     ✅ PASSO 1A: User_roles deletados
+     ✅ PASSO 1B: Profiles deletados
+     ✅ PASSO 2: Profiles recriados do zero
+     ✅ PASSO 3: User_roles recriados do zero
+     
+     E uma tabela final mostrando os 4 usuários com status ✅ OK
+
+Passo 3: Confirmação
+  Você deve ver exatamente 4 linhas na tabela final:
+  
+  janete.sgueglia@saude.sp.gov.br  | JANETE LOURENÇO SGUEGLIA      | 0052124 | intermediate | false | ✅ OK
+  lhribeiro@saude.sp.gov.br        | Lúcia Henrique Ribeiro        | 0052124 | intermediate | false | ✅ OK
+  gtcosta@saude.sp.gov.br          | Geisel Guimarães Torres Costa | 0052124 | intermediate | false | ✅ OK
+  casouza@saude.sp.gov.br          | Cristiane Aparecida Barreto   | 0052124 | intermediate | false | ✅ OK
+
+═════════════════════════════════════════════════════════════════════════════
+
+PASSO 4: LIMPAR CACHE E TESTAR NOVAMENTE
+═════════════════════════════════════════════════════════════════════════════
+
+Passo 1: Fechar navegador completamente
+  1. Feche todas as abas
+  2. Feche o navegador inteiro
+  3. Aguarde 5 segundos
+
+Passo 2: Limpar Cache
+  1. Abra navegador de novo
+  2. Pressione: Ctrl + Shift + Del
+  3. Selecione "Todos os tempos"
+  4. Marque: Cookies, Cache, Dados de sites
+  5. Clique "Limpar dados"
+  6. Feche o navegador
+
+Passo 3: Hard Refresh
+  1. Abra navegador de novo
+  2. Vá para: http://localhost:3001
+  3. Pressione: Ctrl + F5
+  4. Aguarde carregar completamente
+
+Passo 4: Teste Login
+  Email: janete.sgueglia@saude.sp.gov.br
+  Senha: SenhaTemporaria123!
+  
+  ✅ ESPERADO: Login bem-sucedido!
+  ❌ SE ERRO: Anote a mensagem EXATA
+
+═════════════════════════════════════════════════════════════════════════════
+
+TESTE COMPLETO (Após seguir os passos acima):
+═════════════════════════════════════════════════════════════════════════════
+
+Teste cada usuário:
+
+☐ janete.sgueglia@saude.sp.gov.br - SenhaTemporaria123!
+☐ lhribeiro@saude.sp.gov.br - SenhaTemporaria123!
+☐ gtcosta@saude.sp.gov.br - SenhaTemporaria123!
+☐ casouza@saude.sp.gov.br - SenhaTemporaria123!
+
+RESULTADOS ESPERADOS:
+[✅ Funciona | ❌ Erro com mensagem: ________]
+[✅ Funciona | ❌ Erro com mensagem: ________]
+[✅ Funciona | ❌ Erro com mensagem: ________]
+[✅ Funciona | ❌ Erro com mensagem: ________]
+
+═════════════════════════════════════════════════════════════════════════════
+
+ALTERNATIVA: SE AINDA NÃO FUNCIONAR
+═════════════════════════════════════════════════════════════════════════════
+
+Se ainda vir "Database error querying schema" mesmo após LIMPAR E RECRIAR:
+
+1. Envie screenshot do erro no console (F12 > Console)
+2. Envie qual é o email exato que está falhando
+3. Diga se consegue fazer login com os ADMIN padrões:
+   - sessp.css3@gmail.com (se existe)
+   - Qualquer outro admin criado anteriormente
+
+Isso me ajudará a identificar se é problema:
+  🔴 Dos dados específicos desses usuários
+  🔴 De algo na aplicação (App.tsx)
+  🔴 De RLS policies ainda ativas
+  🔴 De uma query em outro lugar do código
+
+═════════════════════════════════════════════════════════════════════════════
+
+CHECKLIST FINAL:
+═════════════════════════════════════════════════════════════════════════════
+
+☐ Script LIMPAR-E-RECRIAR-4-USUARIOS.sql foi executado
+☐ Você viu "✅ PASSO 1A", "✅ PASSO 1B", "✅ PASSO 2", "✅ PASSO 3"
+☐ Você viu 4 usuários na tabela final com status ✅ OK
+☐ Limpou cache do navegador (Ctrl+Shift+Del)
+☐ Hard refresh (Ctrl+F5)
+☐ Testou login com todos os 4 usuários
+☐ [Número de sucessos] / 4 usuários conseguiram fazer login
+
+═════════════════════════════════════════════════════════════════════════════

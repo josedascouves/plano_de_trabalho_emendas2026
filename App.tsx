@@ -2431,14 +2431,17 @@ const App: React.FC = () => {
     [formData.emenda.programa]
   );
 
-  // Metas Quantitativas - Convert to same format as availableAcoes
-  const availableMetasQuantitativas = useMemo(() => 
-    Object.entries(METAS_QUANTITATIVAS_OPTIONS).map(([categoria, itens]) => ({
-      categoria,
-      itens
-    })),
-    []
-  );
+  // Metas Quantitativas - Only available for "EMENDA INDIVIDUAL - CUSTEIO MAC - 2E90"
+  const availableMetasQuantitativas = useMemo(() => {
+    if (formData.emenda.programa === "EMENDA INDIVIDUAL - CUSTEIO MAC - 2E90") {
+      return Object.entries(METAS_QUANTITATIVAS_OPTIONS).map(([categoria, itens]) => ({
+        categoria,
+        itens
+      }));
+    }
+    // Para outros programas, usar as ações de serviços disponíveis
+    return ACOES_SERVICOS_POR_PROGRAMA[formData.emenda.programa] || [];
+  }, [formData.emenda.programa]);
 
   const updateFormData = (section: keyof FormState, value: any) => {
     if (section === 'beneficiario' && value?.cnes) {

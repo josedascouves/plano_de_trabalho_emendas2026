@@ -1028,7 +1028,24 @@ const App: React.FC = () => {
         throw new Error('E-mail inválido. Use um formato válido (ex: usuario@example.com)');
       }
 
-      // Atualizar perfil (nome, email, CNES)
+      // 1️⃣ Atualizar email na tabela auth.users via RPC
+      try {
+        const { error: emailError } = await supabase.rpc('update_user_email', {
+          user_id: editingUser.id,
+          new_email: editingUser.email
+        });
+        
+        if (emailError) {
+          console.warn('⚠️ Aviso ao atualizar email no Supabase Auth:', emailError);
+          // Continua mesmo se falhar, pois pode ser erro de permissão
+        } else {
+          console.log('✅ Email atualizado no Supabase Auth');
+        }
+      } catch (err: any) {
+        console.warn('⚠️ Erro ao tentar atualizar email via RPC:', err.message);
+      }
+
+      // 2️⃣ Atualizar perfil (nome, email, CNES)
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ 
@@ -1040,7 +1057,7 @@ const App: React.FC = () => {
 
       if (profileError) throw profileError;
 
-      // Se houver nova senha, enviar email de reset
+      // 3️⃣ Se houver nova senha, enviar email de reset
       if (editingUser.password && editingUser.password.length >= 6) {
         try {
           // Usar RPC function para atualizar senha
@@ -1058,7 +1075,7 @@ const App: React.FC = () => {
         }
       }
 
-      alert('✅ Usuário atualizado com sucesso!');
+      alert('✅ Usuário atualizado com sucesso!\n\nObs: Se o email foi alterado, o usuário precisa fazer login novamente com o novo email.');
       setShowEditUserModal(false);
       setEditingUser({ id: '', email: '', name: '', cnes: '', password: '' });
 

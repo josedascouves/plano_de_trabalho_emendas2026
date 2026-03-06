@@ -2660,9 +2660,11 @@ Secretaria de Estado da Saúde de São Paulo`;
               <h2 className="text-lg font-bold text-red-700 uppercase tracking-widest print:text-base mb-2">
                 {getPortariaForPrograma(formData.emenda.programa)}
               </h2>
-              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide print:text-[11px]">
-                Emendas Parlamentar 2026
-              </p>
+              {!formData.emenda.programa.includes('PORTARIA 10.169') && (
+                <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide print:text-[11px]">
+                  Emendas Parlamentar 2026
+                </p>
+              )}
             </div>
 
             {/* Info protocolo */}

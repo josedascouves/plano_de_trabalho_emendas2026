@@ -208,6 +208,16 @@ const App: React.FC = () => {
     return planCreatedBy === currentUser.id; // User vê só seus planos
   };
 
+  // Função para obter o tipo de portaria baseado no programa orçamentário
+  const getPortariaForPrograma = (programa: string): string => {
+    if (programa.startsWith('EMENDA INDIVIDUAL')) {
+      return 'PORTARIA GM/MS Nº 10.297';
+    } else if (programa.includes('PORTARIA 10.169')) {
+      return 'Portaria GM/MS nº 10.169';
+    }
+    return 'PORTARIA GM/MS Nº 10.297'; // Padrão
+  };
+
   // Help Content for each section
   const helpContent: {[key: string]: {title: string; description: string; tips: string[]}} = {
     'info-emenda': {
@@ -2644,12 +2654,15 @@ Secretaria de Estado da Saúde de São Paulo`;
 
             {/* Título principal expandido */}
             <div className="text-center border-t-2 border-gray-300 border-b-4 border-red-700 py-8 print:py-6">
-              <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight print:text-2xl mb-2 leading-tight">
+              <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight print:text-2xl mb-3 leading-tight">
                 Plano de Trabalho
               </h1>
-              <h2 className="text-lg font-bold text-red-700 uppercase tracking-widest print:text-base">
-                Emenda Parlamentar 2026
+              <h2 className="text-lg font-bold text-red-700 uppercase tracking-widest print:text-base mb-2">
+                {getPortariaForPrograma(formData.emenda.programa)}
               </h2>
+              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide print:text-[11px]">
+                Emendas Parlamentar 2026
+              </p>
             </div>
 
             {/* Info protocolo */}
@@ -2932,7 +2945,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                 Documento oficial da Secretaria de Estado da Saúde de São Paulo, gerado pelo Sistema de Gestão de Planos de Trabalho.
               </p>
               <p className="text-[9px] text-gray-600 mt-2">
-                Destinado a arquivamento, auditoria, controle externo e conformidade com as determinações da Portaria GM/MS nº 6.904/2025.
+                Destinado a arquivamento, auditoria, controle externo e conformidade com as determinações da {getPortariaForPrograma(formData.emenda.programa)}.
               </p>
             </div>
           </div>

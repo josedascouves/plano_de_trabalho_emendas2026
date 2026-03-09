@@ -1295,58 +1295,78 @@ const App: React.FC = () => {
         return;
       }
 
-      console.log('🚀 Iniciando criação de usuários em paralelo...');
+      console.log('🚀 Iniciando criação de usuários...');
 
-      // Criar usuários em PARALELO (máximo 3 simultâneos para não sobrecarregar)
+      // Criar cliente separado para signUp (não afeta sessão do admin)
+      const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
+      const signUpClient = createSupabaseClient(
+        'https://tlpmspfnswaxwqzmwski.supabase.co',
+        'sb_publishable_a_t5QoKSL53wf1uT6GjqYg_wk2ENe-9'
+      );
+
       let criados = 0;
       let erros = 0;
       const mensagens_erro: string[] = [];
-      const BATCH_SIZE = 3;
 
-      for (let i = 0; i < usuarios.length; i += BATCH_SIZE) {
-        const batch = usuarios.slice(i, i + BATCH_SIZE);
-        
-        const promessas = batch.map(async (usuario, idx) => {
-          try {
-            console.log(`⏳ Criando usuário ${i + idx + 1}/${usuarios.length}: ${usuario.email}`);
+      // Processar um por vez para não perder sessão
+      for (let i = 0; i < usuarios.length; i++) {
+        const usuario = usuarios[i];
+        try {
+          console.log(`⏳ Criando usuário ${i + 1}/${usuarios.length}: ${usuario.email}`);
 
-            // Usar a MESMA RPC que já funciona no cadastro individual
-            const { data: result, error: rpcError } = await supabase.rpc('criar_usuario_automático', {
-              p_email: usuario.email,
-              p_password: usuario.senha,
-              p_full_name: usuario.nome,
-              p_cnes: usuario.cnes,
-              p_role: 'user'
-            });
-
-            if (rpcError) {
-              console.warn(`⚠️ Erro ao criar ${usuario.email}:`, rpcError);
-              erros++;
-              mensagens_erro.push(`${i + idx + 1}. ${usuario.email}: ${rpcError.message}`);
-              return { success: false };
+          // 1. Criar usuário via auth.signUp (trigger auto-cria profile)
+          const { data: signUpData, error: signUpError } = await signUpClient.auth.signUp({
+            email: usuario.email,
+            password: usuario.senha,
+            options: {
+              data: {
+                full_name: usuario.nome,
+                cnes: usuario.cnes,
+                role: 'user'
+              }
             }
+          });
 
-            if (result?.success) {
-              console.log(`✅ Usuário criado: ${usuario.email} (ID: ${result?.user_id})`);
-              criados++;
-              return { success: true };
-            } else {
-              console.warn(`⚠️ Falha ao criar ${usuario.email}: ${result?.error}`);
-              erros++;
-              mensagens_erro.push(`${i + idx + 1}. ${usuario.email}: ${result?.error}`);
-              return { success: false };
-            }
-
-          } catch (err: any) {
-            console.error(`❌ Erro ao processar ${usuario.email}:`, err);
+          if (signUpError) {
+            console.warn(`⚠️ Erro ao criar ${usuario.email}:`, signUpError);
             erros++;
-            mensagens_erro.push(`${i + idx + 1}. ${usuario.email}: ${err.message}`);
-            return { success: false };
+            mensagens_erro.push(`${i + 1}. ${usuario.email}: ${signUpError.message}`);
+            continue;
           }
-        });
 
-        // Aguardar conclusão do batch
-        await Promise.all(promessas);
+          const userId = signUpData?.user?.id;
+          if (!userId) {
+            erros++;
+            mensagens_erro.push(`${i + 1}. ${usuario.email}: Usuário não retornou ID`);
+            continue;
+          }
+
+          // 2. Atualizar CNES no profile (trigger pode não setar)
+          await supabase.from('profiles').upsert({
+            id: userId,
+            full_name: usuario.nome,
+            email: usuario.email,
+            cnes: usuario.cnes
+          }, { onConflict: 'id' });
+
+          // 3. Criar role
+          await supabase.from('user_roles').upsert({
+            user_id: userId,
+            role: 'user',
+            disabled: false
+          }, { onConflict: 'user_id' });
+
+          console.log(`✅ Usuário criado: ${usuario.email} (ID: ${userId})`);
+          criados++;
+
+          // Logout do signUpClient para não manter sessão do novo usuário
+          await signUpClient.auth.signOut();
+
+        } catch (err: any) {
+          console.error(`❌ Erro ao processar ${usuario.email}:`, err);
+          erros++;
+          mensagens_erro.push(`${i + 1}. ${usuario.email}: ${err.message}`);
+        }
       }
 
       const resultado = {

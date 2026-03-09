@@ -1310,12 +1310,9 @@ const App: React.FC = () => {
           try {
             console.log(`⏳ Criando usuário ${i + idx + 1}/${usuarios.length}: ${usuario.email}`);
 
-            // 1️⃣ Criar usuário em auth.users via Admin API (RPC)
+            // 1️⃣ Criar usuário em auth.users via RPC (com JSON)
             const { data: authData, error: authError } = await supabase.rpc('criar_usuario_individual', {
-              p_email: usuario.email,
-              p_senha: usuario.senha,
-              p_nome: usuario.nome,
-              p_cnes: usuario.cnes
+              p_usuario: usuario
             });
 
             if (authError) {

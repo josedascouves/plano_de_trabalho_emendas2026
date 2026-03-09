@@ -1297,11 +1297,11 @@ const App: React.FC = () => {
 
       console.log('🚀 Iniciando criação de usuários em paralelo...');
 
-      // Criar usuários em PARALELO (máximo 5 simultâneos para não sobrecarregar)
+      // Criar usuários em PARALELO (máximo 3 simultâneos para não sobrecarregar)
       let criados = 0;
       let erros = 0;
       const mensagens_erro: string[] = [];
-      const BATCH_SIZE = 5;
+      const BATCH_SIZE = 3;
 
       for (let i = 0; i < usuarios.length; i += BATCH_SIZE) {
         const batch = usuarios.slice(i, i + BATCH_SIZE);
@@ -1310,21 +1310,31 @@ const App: React.FC = () => {
           try {
             console.log(`⏳ Criando usuário ${i + idx + 1}/${usuarios.length}: ${usuario.email}`);
 
-            // 1️⃣ Criar usuário em auth.users via RPC (com JSON)
-            const { data: authData, error: authError } = await supabase.rpc('criar_usuario_individual', {
-              p_usuario: usuario
+            // 1️⃣ Criar usuário via RPC
+            const { data: result, error: rpcError } = await supabase.rpc('criar_usuario_individual', {
+              p_email: usuario.email,
+              p_senha: usuario.senha,
+              p_nome: usuario.nome,
+              p_cnes: usuario.cnes
             });
 
-            if (authError) {
-              console.warn(`⚠️ Erro ao criar ${usuario.email}:`, authError);
+            if (rpcError) {
+              console.warn(`⚠️ Erro ao criar ${usuario.email}:`, rpcError);
               erros++;
-              mensagens_erro.push(`${i + idx + 1}. ${usuario.email}: ${authError.message}`);
+              mensagens_erro.push(`${i + idx + 1}. ${usuario.email}: ${rpcError.message}`);
               return { success: false };
             }
 
-            console.log(`✅ Usuário criado: ${usuario.email} (ID: ${authData?.user_id})`);
-            criados++;
-            return { success: true };
+            if (result?.success) {
+              console.log(`✅ Usuário criado: ${usuario.email} (ID: ${result?.user_id})`);
+              criados++;
+              return { success: true };
+            } else {
+              console.warn(`⚠️ Falha ao criar ${usuario.email}: ${result?.error}`);
+              erros++;
+              mensagens_erro.push(`${i + idx + 1}. ${usuario.email}: ${result?.error}`);
+              return { success: false };
+            }
 
           } catch (err: any) {
             console.error(`❌ Erro ao processar ${usuario.email}:`, err);

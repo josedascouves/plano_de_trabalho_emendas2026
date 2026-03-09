@@ -1297,23 +1297,28 @@ const App: React.FC = () => {
       
       // Chamar RPC de criação em lote
       const { data, error } = await supabase.rpc('criar_usuarios_em_lote', {
-        p_usuarios: JSON.stringify(usuarios)
+        p_usuarios: usuarios
       });
       
       if (error) {
-        throw new Error(error.message);
+        console.error('❌ Erro na RPC:', error);
+        throw new Error(error.message || 'Erro ao executar RPC de importação');
       }
       
       setCsvResults(data);
       
       if (data?.success) {
-        alert(
-          `✅ Importação concluída!\n\n` +
-          `Total: ${data.total}\n` +
-          `Criados/Atualizados: ${data.criados}\n` +
-          `Erros: ${data.erros}` +
-          (data.erros > 0 ? '\n\nVeja os detalhes na tela.' : '')
-        );
+        let alertMsg = 
+          `✅ Importação concluída com sucesso!\n\n` +
+          `Total processado: ${data.total}\n` +
+          `Criados: ${data.criados}\n` +
+          `Erros: ${data.erros}`;
+        
+        if (data.erros > 0 && data.mensagens_erro) {
+          alertMsg += `\n\n❌ Erros encontrados:\n${data.mensagens_erro.join('\n')}`;
+        }
+        
+        alert(alertMsg);
         
         // Recarregar lista de usuários
         const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, cnes').order('full_name');

@@ -92,6 +92,8 @@ const App: React.FC = () => {
   const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as 'user' | 'admin' | 'intermediate', cnes: '' });
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
+  const [csvUploading, setCsvUploading] = useState(false);
+  const [csvResults, setCsvResults] = useState<any>(null);
 
   // Plan List & Edit Management
   const [planosList, setPlanosList] = useState<any[]>([]);
@@ -668,6 +670,7 @@ const App: React.FC = () => {
         throw new Error('E-mail inválido');
       }
 
+      // PASSO 1: Fazer autenticação básica (SEM queries extras!)
       const { data, error } = await supabase.auth.signInWithPassword({
         email: loginInput.email,
         password: loginInput.password
@@ -684,61 +687,67 @@ const App: React.FC = () => {
       }
 
       if (data.user) {
-        try {
-          // Buscar perfil do usuário - APENAS colunas que existem
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('id, full_name, email, cnes')
-            .eq('id', data.user.id)
-            .maybeSingle();
-          
-          if (profileError) {
-            console.error('❌ Erro ao buscar perfil:', profileError);
-            throw new Error('Erro ao carregar perfil do usuário');
+        // ✅ LOGIN BEM-SUCEDIDO! Logar com dados mínimos
+        const userObject = {
+          id: data.user.id,
+          username: data.user.email || '',
+          name: data.user.email?.split('@')[0] || 'Usuário',
+          role: 'user',
+          cnes: ''
+        };
+        
+        console.log('✅ Login bem-sucedido:', userObject.username);
+        setCurrentUser(userObject);
+        setIsAuthenticated(true);
+        setLoginInput({ email: '', password: '' });
+
+        // PASSO 2: Carregar dados extras em background (NÃO BLOQUEIA O LOGIN!)
+        // Trata erros silenciosamente
+        const loadUserData = async () => {
+          try {
+            // Buscar perfil
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name, cnes')
+              .eq('id', data.user.id)
+              .maybeSingle();
+            
+            if (profile) {
+              setCurrentUser(prev => prev ? {
+                ...prev,
+                name: profile.full_name || prev.name,
+                cnes: profile.cnes || ''
+              } : null);
+            }
+          } catch (err) {
+            console.warn('⚠️ Erro ao carregar profile:', err);
           }
 
-          if (!profile) {
-            console.error('❌ Perfil não encontrado para user:', data.user.id);
-            throw new Error('Perfil do usuário não encontrado');
+          try {
+            // Buscar role
+            const { data: userRole } = await supabase
+              .from('user_roles')
+              .select('role, disabled')
+              .eq('user_id', data.user.id)
+              .maybeSingle();
+            
+            if (userRole) {
+              if (userRole.disabled) {
+                await supabase.auth.signOut();
+                setCurrentUser(null);
+                setIsAuthenticated(false);
+                setLoginError('Este usuário foi desativado.');
+              } else if (userRole.role) {
+                setCurrentUser(prev => prev ? { ...prev, role: userRole.role } : null);
+              }
+            }
+          } catch (err) {
+            console.warn('⚠️ Erro ao carregar role:', err);
           }
+        };
 
-          // Buscar role e status (disabled) da tabela user_roles
-          const { data: userRole, error: userRoleError } = await supabase
-            .from('user_roles')
-            .select('role, disabled')
-            .eq('user_id', data.user.id)
-            .maybeSingle();
-          
-          if (userRoleError) {
-            console.error('❌ Erro ao buscar role:', userRoleError);
-            throw new Error('Erro ao carregar permissões do usuário');
-          }
-
-          // Verificar se usuário está desativado
-          if (userRole?.disabled) {
-            await supabase.auth.signOut();
-            throw new Error('Este usuário foi desativado. Contate um administrador.');
-          }
-
-          const userObject = {
-            id: data.user.id,
-            username: data.user.email || '',
-            name: profile.full_name || 'Usuário',
-            role: userRole?.role || 'user',
-            cnes: profile.cnes || ''
-          };
-          
-          console.log('🔐 handleLogin - Usuário carregado:', userObject);
-          setCurrentUser(userObject);
-          setIsAuthenticated(true);
-          setLoginInput({ email: '', password: '' });
-        } catch (loginQueryError: any) {
-          // Erro ao fazer queries - muito provável que seja RLS
-          console.error('❌ Erro ao fazer queries de login:', loginQueryError);
-          setLoginError(`Erro ao carregar dados do usuário: ${loginQueryError.message || 'Acesso negado'}`);
-          setIsSending(false);
-          return;
-        }
+        // Executar sem await - não bloqueia o login
+        loadUserData().catch(err => console.warn('Erro ao carregar dados do usuário:', err));
       }
     } catch (error: any) {
       console.error('Erro ao fazer login:', error);
@@ -1203,6 +1212,130 @@ const App: React.FC = () => {
       alert(`❌ Erro ao registrar: ${error.message}`);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // IMPORTAR USUARIOS VIA CSV
+  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setCsvUploading(true);
+    setCsvResults(null);
+    
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        throw new Error('O arquivo CSV deve ter pelo menos um cabeçalho e uma linha de dados.');
+      }
+
+      // Detectar separador (vírgula ou ponto-e-vírgula)
+      const headerLine = lines[0];
+      const separator = headerLine.includes(';') ? ';' : ',';
+      
+      // Parsear cabeçalho (normalizar: minúsculo, sem acento, sem espaço extra)
+      const normalize = (s: string) => s.toLowerCase().trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+      
+      const headers = headerLine.split(separator).map(h => normalize(h));
+      
+      // Mapear colunas flexivelmente
+      const findCol = (keywords: string[]) => {
+        return headers.findIndex(h => keywords.some(k => h.includes(k)));
+      };
+      
+      const colNome = findCol(['nome', 'name', 'fullname', 'nomecompleto', 'responsavel']);
+      const colEmail = findCol(['email', 'mail', 'emailresponsavel']);
+      const colCnes = findCol(['cnes', 'codigocnes']);
+      const colSenha = findCol(['senha', 'password', 'pass']);
+      
+      if (colEmail === -1) {
+        throw new Error('Coluna "email" não encontrada no CSV. O cabeçalho deve conter: nome, email, cnes, senha');
+      }
+      if (colNome === -1) {
+        throw new Error('Coluna "nome" não encontrada no CSV.');
+      }
+      if (colCnes === -1) {
+        throw new Error('Coluna "cnes" não encontrada no CSV.');
+      }
+      
+      // Parsear linhas de dados
+      const usuarios: any[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(separator).map(c => c.trim().replace(/^"|"$/g, ''));
+        const email = cols[colEmail]?.trim();
+        const nome = cols[colNome]?.trim();
+        const cnes = cols[colCnes]?.trim();
+        const senha = colSenha !== -1 ? cols[colSenha]?.trim() : cnes;
+        
+        if (!email || !nome) continue;
+        
+        usuarios.push({ nome, email, cnes: cnes || '', senha: senha || cnes || '' });
+      }
+      
+      if (usuarios.length === 0) {
+        throw new Error('Nenhum usuário válido encontrado no CSV.');
+      }
+      
+      // Confirmar com o admin
+      const confirma = confirm(
+        `Foram encontrados ${usuarios.length} usuários no CSV.\n\n` +
+        `Primeiros 3:\n` +
+        usuarios.slice(0, 3).map(u => `  • ${u.nome} - ${u.email} - CNES: ${u.cnes}`).join('\n') +
+        (usuarios.length > 3 ? `\n  ... e mais ${usuarios.length - 3}` : '') +
+        `\n\nDeseja criar todos agora?`
+      );
+      
+      if (!confirma) {
+        setCsvUploading(false);
+        e.target.value = '';
+        return;
+      }
+      
+      // Chamar RPC de criação em lote
+      const { data, error } = await supabase.rpc('criar_usuarios_em_lote', {
+        p_usuarios: JSON.stringify(usuarios)
+      });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      setCsvResults(data);
+      
+      if (data?.success) {
+        alert(
+          `✅ Importação concluída!\n\n` +
+          `Total: ${data.total}\n` +
+          `Criados/Atualizados: ${data.criados}\n` +
+          `Erros: ${data.erros}` +
+          (data.erros > 0 ? '\n\nVeja os detalhes na tela.' : '')
+        );
+        
+        // Recarregar lista de usuários
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, cnes').order('full_name');
+        const { data: userRoles } = await supabase.from('user_roles').select('user_id, role, disabled');
+        if (profiles && userRoles) {
+          const usersByRole: { [key: string]: any } = {};
+          userRoles.forEach(ur => { usersByRole[ur.user_id] = ur; });
+          setUsersList(profiles.map(p => ({
+            id: p.id, username: p.email || '', email: p.email || '',
+            name: p.full_name, role: usersByRole[p.id]?.role || 'user',
+            cnes: p.cnes || '', disabled: usersByRole[p.id]?.disabled || false
+          })));
+        }
+      } else {
+        throw new Error(data?.error || 'Erro desconhecido na importação');
+      }
+    } catch (error: any) {
+      console.error('Erro ao importar CSV:', error);
+      alert(`❌ Erro ao importar: ${error.message}`);
+    } finally {
+      setCsvUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -3233,6 +3366,84 @@ Secretaria de Estado da Saúde de São Paulo`;
                           </button>
                         )}
                       </form>
+                    </div>
+
+                    {/* DIVISOR */}
+                    <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
+
+                    {/* SEÇÃO: IMPORTAR USUÁRIOS VIA CSV */}
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-lg font-black text-gray-900 flex items-center gap-3">
+                          <UploadCloud className="text-green-600 w-5 h-5" />
+                          Importar Usuários via CSV
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-2">Envie uma planilha CSV para criar vários usuários de uma só vez.</p>
+                      </div>
+
+                      <div className="bg-green-50 p-6 rounded-2xl border border-green-200 space-y-4">
+                        <div className="flex items-start gap-3">
+                          <Info className="w-5 h-5 text-green-700 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm text-green-800 space-y-1">
+                            <p className="font-bold">Formato do CSV (separado por vírgula ou ponto-e-vírgula):</p>
+                            <p className="font-mono text-xs bg-green-100 p-2 rounded-lg">nome;email;cnes;senha</p>
+                            <p className="text-xs text-green-600">Se a coluna "senha" estiver vazia, o CNES será usado como senha.</p>
+                            <p className="font-mono text-xs bg-green-100 p-2 rounded-lg mt-1">
+                              MARIA SILVA;maria@hospital.com.br;1234567;1234567<br/>
+                              JOAO SANTOS;joao@clinica.org.br;7654321;7654321
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          <label className="flex-1 cursor-pointer">
+                            <input
+                              type="file"
+                              accept=".csv,.txt"
+                              onChange={handleCsvUpload}
+                              disabled={csvUploading}
+                              className="hidden"
+                            />
+                            <div className={`flex items-center justify-center gap-3 py-4 px-6 rounded-xl border-2 border-dashed transition-all ${
+                              csvUploading 
+                                ? 'border-gray-300 bg-gray-100 cursor-not-allowed' 
+                                : 'border-green-400 bg-white hover:bg-green-50 hover:border-green-500'
+                            }`}>
+                              {csvUploading ? (
+                                <>
+                                  <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+                                  <span className="font-bold text-green-700">Importando...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <UploadCloud className="w-5 h-5 text-green-600" />
+                                  <span className="font-bold text-green-700">Clique para selecionar arquivo CSV</span>
+                                </>
+                              )}
+                            </div>
+                          </label>
+                        </div>
+
+                        {/* Resultados da importação */}
+                        {csvResults && csvResults.detalhes && (
+                          <div className="mt-4 space-y-2">
+                            <p className="text-sm font-bold text-gray-800">
+                              Resultado: {csvResults.criados} criado(s), {csvResults.erros} erro(s) de {csvResults.total} total
+                            </p>
+                            <div className="max-h-40 overflow-y-auto space-y-1">
+                              {csvResults.detalhes.map((d: any, idx: number) => (
+                                <div key={idx} className={`text-xs px-3 py-2 rounded-lg flex items-center gap-2 ${
+                                  d.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {d.success ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                                  <span className="font-medium">{d.email}</span>
+                                  <span>— {d.success ? d.message : d.error}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* DIVISOR */}

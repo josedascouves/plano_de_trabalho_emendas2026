@@ -1294,47 +1294,92 @@ const App: React.FC = () => {
         e.target.value = '';
         return;
       }
+
+      console.log('🚀 Iniciando criação de usuários em paralelo...');
+
+      // Criar usuários em PARALELO (máximo 5 simultâneos para não sobrecarregar)
+      let criados = 0;
+      let erros = 0;
+      const mensagens_erro: string[] = [];
+      const BATCH_SIZE = 5;
+
+      for (let i = 0; i < usuarios.length; i += BATCH_SIZE) {
+        const batch = usuarios.slice(i, i + BATCH_SIZE);
+        
+        const promessas = batch.map(async (usuario, idx) => {
+          try {
+            console.log(`⏳ Criando usuário ${i + idx + 1}/${usuarios.length}: ${usuario.email}`);
+
+            // 1️⃣ Criar usuário em auth.users via Admin API (RPC)
+            const { data: authData, error: authError } = await supabase.rpc('criar_usuario_individual', {
+              p_email: usuario.email,
+              p_senha: usuario.senha,
+              p_nome: usuario.nome,
+              p_cnes: usuario.cnes
+            });
+
+            if (authError) {
+              console.warn(`⚠️ Erro ao criar ${usuario.email}:`, authError);
+              erros++;
+              mensagens_erro.push(`${i + idx + 1}. ${usuario.email}: ${authError.message}`);
+              return { success: false };
+            }
+
+            console.log(`✅ Usuário criado: ${usuario.email} (ID: ${authData?.user_id})`);
+            criados++;
+            return { success: true };
+
+          } catch (err: any) {
+            console.error(`❌ Erro ao processar ${usuario.email}:`, err);
+            erros++;
+            mensagens_erro.push(`${i + idx + 1}. ${usuario.email}: ${err.message}`);
+            return { success: false };
+          }
+        });
+
+        // Aguardar conclusão do batch
+        await Promise.all(promessas);
+      }
+
+      const resultado = {
+        success: erros === 0,
+        total: usuarios.length,
+        criados,
+        erros,
+        mensagens_erro
+      };
+
+      setCsvResults(resultado);
+
+      // Mensagem de conclusão
+      let alertMsg = 
+        `✅ Importação concluída!\n\n` +
+        `Total processado: ${resultado.total}\n` +
+        `Criados: ${resultado.criados}\n` +
+        `Erros: ${resultado.erros}`;
       
-      // Chamar RPC de criação em lote
-      const { data, error } = await supabase.rpc('criar_usuarios_em_lote', {
-        p_usuarios: usuarios
-      });
-      
-      if (error) {
-        console.error('❌ Erro na RPC:', error);
-        throw new Error(error.message || 'Erro ao executar RPC de importação');
+      if (resultado.erros > 0) {
+        alertMsg += `\n\n❌ Erros encontrados:\n${resultado.mensagens_erro.slice(0, 5).join('\n')}`;
+        if (resultado.mensagens_erro.length > 5) {
+          alertMsg += `\n... e mais ${resultado.mensagens_erro.length - 5}`;
+        }
       }
       
-      setCsvResults(data);
-      
-      if (data?.success) {
-        let alertMsg = 
-          `✅ Importação concluída com sucesso!\n\n` +
-          `Total processado: ${data.total}\n` +
-          `Criados: ${data.criados}\n` +
-          `Erros: ${data.erros}`;
-        
-        if (data.erros > 0 && data.mensagens_erro) {
-          alertMsg += `\n\n❌ Erros encontrados:\n${data.mensagens_erro.join('\n')}`;
-        }
-        
-        alert(alertMsg);
-        
-        // Recarregar lista de usuários
-        const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, cnes').order('full_name');
-        const { data: userRoles } = await supabase.from('user_roles').select('user_id, role, disabled');
-        if (profiles && userRoles) {
-          const usersByRole: { [key: string]: any } = {};
-          userRoles.forEach(ur => { usersByRole[ur.user_id] = ur; });
-          setUsersList(profiles.map(p => ({
-            id: p.id, username: p.email || '', email: p.email || '',
-            name: p.full_name, role: usersByRole[p.id]?.role || 'user',
-            cnes: p.cnes || '', disabled: usersByRole[p.id]?.disabled || false
-          })));
-        }
-      } else {
-        throw new Error(data?.error || 'Erro desconhecido na importação');
+      alert(alertMsg);
+
+      // Recarregar lista de usuários
+      const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, cnes').order('full_name');
+      const { data: userRoles } = await supabase.from('user_roles').select('user_id, role, disabled');
+      if (profiles && userRoles) {
+        const usersByRole: { [key: string]: any } = {};
+        userRoles.forEach(ur => { usersByRole[ur.user_id] = ur; });
+        setUsersList(profiles.map(p => ({
+          id: p.id, username: p.email || '', email: p.email || '',
+          name: p.full_name, role: usersByRole[p.id]?.role || 'user',
+          cnes: p.cnes || '', disabled: usersByRole[p.id]?.disabled || false
+        })));
       }
+
     } catch (error: any) {
       console.error('Erro ao importar CSV:', error);
       alert(`❌ Erro ao importar: ${error.message}`);

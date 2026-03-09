@@ -1310,12 +1310,13 @@ const App: React.FC = () => {
           try {
             console.log(`⏳ Criando usuário ${i + idx + 1}/${usuarios.length}: ${usuario.email}`);
 
-            // 1️⃣ Criar usuário via RPC
-            const { data: result, error: rpcError } = await supabase.rpc('criar_usuario_individual', {
+            // Usar a MESMA RPC que já funciona no cadastro individual
+            const { data: result, error: rpcError } = await supabase.rpc('criar_usuario_automático', {
               p_email: usuario.email,
-              p_senha: usuario.senha,
-              p_nome: usuario.nome,
-              p_cnes: usuario.cnes
+              p_password: usuario.senha,
+              p_full_name: usuario.nome,
+              p_cnes: usuario.cnes,
+              p_role: 'user'
             });
 
             if (rpcError) {

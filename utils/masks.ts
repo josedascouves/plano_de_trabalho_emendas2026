@@ -127,9 +127,12 @@ export const maskPhone = (value: string): string => {
     .replace(/(\d{5})(\d)/, '$1-$2');
 };
 
-// CNES: apenas números, máximo 7 dígitos
+// CNES: apenas números, máximo 8 dígitos (suporta múltiplos separados por vírgula)
 export const maskCNES = (value: string): string => {
-  return value.replace(/\D/g, '').slice(0, 7);
+  if (value.includes(',')) {
+    return value.split(',').map(v => v.replace(/[^\d]/g, '').slice(0, 8)).join(',');
+  }
+  return value.replace(/\D/g, '').slice(0, 8);
 };
 
 // Apenas números com separador de milhar

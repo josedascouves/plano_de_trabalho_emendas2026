@@ -94,6 +94,7 @@ const App: React.FC = () => {
   const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
   const [csvUploading, setCsvUploading] = useState(false);
   const [csvResults, setCsvResults] = useState<any>(null);
+  const [selectedCnes, setSelectedCnes] = useState<string>('');
 
   // Plan List & Edit Management
   const [planosList, setPlanosList] = useState<any[]>([]);
@@ -148,10 +149,19 @@ const App: React.FC = () => {
     responsavelAssinatura: ''
   });
 
+  // Helper: parse multi-CNES string into array
+  const parseCnesList = (cnes: string | undefined): string[] => {
+    if (!cnes) return [];
+    return cnes.split(',').map(c => c.trim()).filter(Boolean);
+  };
+
+  // Lista de CNES do usuário atual
+  const userCnesList = useMemo(() => parseCnesList(currentUser?.cnes), [currentUser?.cnes]);
+
   // Função para obter formData inicial
   const getInitialFormData = (): FormState => {
-    // Auto-fill CNES for regular users (non-admin)
-    const userCnes = currentUser?.role === 'user' ? (currentUser?.cnes || '') : '';
+    // Auto-fill CNES for regular users (non-admin) - usa o CNES selecionado
+    const userCnes = currentUser?.role === 'user' ? (selectedCnes || '') : '';
     
     console.log('📝 getInitialFormData() chamado:', {
       currentUser_role: currentUser?.role,
@@ -347,6 +357,9 @@ const App: React.FC = () => {
                 };
                 console.log('🔐 checkSession - Usuário carregado:', userData);
                 setCurrentUser(userData);
+                // Selecionar primeiro CNES se houver múltiplos
+                const cnesList = (profile.cnes || '').split(',').map((c: string) => c.trim()).filter(Boolean);
+                setSelectedCnes(cnesList[0] || '');
                 setIsAuthenticated(true);
               } catch (roleError) {
                 // Se não conseguir pegar role, usa 'user' como padrão
@@ -358,6 +371,8 @@ const App: React.FC = () => {
                   cnes: profile.cnes || ''
                 };
                 setCurrentUser(userData);
+                const cnesListFb = (profile.cnes || '').split(',').map((c: string) => c.trim()).filter(Boolean);
+                setSelectedCnes(cnesListFb[0] || '');
                 setIsAuthenticated(true);
               }
             } else if (profileError && session.user.email === 'sessp.css3@gmail.com') {
@@ -613,33 +628,48 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated, currentUser?.email]);
 
-  // Auto-fill CNES for regular users when they log in
+  // Garantir que selectedCnes é válido quando userCnesList muda
   useEffect(() => {
-    // Preencher CNES para usuários padrão (mesmo que seja vazio, apenas para não-admins)
-    if (isAuthenticated && currentUser?.role === 'user') {
-      const cnesToUse = currentUser.cnes || '';
-      if (formData.beneficiario.cnes !== cnesToUse) {
+    if (userCnesList.length > 0 && (!selectedCnes || !userCnesList.includes(selectedCnes))) {
+      console.log('🔄 Atualizando selectedCnes para:', userCnesList[0]);
+      setSelectedCnes(userCnesList[0]);
+    }
+  }, [userCnesList]);
+
+  // Auto-fill CNES para usuários regulares - usa apenas selectedCnes (nunca valor com vírgula)
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'user' && selectedCnes) {
+      // Apenas atualizar se o valor atual é diferente E se selectedCnes não contém vírgula
+      if (!selectedCnes.includes(',') && formData.beneficiario.cnes !== selectedCnes) {
         updateFormData('beneficiario', { 
           ...formData.beneficiario, 
-          cnes: cnesToUse
+          cnes: selectedCnes
         });
       }
     }
-  }, [isAuthenticated, currentUser?.cnes, currentUser?.role]);
+  }, [isAuthenticated, selectedCnes, currentUser?.role]);
 
   // Quando muda para 'new', garante que CNES é preenchido para usuários padrão
   useEffect(() => {
-    if (currentView === 'new' && isAuthenticated && currentUser?.role === 'user') {
-      const cnesToUse = currentUser.cnes || '';
-      console.log('📝 View mudou para NEW, preenchendo CNES para usuário padrão:', cnesToUse);
-      if (formData.beneficiario.cnes !== cnesToUse) {
+    if (currentView === 'new' && isAuthenticated && currentUser?.role === 'user' && selectedCnes) {
+      console.log('📝 View mudou para NEW, preenchendo CNES para usuário padrão:', selectedCnes);
+      if (!selectedCnes.includes(',') && formData.beneficiario.cnes !== selectedCnes) {
         updateFormData('beneficiario', { 
           ...formData.beneficiario, 
-          cnes: cnesToUse
+          cnes: selectedCnes
         });
       }
     }
-  }, [currentView, isAuthenticated, currentUser?.cnes, currentUser?.role]);
+  }, [currentView, isAuthenticated, selectedCnes, currentUser?.role]);
+
+  // Proteção: se formData.beneficiario.cnes tiver vírgula, forçar para selectedCnes ou primeiro CNES
+  useEffect(() => {
+    if (formData.beneficiario.cnes && formData.beneficiario.cnes.includes(',')) {
+      const firstCnes = selectedCnes || formData.beneficiario.cnes.split(',')[0].trim();
+      console.log('⚠️ CNES com vírgula detectado no form, corrigindo para:', firstCnes);
+      updateFormData('beneficiario', { ...formData.beneficiario, cnes: firstCnes });
+    }
+  }, [formData.beneficiario.cnes]);
 
   // Track form changes - melhorado para detectar mudanças reais
   useEffect(() => {
@@ -718,6 +748,9 @@ const App: React.FC = () => {
                 name: profile.full_name || prev.name,
                 cnes: profile.cnes || ''
               } : null);
+              // Selecionar primeiro CNES se ainda não selecionado
+              const cnesLogin = (profile.cnes || '').split(',').map((c: string) => c.trim()).filter(Boolean);
+              setSelectedCnes(prev => prev || cnesLogin[0] || '');
             }
           } catch (err) {
             console.warn('⚠️ Erro ao carregar profile:', err);
@@ -1142,13 +1175,19 @@ const App: React.FC = () => {
         throw new Error('Perfil do usuário é obrigatório');
       }
 
-      // Validação de CNES - OBRIGATÓRIO
+      // Validação de CNES - OBRIGATÓRIO (aceita múltiplos separados por vírgula)
       if (!newUser.cnes || newUser.cnes.trim().length === 0) {
-        throw new Error('🔴 CNES da instituição é OBRIGATÓRIO (máximo 8 dígitos)');
+        throw new Error('🔴 CNES da instituição é OBRIGATÓRIO (máximo 8 dígitos cada)');
       }
 
-      if (newUser.cnes.trim().length > 8) {
-        throw new Error('CNES não pode ter mais de 8 dígitos');
+      const cnesValues = newUser.cnes.split(',').map(c => c.trim()).filter(Boolean);
+      for (const cnes of cnesValues) {
+        if (cnes.length > 8) {
+          throw new Error(`CNES "${cnes}" não pode ter mais de 8 dígitos`);
+        }
+        if (!/^\d+$/.test(cnes)) {
+          throw new Error(`CNES "${cnes}" deve conter apenas números`);
+        }
       }
 
       console.log('👤 Criando novo usuário:', { email: newUser.email, name: newUser.name, role: newUser.role });
@@ -1231,6 +1270,31 @@ const App: React.FC = () => {
         throw new Error('O arquivo CSV deve ter pelo menos um cabeçalho e uma linha de dados.');
       }
 
+      // Parser CSV que respeita campos entre aspas (para CNES com vírgulas ex: "2078813,2089335")
+      const parseCsvLine = (line: string, sep: string): string[] => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (ch === sep && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += ch;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      };
+
       // Detectar separador (vírgula ou ponto-e-vírgula)
       const headerLine = lines[0];
       const separator = headerLine.includes(';') ? ';' : ',';
@@ -1240,7 +1304,7 @@ const App: React.FC = () => {
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]/g, '');
       
-      const headers = headerLine.split(separator).map(h => normalize(h));
+      const headers = parseCsvLine(headerLine, separator).map(h => normalize(h));
       
       // Mapear colunas flexivelmente
       const findCol = (keywords: string[]) => {
@@ -1265,11 +1329,11 @@ const App: React.FC = () => {
       // Parsear linhas de dados
       const usuarios: any[] = [];
       for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(separator).map(c => c.trim().replace(/^"|"$/g, ''));
+        const cols = parseCsvLine(lines[i], separator);
         const email = cols[colEmail]?.trim();
         const nome = cols[colNome]?.trim();
         const cnes = cols[colCnes]?.trim();
-        const senha = colSenha !== -1 ? cols[colSenha]?.trim() : cnes;
+        const senha = colSenha !== -1 ? cols[colSenha]?.trim() : (cnes?.includes(',') ? cnes.split(',')[0].trim() : cnes);
         
         if (!email || !nome) continue;
         
@@ -3274,6 +3338,28 @@ Secretaria de Estado da Saúde de São Paulo`;
               )}
               {isAuthenticated && (
                 <div className="flex items-center gap-4 border-l border-gray-600 pl-6">
+                  {/* Seletor de CNES para usuários com múltiplos CNES */}
+                  {currentUser?.role === 'user' && (currentUser?.cnes || '').includes(',') && (
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-gray-400" />
+                      <select
+                        value={selectedCnes || parseCnesList(currentUser?.cnes)[0]}
+                        onChange={(e) => {
+                          setSelectedCnes(e.target.value);
+                          updateFormData('beneficiario', { ...formData.beneficiario, cnes: e.target.value });
+                        }}
+                        className="bg-gray-700 text-white text-xs rounded-lg border border-gray-600 px-2 py-1.5 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        title="Selecione o CNES ativo"
+                      >
+                        {parseCnesList(currentUser?.cnes).map(cnes => (
+                          <option key={cnes} value={cnes}>CNES: {cnes}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {currentUser?.role === 'user' && !(currentUser?.cnes || '').includes(',') && currentUser?.cnes && (
+                    <span className="text-xs text-gray-400 hidden sm:block">CNES: {currentUser.cnes}</span>
+                  )}
                   <div className="text-right text-sm hidden sm:block">
                     <p className="text-white font-bold">{currentUser?.name}</p>
                     <p className="text-xs text-gray-400 uppercase">{currentUser?.role}</p>
@@ -4810,21 +4896,53 @@ Secretaria de Estado da Saúde de São Paulo`;
                         placeholder="XX.XXX.XXX/XXXX-XX"
                         required
                       />
-                      <InputField
-                        label="CNES"
-                        name="cnes"
-                        value={formData.beneficiario.cnes}
-                        onChange={(e) => {
-                          // Only allow changes if user is admin
-                          if (currentUser?.role === 'admin') {
-                            updateFormData('beneficiario', { ...formData.beneficiario, cnes: maskCNES(e.target.value) });
-                          }
-                        }}
-                        mask={(val: string) => maskCNES(val)}
-                        placeholder="Código CNES"
-                        disabled={currentUser?.role === 'user'}
-                        title={`Seu CNES: ${currentUser?.cnes || 'não preenchido'}`}
-                      />
+                      {/* CNES - Dropdown para usuários com múltiplos CNES */}
+                      {(() => {
+                        // Detectar múltiplos CNES de qualquer fonte
+                        const hasMultipleCnes = (currentUser?.cnes || '').includes(',') || userCnesList.length > 1;
+                        const cnesOptions = userCnesList.length > 1 ? userCnesList : parseCnesList(currentUser?.cnes);
+                        
+                        if (currentUser?.role === 'user' && hasMultipleCnes && cnesOptions.length > 1) {
+                          return (
+                            <div className="flex flex-col">
+                              <label className="text-sm font-semibold text-gray-700 mb-2">
+                                CNES <span className="text-xs text-gray-500 font-normal">({cnesOptions.length} unidades - selecione)</span>
+                              </label>
+                              <select
+                                value={selectedCnes || cnesOptions[0]}
+                                onChange={(e) => {
+                                  const newCnes = e.target.value;
+                                  setSelectedCnes(newCnes);
+                                  updateFormData('beneficiario', { ...formData.beneficiario, cnes: newCnes });
+                                }}
+                                className="w-full px-4 py-3 rounded-xl border-2 border-blue-300 bg-white text-gray-800 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all font-mono text-base"
+                                title={`Seus CNES: ${cnesOptions.join(', ')}`}
+                              >
+                                {cnesOptions.map(cnes => (
+                                  <option key={cnes} value={cnes}>{cnes}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <InputField
+                            label="CNES"
+                            name="cnes"
+                            value={formData.beneficiario.cnes}
+                            onChange={(e) => {
+                              if (currentUser?.role === 'admin') {
+                                updateFormData('beneficiario', { ...formData.beneficiario, cnes: maskCNES(e.target.value) });
+                              }
+                            }}
+                            mask={(val: string) => maskCNES(val)}
+                            placeholder="Código CNES"
+                            disabled={currentUser?.role === 'user' && !hasMultipleCnes}
+                            title={`Seu CNES: ${selectedCnes || 'não preenchido'}`}
+                          />
+                        );
+                      })()}
                       <InputField
                         label="Email"
                         name="email"

@@ -756,7 +756,19 @@ const UserManagement: React.FC = () => {
 
                     {/* CNES */}
                     <div className="col-span-1">
-                      <p className="text-slate-300 text-sm">{user.cnes || '-'}</p>
+                      {user.cnes ? (
+                        user.cnes.includes(',') ? (
+                          <div className="flex flex-col gap-0.5">
+                            {user.cnes.split(',').map((c: string, i: number) => (
+                              <span key={i} className="text-slate-300 text-xs bg-slate-600 rounded px-1 py-0.5 inline-block w-fit">{c.trim()}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-slate-300 text-sm">{user.cnes}</p>
+                        )
+                      ) : (
+                        <p className="text-slate-300 text-sm">-</p>
+                      )}
                     </div>
 
                     {/* STATUS */}

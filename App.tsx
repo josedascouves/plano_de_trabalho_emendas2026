@@ -1070,29 +1070,27 @@ const App: React.FC = () => {
         throw new Error('E-mail inválido. Use um formato válido (ex: usuario@example.com)');
       }
 
-      // 1️⃣ Atualizar email na tabela auth.users via RPC
-      try {
-        const { error: emailError } = await supabase.rpc('update_user_email', {
-          user_id: editingUser.id,
-          new_email: editingUser.email
-        });
-        
-        if (emailError) {
-          console.warn('⚠️ Aviso ao atualizar email no Supabase Auth:', emailError);
-          // Continua mesmo se falhar, pois pode ser erro de permissão
-        } else {
-          console.log('✅ Email atualizado no Supabase Auth');
-        }
-      } catch (err: any) {
-        console.warn('⚠️ Erro ao tentar atualizar email via RPC:', err.message);
+      // 1️⃣ Atualizar email via RPC (atualiza auth.users + auth.identities + profiles)
+      const { data: emailResult, error: emailError } = await supabase.rpc('update_user_email', {
+        p_user_id: editingUser.id,
+        p_new_email: editingUser.email
+      });
+      
+      if (emailError) {
+        throw new Error('Erro ao atualizar email: ' + emailError.message);
       }
+      
+      if (emailResult && !emailResult.success) {
+        throw new Error(emailResult.error || 'Erro ao atualizar email no banco de autenticação');
+      }
+      
+      console.log('✅ Email atualizado em auth.users, auth.identities e profiles');
 
-      // 2️⃣ Atualizar perfil (nome, email, CNES)
+      // 2️⃣ Atualizar perfil (nome, CNES) - email já foi atualizado pela RPC
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ 
           full_name: editingUser.name, 
-          email: editingUser.email,
           cnes: editingUser.cnes || null
         })
         .eq('id', editingUser.id);
@@ -1117,7 +1115,7 @@ const App: React.FC = () => {
         }
       }
 
-      alert('✅ Usuário atualizado com sucesso!\n\nObs: Se o email foi alterado, o usuário precisa fazer login novamente com o novo email.');
+      alert('✅ Usuário atualizado com sucesso!\n\nSe o email foi alterado, o usuário deve fazer login com o novo email.');
       setShowEditUserModal(false);
       setEditingUser({ id: '', email: '', name: '', cnes: '', password: '' });
 

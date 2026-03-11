@@ -54,7 +54,34 @@ BEGIN
       )
       RETURNING id INTO v_user_id;
 
-      -- 2️⃣ Criar perfil em profiles
+      -- 2️⃣ Criar identity (ESSENCIAL para login funcionar!)
+      INSERT INTO auth.identities (
+        id,
+        user_id,
+        identity_data,
+        provider,
+        provider_id,
+        last_sign_in_at,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        gen_random_uuid(),
+        v_user_id,
+        jsonb_build_object(
+          'sub', v_user_id::text,
+          'email', LOWER(TRIM(v_usuario ->> 'email')),
+          'email_verified', true,
+          'phone_verified', false
+        ),
+        'email',
+        v_user_id::text,
+        NOW(),
+        NOW(),
+        NOW()
+      );
+
+      -- 4️⃣ Criar perfil em profiles
       INSERT INTO public.profiles (
         id,
         full_name,
@@ -72,7 +99,7 @@ BEGIN
         NOW()
       );
 
-      -- 3️⃣ Criar role de usuário em user_roles
+      -- 5️⃣ Criar role de usuário em user_roles
       INSERT INTO public.user_roles (
         user_id,
         role,

@@ -1072,8 +1072,8 @@ const App: React.FC = () => {
 
       // 1️⃣ Atualizar email via RPC (atualiza auth.users + auth.identities + profiles)
       const { data: emailResult, error: emailError } = await supabase.rpc('update_user_email', {
-        p_user_id: editingUser.id,
-        p_new_email: editingUser.email
+        user_id: editingUser.id,
+        new_email: editingUser.email
       });
       
       if (emailError) {

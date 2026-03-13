@@ -88,6 +88,9 @@ export interface FormState {
     cnpj: string;
     email: string;
     telefone: string;
+    contaBancaria: string;
+    extratoUrl: string;
+    extratoFilename: string;
   };
   planejamento: {
     diretrizId: string;

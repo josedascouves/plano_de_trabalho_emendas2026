@@ -42,7 +42,10 @@ import {
   ChevronDown,
   Key,
   HelpCircle,
-  Search
+  Search,
+  Eye,
+  Landmark,
+  Paperclip
 } from 'lucide-react';
 import { FormState, User } from './types';
 import { 
@@ -172,7 +175,7 @@ const App: React.FC = () => {
     
     return {
       emenda: { parlamentar: '', numero: '', valor: '', valorExtenso: '', programa: '' },
-      beneficiario: { nome: '', cnes: userCnes, cnpj: '', email: '', telefone: '' },
+      beneficiario: { nome: '', cnes: userCnes, cnpj: '', email: '', telefone: '', contaBancaria: '', extratoUrl: '', extratoFilename: '' },
       planejamento: { diretrizId: '', objetivoId: '', metaIds: [] },
       acoesServicos: [],
       metasQualitativas: [],
@@ -191,6 +194,11 @@ const App: React.FC = () => {
   const [currentMetaQualitativa, setCurrentMetaQualitativa] = useState({ meta: '', valor: '' });
 
   const [currentNatureza, setCurrentNatureza] = useState({ codigo: '', valor: '' });
+
+  // ======== UPLOAD EXTRATO BANCÁRIO ========
+  const [isUploadingExtrato, setIsUploadingExtrato] = useState(false);
+  const [extratoPreviewUrl, setExtratoPreviewUrl] = useState<string | null>(null);
+  const extratoInputRef = useRef<HTMLInputElement>(null);
 
   const LOGO_URL_COLORIDA = "/img/logo_colorido.png";  // Versão oficial colorida
   const LOGO_URL_BRANCA = "/img/logo_branco.png";      // Versão oficial branca para header
@@ -1560,10 +1568,12 @@ const App: React.FC = () => {
         formData.emenda.valor !== '0,00' &&
         formData.emenda.programa?.trim()
       ),
-      // Seção 2: Beneficiário - completa se nome e cnpj preenchidos
+      // Seção 2: Beneficiário - completa se nome, cnpj, conta bancária e extrato preenchidos
       'beneficiario': !!(
         formData.beneficiario.nome?.trim() &&
-        formData.beneficiario.cnpj?.trim()
+        formData.beneficiario.cnpj?.trim() &&
+        formData.beneficiario.contaBancaria?.trim() &&
+        formData.beneficiario.extratoUrl?.trim()
       ),
       // Seção 3: Alinhamento - completa se diretriz e objetivo selecionados
       'alinhamento': !!(
@@ -1731,7 +1741,10 @@ const App: React.FC = () => {
           cnes: (plano.cnes || '').trim(),
           cnpj: (plano.beneficiario_cnpj || '').trim(),
           email: (plano.beneficiario_email || '').trim(),
-          telefone: (plano.beneficiario_telefone || '').trim()
+          telefone: (plano.beneficiario_telefone || '').trim(),
+          contaBancaria: (plano.conta_bancaria || '').trim(),
+          extratoUrl: (plano.extrato_url || '').trim(),
+          extratoFilename: (plano.extrato_filename || '').trim()
         },
         planejamento: {
           diretrizId: (plano.diretriz_id || '').trim(),
@@ -2081,6 +2094,9 @@ const App: React.FC = () => {
             beneficiario_nome: formData.beneficiario.nome,
             beneficiario_cnpj: formData.beneficiario.cnpj,
             cnes: formData.beneficiario.cnes || null,
+            conta_bancaria: formData.beneficiario.contaBancaria || null,
+            extrato_url: formData.beneficiario.extratoUrl || null,
+            extrato_filename: formData.beneficiario.extratoFilename || null,
             justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
             updated_at: new Date().toISOString()
@@ -2138,6 +2154,9 @@ const App: React.FC = () => {
             beneficiario_nome: formData.beneficiario.nome,
             beneficiario_cnpj: formData.beneficiario.cnpj,
             cnes: formData.beneficiario.cnes || null,
+            conta_bancaria: formData.beneficiario.contaBancaria || null,
+            extrato_url: formData.beneficiario.extratoUrl || null,
+            extrato_filename: formData.beneficiario.extratoFilename || null,
             justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
             pdf_url: null,
@@ -2287,6 +2306,9 @@ const App: React.FC = () => {
             beneficiario_email: formData.beneficiario.email || null,
             beneficiario_telefone: formData.beneficiario.telefone || null,
             cnes: formData.beneficiario.cnes || null,
+            conta_bancaria: formData.beneficiario.contaBancaria || null,
+            extrato_url: formData.beneficiario.extratoUrl || null,
+            extrato_filename: formData.beneficiario.extratoFilename || null,
             justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
             diretriz_id: formData.planejamento.diretrizId || null,
@@ -2391,6 +2413,9 @@ const App: React.FC = () => {
           beneficiario_email: formData.beneficiario.email || null,
           beneficiario_telefone: formData.beneficiario.telefone || null,
           cnes: formData.beneficiario.cnes || null,
+          conta_bancaria: formData.beneficiario.contaBancaria || null,
+          extrato_url: formData.beneficiario.extratoUrl || null,
+          extrato_filename: formData.beneficiario.extratoFilename || null,
           justificativa: formData.justificativa,
           responsavel_assinatura: formData.responsavelAssinatura,
           diretriz_id: formData.planejamento.diretrizId || null,
@@ -2496,6 +2521,8 @@ const App: React.FC = () => {
     // DADOS DO BENEFICIÁRIO - obrigatório
     if (!formData.beneficiario.nome?.trim()) missingFields.push('Nome do Beneficiário');
     if (!formData.beneficiario.cnpj?.trim()) missingFields.push('CNPJ do Beneficiário');
+    if (!formData.beneficiario.contaBancaria?.trim()) missingFields.push('Conta Bancária');
+    if (!formData.beneficiario.extratoUrl?.trim()) missingFields.push('Extrato Bancário (faça upload do arquivo)');
 
     // ALINHAMENTO ESTRATÉGICO - obrigatório
     if (!formData.planejamento.diretrizId) missingFields.push('Diretriz Estratégica');
@@ -2565,6 +2592,152 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error("❌ Erro ao registrar evento de PDF:", error);
       // Não interrompe o fluxo se falhar ao registrar
+    }
+  };
+
+  // ======== UPLOAD E COMPRESSÃO DE EXTRATO BANCÁRIO ========
+  const compressImage = (file: File, maxWidth: number = 1200, quality: number = 0.7): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas não suportado')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Falha ao comprimir imagem'));
+          },
+          'image/webp',
+          quality
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Falha ao carregar imagem')); };
+      img.src = url;
+    });
+  };
+
+  const handleExtratoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo de arquivo
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('❌ Tipo de arquivo não permitido.\n\nFormatos aceitos: PDF, JPEG, PNG, WebP');
+      if (extratoInputRef.current) extratoInputRef.current.value = '';
+      return;
+    }
+
+    // Validar tamanho (máx 1MB antes da compressão)
+    if (file.size > 1 * 1024 * 1024) {
+      alert('❌ Arquivo muito grande.\n\nTamanho máximo: 1MB');
+      if (extratoInputRef.current) extratoInputRef.current.value = '';
+      return;
+    }
+
+    setIsUploadingExtrato(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessão expirada');
+
+      let uploadBlob: Blob = file;
+      let uploadExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
+      let uploadMimeType = file.type;
+
+      // Comprimir imagens para WebP (reduz significativamente o tamanho)
+      if (file.type.startsWith('image/')) {
+        uploadBlob = await compressImage(file);
+        uploadExt = 'webp';
+        uploadMimeType = 'image/webp';
+      }
+
+      // Nome único para o arquivo: userId/timestamp.ext
+      const filePath = `${user.id}/${Date.now()}.${uploadExt}`;
+
+      // Se já existe um extrato anterior, remover do storage
+      if (formData.beneficiario.extratoUrl) {
+        await supabase.storage
+          .from('extratos-bancarios')
+          .remove([formData.beneficiario.extratoUrl]);
+      }
+
+      // Upload para Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('extratos-bancarios')
+        .upload(filePath, uploadBlob, {
+          contentType: uploadMimeType,
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Atualizar formData com os dados do extrato
+      updateFormData('beneficiario', {
+        ...formData.beneficiario,
+        extratoUrl: filePath,
+        extratoFilename: file.name
+      });
+
+      alert(`✅ Extrato enviado com sucesso!\n\nArquivo: ${file.name}\nTamanho original: ${(file.size / 1024).toFixed(0)} KB\nTamanho comprimido: ${(uploadBlob.size / 1024).toFixed(0)} KB`);
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar extrato:', error);
+      alert(`❌ Erro ao enviar extrato:\n${error.message}`);
+    } finally {
+      setIsUploadingExtrato(false);
+      if (extratoInputRef.current) extratoInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveExtrato = async () => {
+    if (!formData.beneficiario.extratoUrl) return;
+    
+    try {
+      await supabase.storage
+        .from('extratos-bancarios')
+        .remove([formData.beneficiario.extratoUrl]);
+
+      updateFormData('beneficiario', {
+        ...formData.beneficiario,
+        extratoUrl: '',
+        extratoFilename: ''
+      });
+    } catch (error: any) {
+      console.error('Erro ao remover extrato:', error);
+    }
+  };
+
+  const getExtratoPublicUrl = (path: string): string => {
+    const { data } = supabase.storage
+      .from('extratos-bancarios')
+      .getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const handleViewExtrato = async (extratoPath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('extratos-bancarios')
+        .createSignedUrl(extratoPath, 300); // URL válida por 5 minutos
+
+      if (error) throw error;
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    } catch (error: any) {
+      console.error('❌ Erro ao visualizar extrato:', error);
+      alert(`❌ Erro ao abrir extrato:\n${error.message}`);
     }
   };
 
@@ -2800,7 +2973,7 @@ Programa: ${formData.emenda.programa}
 Valor Total: R$ ${formData.emenda.valor}
 Beneficiário: ${formData.beneficiario.nome}
 CNPJ: ${formData.beneficiario.cnpj}
-CNES: ${formData.beneficiario.cnes}
+CNES: ${formData.beneficiario.cnes}${formData.beneficiario.contaBancaria ? `\nConta Bancária: ${formData.beneficiario.contaBancaria}` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Por favor, anexe o PDF assinado a este email antes de enviar.
@@ -3004,6 +3177,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                     <p className="text-sm font-semibold text-gray-900">{formData.beneficiario.nome || '—'}</p>
                     <p className="text-xs text-gray-700 font-mono">CNPJ: {formData.beneficiario.cnpj || '—'}</p>
                     {formData.beneficiario.cnes && <p className="text-xs text-gray-700 font-mono">CNES: {formData.beneficiario.cnes}</p>}
+                    {formData.beneficiario.contaBancaria && <p className="text-xs text-gray-700 font-mono">Conta Bancária: {formData.beneficiario.contaBancaria}</p>}
                   </div>
                 </div>
               </div>
@@ -4545,6 +4719,37 @@ Secretaria de Estado da Saúde de São Paulo`;
                           </div>
                         );
                       })()}
+                      {/* ALERTA DE CONTAS BANCÁRIAS DUPLICADAS */}
+                      {(() => {
+                        const contaCount: Record<string, string[]> = {};
+                        planosList.forEach(p => {
+                          const conta = (p.conta_bancaria || '').trim();
+                          if (conta) {
+                            if (!contaCount[conta]) contaCount[conta] = [];
+                            contaCount[conta].push(p.parlamentar || p.numero_emenda || p.id);
+                          }
+                        });
+                        const duplicadas = Object.entries(contaCount).filter(([, ids]) => ids.length > 1);
+                        if (duplicadas.length === 0) return null;
+                        return (
+                          <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4 mb-4">
+                            <div className="flex items-start gap-3">
+                              <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-sm font-black text-amber-800 uppercase tracking-wider mb-2">⚠️ Conta(s) Bancária(s) Utilizada(s) em Mais de 1 Plano</p>
+                                {duplicadas.map(([conta, planos]) => (
+                                  <div key={conta} className="mb-1">
+                                    <p className="text-sm text-amber-900">
+                                      <span className="font-mono font-bold bg-amber-200 px-2 py-0.5 rounded">{conta}</span>
+                                      <span className="text-amber-700 ml-2">→ usada em {planos.length} planos: {planos.join(', ')}</span>
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {planosList
                         .filter(plano => {
                           if (filtros.cnes && !plano.cnes?.toLowerCase().includes(filtros.cnes.toLowerCase())) return false;
@@ -4572,7 +4777,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                 className="w-5 h-5 accent-amber-600 mt-0.5 flex-shrink-0"
                               />
                             )}
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 flex-1">
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 flex-1">
                               <div>
                                 <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Parlamentar</p>
                                 <p className="text-sm font-bold text-gray-900 truncate">{plano.parlamentar}</p>
@@ -4594,6 +4799,17 @@ Secretaria de Estado da Saúde de São Paulo`;
                               <p className="text-sm font-bold text-gray-900 truncate font-mono">{plano.beneficiario_cnpj || '—'}</p>
                             </div>
                             <div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Conta Bancária</p>
+                              {plano.conta_bancaria && planosList.filter(p => p.conta_bancaria && p.conta_bancaria.trim() === plano.conta_bancaria.trim() && p.id !== plano.id).length > 0 ? (
+                                <div className="flex items-center gap-1">
+                                  <p className="text-sm font-bold text-amber-700 truncate font-mono">{plano.conta_bancaria}</p>
+                                  <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" title="Conta usada em outro plano!" />
+                                </div>
+                              ) : (
+                                <p className="text-sm font-bold text-gray-900 truncate font-mono">{plano.conta_bancaria || '—'}</p>
+                              )}
+                            </div>
+                            <div>
                               <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Data</p>
                               <div className="space-y-0.5">
                                 <p className="text-sm font-bold text-gray-900">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</p>
@@ -4608,6 +4824,14 @@ Secretaria de Estado da Saúde de São Paulo`;
                             </div>
                           </div>
                           <div className="border-t border-gray-100 pt-2 flex gap-2 justify-end flex-wrap">
+                            {plano.extrato_url && (
+                              <button
+                                onClick={() => handleViewExtrato(plano.extrato_url)}
+                                className="flex items-center gap-1 px-3 py-2 bg-blue-100 text-blue-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-blue-200 transition-all"
+                              >
+                                <Eye className="w-4 h-4" /> Ver Extrato
+                              </button>
+                            )}
                             {canEditPlan(plano.created_by) && (
                               <>
                                 <button 
@@ -4958,6 +5182,89 @@ Secretaria de Estado da Saúde de São Paulo`;
                       mask={(val: string) => maskPhone(val)}
                       placeholder="(XX) 9XXXX-XXXX"
                     />
+
+                    {/* CONTA BANCÁRIA E EXTRATO */}
+                    <div className="border-t border-gray-200 pt-6 mt-6">
+                      <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <Landmark className="w-4 h-4 text-blue-600" />
+                        Dados Bancários
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <InputField
+                          label="Conta Bancária"
+                          name="contaBancaria"
+                          value={formData.beneficiario.contaBancaria}
+                          onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, contaBancaria: e.target.value })}
+                          placeholder="Banco / Agência / Conta (Ex: 001 / 1234-5 / 12345-6)"
+                          required
+                        />
+                        <div className="flex flex-col">
+                          <label className="text-sm font-semibold text-gray-700 mb-2">
+                            Extrato Bancário <span className="text-red-600">*</span>
+                          </label>
+                          {formData.beneficiario.extratoUrl ? (
+                            <div className="flex items-center gap-3 p-3 bg-green-50 border-2 border-green-300 rounded-xl">
+                              <Paperclip className="w-5 h-5 text-green-600 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-green-800 truncate">{formData.beneficiario.extratoFilename || 'Extrato enviado'}</p>
+                                <p className="text-xs text-green-600">Arquivo enviado com sucesso</p>
+                              </div>
+                              <div className="flex gap-2 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewExtrato(formData.beneficiario.extratoUrl)}
+                                  className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-all"
+                                  title="Visualizar extrato"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleRemoveExtrato}
+                                  className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all"
+                                  title="Remover extrato"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <input
+                                ref={extratoInputRef}
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                onChange={handleExtratoUpload}
+                                disabled={isUploadingExtrato}
+                                className="hidden"
+                                id="extrato-upload"
+                              />
+                              <label
+                                htmlFor="extrato-upload"
+                                className={`flex items-center justify-center gap-3 w-full px-4 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+                                  isUploadingExtrato
+                                    ? 'border-gray-300 bg-gray-50 text-gray-400 cursor-not-allowed'
+                                    : 'border-blue-300 bg-blue-50 text-blue-700 hover:border-blue-500 hover:bg-blue-100'
+                                }`}
+                              >
+                                {isUploadingExtrato ? (
+                                  <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <span className="text-sm font-bold">Enviando...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <UploadCloud className="w-5 h-5" />
+                                    <span className="text-sm font-bold">Enviar Extrato</span>
+                                    <span className="text-xs text-blue-500">(PDF, JPG, PNG - máx 1MB)</span>
+                                  </>
+                                )}
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </Section>
 

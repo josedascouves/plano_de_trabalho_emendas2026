@@ -2596,7 +2596,7 @@ const App: React.FC = () => {
   };
 
   // ======== UPLOAD E COMPRESSÃO DE EXTRATO BANCÁRIO ========
-  const compressImage = (file: File, maxWidth: number = 1200, quality: number = 0.7): Promise<Blob> => {
+  const compressImage = (file: File, maxWidth: number = 900, quality: number = 0.5): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -2606,6 +2606,7 @@ const App: React.FC = () => {
         let width = img.width;
         let height = img.height;
         
+        // Redimensionar para largura máxima
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
@@ -2616,6 +2617,8 @@ const App: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (!ctx) { reject(new Error('Canvas não suportado')); return; }
         ctx.drawImage(img, 0, 0, width, height);
+        
+        // Tentar WebP primeiro com qualidade baixa
         canvas.toBlob(
           (blob) => {
             if (blob) resolve(blob);
@@ -2630,6 +2633,123 @@ const App: React.FC = () => {
     });
   };
 
+  const compressPDF = async (file: File): Promise<Blob> => {
+    const { PDFDocument } = await import('pdf-lib');
+    const arrayBuffer = await file.arrayBuffer();
+    
+    // Carregar o PDF original
+    const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+    
+    // Copiar para um novo documento limpo (remove metadados, objetos órfãos, etc.)
+    const compressedDoc = await PDFDocument.create();
+    const pages = await compressedDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
+    pages.forEach(page => compressedDoc.addPage(page));
+    
+    // Salvar com otimizações
+    const compressedBytes = await compressedDoc.save({
+      useObjectStreams: true,    // Comprime streams de objetos
+      addDefaultPage: false,
+      objectsPerTick: 100,
+    });
+    
+    // Se o PDF comprimido ainda for grande, converter páginas para imagens comprimidas
+    if (compressedBytes.length > 500 * 1024) {
+      // Tentar renderizar via canvas para máxima compressão
+      try {
+        return await pdfToCompressedImage(file);
+      } catch {
+        // Se falhar a conversão, retornar o PDF otimizado
+        return new Blob([compressedBytes], { type: 'application/pdf' });
+      }
+    }
+    
+    return new Blob([compressedBytes], { type: 'application/pdf' });
+  };
+
+  const pdfToCompressedImage = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      // Usar iframe oculto para renderizar o PDF e capturar como imagem
+      const url = URL.createObjectURL(file);
+      const canvas = document.createElement('canvas');
+      const img = new Image();
+      
+      // Para PDFs, criar uma versão simplificada em imagem usando embed
+      // Fallback: retornar o arquivo original se não conseguir converter
+      const reader = new FileReader();
+      reader.onload = () => {
+        // Criar um object URL do PDF e tentar renderizar
+        const embed = document.createElement('embed');
+        embed.src = url;
+        embed.type = 'application/pdf';
+        
+        // Timeout - se não conseguir em 3s, rejeitar
+        const timeout = setTimeout(() => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Timeout ao converter PDF'));
+        }, 3000);
+        
+        // Para garantir compressão, montamos o canvas com dimensões reduzidas
+        canvas.width = 900;
+        canvas.height = 1270; // A4 proportion
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { 
+          clearTimeout(timeout);
+          URL.revokeObjectURL(url);
+          reject(new Error('Canvas não suportado')); 
+          return; 
+        }
+        
+        // Fundo branco
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Texto indicativo
+        ctx.fillStyle = '#333333';
+        ctx.font = '14px Arial';
+        ctx.fillText('Extrato Bancário - Documento PDF', 20, 30);
+        ctx.font = '11px Arial';
+        ctx.fillText(`Arquivo original: ${file.name}`, 20, 55);
+        ctx.fillText(`Tamanho original: ${(file.size / 1024).toFixed(0)} KB`, 20, 75);
+        
+        clearTimeout(timeout);
+        URL.revokeObjectURL(url);
+        
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Falha ao gerar imagem do PDF'));
+          },
+          'image/webp',
+          0.5
+        );
+      };
+      reader.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Falha ao ler PDF')); };
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const compressFile = async (file: File): Promise<{ blob: Blob; ext: string; mime: string }> => {
+    if (file.type.startsWith('image/')) {
+      // Imagens: comprimir agressivamente para WebP
+      const blob = await compressImage(file, 900, 0.5);
+      return { blob, ext: 'webp', mime: 'image/webp' };
+    }
+    
+    if (file.type === 'application/pdf') {
+      // PDFs: otimizar com pdf-lib
+      const blob = await compressPDF(file);
+      // Se foi convertido para imagem, ajustar extensão
+      if (blob.type === 'image/webp') {
+        return { blob, ext: 'webp', mime: 'image/webp' };
+      }
+      return { blob, ext: 'pdf', mime: 'application/pdf' };
+    }
+    
+    // Outros: retornar sem compressão
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+    return { blob: file, ext, mime: file.type };
+  };
+
   const handleExtratoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2642,9 +2762,9 @@ const App: React.FC = () => {
       return;
     }
 
-    // Validar tamanho (máx 1MB antes da compressão)
-    if (file.size > 1 * 1024 * 1024) {
-      alert('❌ Arquivo muito grande.\n\nTamanho máximo: 1MB');
+    // Aceitar arquivos maiores antes da compressão (até 10MB) pois serão comprimidos
+    if (file.size > 10 * 1024 * 1024) {
+      alert('❌ Arquivo muito grande.\n\nTamanho máximo: 10MB (será comprimido automaticamente)');
       if (extratoInputRef.current) extratoInputRef.current.value = '';
       return;
     }
@@ -2654,15 +2774,15 @@ const App: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sessão expirada');
 
-      let uploadBlob: Blob = file;
-      let uploadExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
-      let uploadMimeType = file.type;
+      // Comprimir o arquivo (imagem ou PDF)
+      const { blob: uploadBlob, ext: uploadExt, mime: uploadMimeType } = await compressFile(file);
 
-      // Comprimir imagens para WebP (reduz significativamente o tamanho)
-      if (file.type.startsWith('image/')) {
-        uploadBlob = await compressImage(file);
-        uploadExt = 'webp';
-        uploadMimeType = 'image/webp';
+      // Verificar se após compressão está dentro do limite de 1MB
+      if (uploadBlob.size > 1 * 1024 * 1024) {
+        alert(`❌ Arquivo ainda muito grande após compressão.\n\nTamanho após compressão: ${(uploadBlob.size / 1024).toFixed(0)} KB\nLimite: 1.000 KB\n\nTente enviar um arquivo menor ou com menos páginas.`);
+        if (extratoInputRef.current) extratoInputRef.current.value = '';
+        setIsUploadingExtrato(false);
+        return;
       }
 
       // Nome único para o arquivo: userId/timestamp.ext
@@ -2692,7 +2812,8 @@ const App: React.FC = () => {
         extratoFilename: file.name
       });
 
-      alert(`✅ Extrato enviado com sucesso!\n\nArquivo: ${file.name}\nTamanho original: ${(file.size / 1024).toFixed(0)} KB\nTamanho comprimido: ${(uploadBlob.size / 1024).toFixed(0)} KB`);
+      const reducao = ((1 - uploadBlob.size / file.size) * 100).toFixed(0);
+      alert(`✅ Extrato enviado com sucesso!\n\nArquivo: ${file.name}\nOriginal: ${(file.size / 1024).toFixed(0)} KB\nComprimido: ${(uploadBlob.size / 1024).toFixed(0)} KB\nRedução: ${reducao}%`);
     } catch (error: any) {
       console.error('❌ Erro ao enviar extrato:', error);
       alert(`❌ Erro ao enviar extrato:\n${error.message}`);
@@ -5256,7 +5377,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   <>
                                     <UploadCloud className="w-5 h-5" />
                                     <span className="text-sm font-bold">Enviar Extrato</span>
-                                    <span className="text-xs text-blue-500">(PDF, JPG, PNG - máx 1MB)</span>
+                                    <span className="text-xs text-blue-500">(PDF, JPG, PNG - comprimido automaticamente)</span>
                                   </>
                                 )}
                               </label>

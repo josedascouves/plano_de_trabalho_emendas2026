@@ -1586,8 +1586,8 @@ const App: React.FC = () => {
       'metas-qualitativas': formData.metasQualitativas.length > 0,
       // Seção 6: Execução Financeira - OPCIONAL (só completa se houver itens)
       'execucao-financeira': formData.naturezasDespesa.length > 0,
-      // Seção 7: Finalização - completa se justificativa e responsável preenchidos
-      'finalizacao': !!formData.justificativa?.trim() && !!formData.responsavelAssinatura?.trim()
+      // Seção 7: Finalização - completa se justificativa (min 2000 chars) e responsável preenchidos
+      'finalizacao': !!(formData.justificativa?.trim() && formData.justificativa.trim().length >= 2000 && formData.responsavelAssinatura?.trim())
     }));
   }, [formData]);
 
@@ -2537,8 +2537,12 @@ const App: React.FC = () => {
     // EXECUÇÃO FINANCEIRA - obrigatório (pelo menos um item)
     if (formData.naturezasDespesa.length === 0) missingFields.push('Execução Financeira - Natureza de Despesa (adicione pelo menos uma despesa)');
 
-    // JUSTIFICATIVA TÉCNICA - obrigatório
-    if (!formData.justificativa?.trim()) missingFields.push('Justificativa Técnica');
+    // JUSTIFICATIVA TÉCNICA - obrigatório (mínimo 2000 caracteres)
+    if (!formData.justificativa?.trim()) {
+      missingFields.push('Justificativa Técnica');
+    } else if (formData.justificativa.trim().length < 2000) {
+      missingFields.push(`Justificativa Técnica (mínimo 2.000 caracteres — atual: ${formData.justificativa.trim().length})`);
+    }
 
     // RESPONSÁVEL PELA ASSINATURA - obrigatório
     if (!formData.responsavelAssinatura?.trim()) missingFields.push('Responsável pela Assinatura');
@@ -5934,14 +5938,25 @@ Secretaria de Estado da Saúde de São Paulo`;
                 >
                   {!sentSuccess ? (
                     <div className="space-y-6">
-                      <TextArea
-                        label="Justificativa Técnica"
-                        value={formData.justificativa}
-                        onChange={(e) => updateFormData('justificativa', e.target.value)}
-                        placeholder="Descreva a justificativa técnica do plano de trabalho..."
-                        rows={5}
-                        required
-                      />
+                      <div>
+                        <TextArea
+                          label="Justificativa Técnica"
+                          value={formData.justificativa}
+                          onChange={(e) => updateFormData('justificativa', e.target.value)}
+                          placeholder="Descreva a justificativa técnica do plano de trabalho (mínimo 2.000 caracteres)..."
+                          rows={8}
+                          required
+                        />
+                        <div className={`mt-2 text-xs font-bold tracking-wider ${(formData.justificativa?.trim().length || 0) >= 2000 ? 'text-green-600' : 'text-red-600'}`}>
+                          {(formData.justificativa?.trim().length || 0).toLocaleString('pt-BR')} / 2.000 caracteres
+                          {(formData.justificativa?.trim().length || 0) < 2000 && (
+                            <span className="ml-2 text-red-500">— faltam {(2000 - (formData.justificativa?.trim().length || 0)).toLocaleString('pt-BR')}</span>
+                          )}
+                          {(formData.justificativa?.trim().length || 0) >= 2000 && (
+                            <span className="ml-2">✓ Mínimo atingido</span>
+                          )}
+                        </div>
+                      </div>
 
                       <InputField
                         label="Responsável pela Assinatura"

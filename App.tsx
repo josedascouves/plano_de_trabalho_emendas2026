@@ -4880,6 +4880,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                     </p>
                                   </div>
                                 ))}
+                                <p className="text-sm font-semibold text-red-700 mt-3 border-t border-amber-300 pt-2">⚠ Não serão efetuados pagamentos de emendas que utilizem conta bancária previamente utilizada.</p>
                               </div>
                             </div>
                           </div>
@@ -4962,10 +4963,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   )}
                                 </div>
                               </div>
-                              {/* Mensagem de conta duplicada */}
-                              {plano.conta_bancaria && planosList.filter(p => p.conta_bancaria && p.conta_bancaria.trim() === plano.conta_bancaria.trim() && p.id !== plano.id).length > 0 && (
-                                <p className="text-xs font-semibold text-red-700 mt-1">⚠ Não serão efetuados pagamentos de emendas que utilizem conta bancária previamente utilizada.</p>
-                              )}
+
                             </div>
                             {/* Botões inline */}
                             <div className="flex gap-1.5 flex-shrink-0 items-start">

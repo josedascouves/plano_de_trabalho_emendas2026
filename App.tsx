@@ -2099,6 +2099,8 @@ const App: React.FC = () => {
             extrato_filename: formData.beneficiario.extratoFilename || null,
             justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
+            created_by_name: currentUser?.name || null,
+            created_by_email: currentUser?.username || user.email || null,
             updated_at: new Date().toISOString()
           })
           .eq('id', planoSalvoId);
@@ -2160,7 +2162,9 @@ const App: React.FC = () => {
             justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
             pdf_url: null,
-            created_by: user.id
+            created_by: user.id,
+            created_by_name: currentUser?.name || null,
+            created_by_email: currentUser?.username || user.email || null
           }])
           .select()
           .single();
@@ -2317,7 +2321,9 @@ const App: React.FC = () => {
             updated_at: new Date().toISOString(),
             edit_count: newEditCount,
             last_edited_at: new Date().toISOString(),
-            last_edited_by: user.id
+            last_edited_by: user.id,
+            created_by_name: currentUser?.name || null,
+            created_by_email: currentUser?.username || user.email || null
           })
           .eq('id', planoSalvoId);
 
@@ -2422,13 +2428,17 @@ const App: React.FC = () => {
           objetivo_id: formData.planejamento.objetivoId || null,
           metas_ids: formData.planejamento.metaIds,
           pdf_url: null,
-          created_by: user.id
+          created_by: user.id,
+          created_by_name: currentUser?.name || null,
+          created_by_email: currentUser?.username || user.email || null
         }])
         .select()
         .single();
 
       if (planoError) {
         console.error("❌ Erro ao inserir plano:", planoError);
+        console.error("❌ DETALHES DO ERRO:", JSON.stringify(planoError, null, 2));
+        console.error("❌ code:", planoError.code, "message:", planoError.message, "details:", planoError.details, "hint:", planoError.hint);
         throw planoError;
       }
 
@@ -3677,8 +3687,8 @@ Secretaria de Estado da Saúde de São Paulo`;
       </header>
 
       <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        {/* Container centralizado - realmente centralizado */}
-        <div style={{ maxWidth: '1120px', margin: '0 auto', padding: '2rem 1.5rem' }}>
+        {/* Container centralizado - largura adaptável por view */}
+        <div style={{ maxWidth: currentView === 'list' || currentView === 'dashboard' ? '1600px' : '1120px', margin: '0 auto', padding: '2rem 1.5rem' }}>
           {/* MODAL GERENCIAMENTO DE USUÁRIOS */}
           {showUserManagement && currentUser?.role === 'admin' && (
             <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
@@ -4884,8 +4894,8 @@ Secretaria de Estado da Saúde de São Paulo`;
                           return true;
                         })
                         .map((plano) => (
-                        <div key={plano.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-red-400 transition-all">
-                          <div className="flex items-start gap-3 mb-3">
+                        <div key={plano.id} className="bg-white px-4 py-3 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-red-400 transition-all">
+                          <div className="flex items-start gap-3">
                             {isAdmin() && (
                               <input
                                 type="checkbox"
@@ -4899,108 +4909,107 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   }
                                   setSelectedPlanos(newSelected);
                                 }}
-                                className="w-5 h-5 accent-amber-600 mt-0.5 flex-shrink-0"
+                                className="w-5 h-5 accent-amber-600 mt-1 flex-shrink-0"
                               />
                             )}
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 flex-1">
-                              <div>
-                                <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Parlamentar</p>
-                                <p className="text-sm font-bold text-gray-900 truncate">{plano.parlamentar}</p>
-                              </div>
-                            <div>
-                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Emenda</p>
-                              <p className="text-sm font-bold text-gray-900 truncate">{plano.numero_emenda}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Valor</p>
-                              <p className="text-sm font-black text-red-600">R$ {parseFloat(plano.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">CNES</p>
-                              <p className="text-sm font-bold text-gray-900 truncate font-mono">{plano.cnes || '—'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">CNPJ</p>
-                              <p className="text-sm font-bold text-gray-900 truncate font-mono">{plano.beneficiario_cnpj || '—'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Conta Bancária</p>
-                              {plano.conta_bancaria && planosList.filter(p => p.conta_bancaria && p.conta_bancaria.trim() === plano.conta_bancaria.trim() && p.id !== plano.id).length > 0 ? (
-                                <div className="flex items-center gap-1">
-                                  <p className="text-sm font-bold text-amber-700 truncate font-mono">{plano.conta_bancaria}</p>
-                                  <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" title="Conta usada em outro plano!" />
+                            <div className="flex-1 min-w-0">
+                              {/* Linha única com todos os dados */}
+                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-9 gap-x-4 gap-y-1">
+                                <div className="col-span-1 lg:col-span-2 min-w-0">
+                                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Parlamentar</p>
+                                  <p className="text-sm font-bold text-gray-900">{plano.parlamentar}</p>
                                 </div>
-                              ) : (
-                                <p className="text-sm font-bold text-gray-900 truncate font-mono">{plano.conta_bancaria || '—'}</p>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Emenda</p>
+                                  <p className="text-sm font-bold text-gray-900 font-mono">{plano.numero_emenda}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Valor</p>
+                                  <p className="text-sm font-black text-red-600">R$ {parseFloat(plano.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">CNES</p>
+                                  <p className="text-sm font-bold text-gray-900 font-mono">{plano.cnes || '—'}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">CNPJ</p>
+                                  <p className="text-sm font-bold text-gray-900 font-mono">{plano.beneficiario_cnpj || '—'}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Conta Bancária</p>
+                                  {plano.conta_bancaria && planosList.filter(p => p.conta_bancaria && p.conta_bancaria.trim() === plano.conta_bancaria.trim() && p.id !== plano.id).length > 0 ? (
+                                    <div className="flex items-center gap-1">
+                                      <p className="text-sm font-bold text-amber-700 font-mono">{plano.conta_bancaria}</p>
+                                      <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm font-bold text-gray-900 font-mono">{plano.conta_bancaria || '—'}</p>
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Preenchido por</p>
+                                  <p className="text-sm font-bold text-gray-900">{plano.created_by_name || '—'}</p>
+                                  <p className="text-xs text-gray-500 truncate">{plano.created_by_email || ''}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Data</p>
+                                  <p className="text-sm font-bold text-gray-900">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</p>
+                                  {isAdmin() && plano.last_edited_at && (
+                                    <p className="text-xs text-orange-600 font-semibold">Ed: {new Date(plano.last_edited_at).toLocaleDateString('pt-BR')}</p>
+                                  )}
+                                  {isAdmin() && plano.edit_count > 0 && (
+                                    <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded">{plano.edit_count}x</span>
+                                  )}
+                                </div>
+                              </div>
+                              {/* Mensagem de conta duplicada */}
+                              {plano.conta_bancaria && planosList.filter(p => p.conta_bancaria && p.conta_bancaria.trim() === plano.conta_bancaria.trim() && p.id !== plano.id).length > 0 && (
+                                <p className="text-xs font-semibold text-red-700 mt-1">⚠ Não serão efetuados pagamentos de emendas que utilizem conta bancária previamente utilizada.</p>
                               )}
                             </div>
-                            <div>
-                              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Data</p>
-                              <div className="space-y-0.5">
-                                <p className="text-sm font-bold text-gray-900">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</p>
-                                {isAdmin() && plano.last_edited_at && (
-                                  <p className="text-xs text-orange-600 font-semibold">Ed: {new Date(plano.last_edited_at).toLocaleDateString('pt-BR')}</p>
-                                )}
-                                {isAdmin() && plano.edit_count > 0 && (
-                                  <p className="text-xs bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded inline-block">{plano.edit_count} edição(ões)</p>
-                                )}
-                              </div>
-                            </div>
-                            </div>
-                          </div>
-                          <div className="border-t border-gray-100 pt-2 flex gap-2 justify-end flex-wrap">
-                            {plano.extrato_url && (
-                              <button
-                                onClick={() => handleViewExtrato(plano.extrato_url)}
-                                className="flex items-center gap-1 px-3 py-2 bg-blue-100 text-blue-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-blue-200 transition-all"
-                              >
-                                <Eye className="w-4 h-4" /> Ver Extrato
-                              </button>
-                            )}
-                            {canEditPlan(plano.created_by) && (
-                              <>
-                                <button 
-                                  onClick={() => { 
-                                    // Reset PRIMEIRO - limpar completamente
-                                    setFormData(getInitialFormData());
-                                    setLastSavedFormData(null);
-                                    setPlanoSalvoId(null);
-                                    setFormHasChanges(false);
-                                    
-                                    // Limpar inputs temporários para evitar duplicação
-                                    setCurrentSelection({ categoria: '', item: '', metas: [''] });
-                                    setCurrentMetaQualitativa({ meta: '', valor: '' });
-                                    setCurrentNatureza({ codigo: '', valor: '' });
-                                    
-                                    setCurrentView('new'); 
-                                    setActiveSection('info-emenda'); 
-                                    setSentSuccess(false);
-                                    
-                                    // RESET CRÍTICO: Limpar refs para permitir novo carregamento
-                                    // Isso garante que o novo plano será carregado mesmo que já tenhamos carregado antes
-                                    loadingPlanIdRef.current = null;
-                                    planLoadCompletedRef.current.delete(plano.id);
-                                    
-                                    // DEPOIS - Disparar o carregamento com um pequeno delay
-                                    // Isso garante que React processou o reset antes de carregar
-                                    setTimeout(() => {
-                                      setEditingPlanId(plano.id);
-                                    }, 50);
-                                  }}
-                                  className="flex items-center gap-1 px-3 py-2 bg-orange-100 text-orange-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-orange-200 transition-all"
+                            {/* Botões inline */}
+                            <div className="flex gap-1.5 flex-shrink-0 items-start">
+                              {plano.extrato_url && (
+                                <button
+                                  onClick={() => handleViewExtrato(plano.extrato_url)}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-md font-bold text-xs uppercase hover:bg-blue-100 transition-all"
                                 >
-                                  <Settings2 className="w-4 h-4" /> Editar
+                                  <Eye className="w-4 h-4" /> Extrato
                                 </button>
-                                {isAdmin() && (
+                              )}
+                              {canEditPlan(plano.created_by) && (
+                                <>
                                   <button 
-                                    onClick={() => deletePlan(plano.id)}
-                                    className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-600 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-red-200 transition-all"
+                                    onClick={() => { 
+                                      setFormData(getInitialFormData());
+                                      setLastSavedFormData(null);
+                                      setPlanoSalvoId(null);
+                                      setFormHasChanges(false);
+                                      setCurrentSelection({ categoria: '', item: '', metas: [''] });
+                                      setCurrentMetaQualitativa({ meta: '', valor: '' });
+                                      setCurrentNatureza({ codigo: '', valor: '' });
+                                      setCurrentView('new'); 
+                                      setActiveSection('info-emenda'); 
+                                      setSentSuccess(false);
+                                      loadingPlanIdRef.current = null;
+                                      planLoadCompletedRef.current.delete(plano.id);
+                                      setTimeout(() => { setEditingPlanId(plano.id); }, 50);
+                                    }}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-orange-50 text-orange-600 rounded-md font-bold text-xs uppercase hover:bg-orange-100 transition-all"
                                   >
-                                    <Trash2 className="w-4 h-4" /> Deletar
+                                    <Settings2 className="w-4 h-4" /> Editar
                                   </button>
-                                )}
-                              </>
-                            )}
+                                  {isAdmin() && (
+                                    <button 
+                                      onClick={() => deletePlan(plano.id)}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-600 rounded-md font-bold text-xs uppercase hover:bg-red-100 transition-all"
+                                    >
+                                      <Trash2 className="w-4 h-4" /> Del
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -5315,14 +5324,31 @@ Secretaria de Estado da Saúde de São Paulo`;
                         Dados Bancários
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <InputField
-                          label="Conta Bancária"
-                          name="contaBancaria"
-                          value={formData.beneficiario.contaBancaria}
-                          onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, contaBancaria: e.target.value })}
-                          placeholder="Banco / Agência / Conta (Ex: 001 / 1234-5 / 12345-6)"
-                          required
-                        />
+                        <div>
+                          <InputField
+                            label="Conta Bancária"
+                            name="contaBancaria"
+                            value={formData.beneficiario.contaBancaria}
+                            onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, contaBancaria: e.target.value })}
+                            placeholder="Banco / Agência / Conta (Ex: 001 / 1234-5 / 12345-6)"
+                            required
+                            maxLength={25}
+                            help="Informe somente números para banco, agência e conta."
+                          />
+                          {/* Alerta de conta bancária duplicada */}
+                          {formData.beneficiario.contaBancaria?.trim() && planosList.some(p =>
+                            p.conta_bancaria &&
+                            p.conta_bancaria.trim() === formData.beneficiario.contaBancaria.trim() &&
+                            p.id !== editingPlanId
+                          ) && (
+                            <div className="flex items-start gap-2 p-3 bg-amber-50 border-2 border-amber-400 rounded-xl -mt-8 mb-4">
+                              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                              <p className="text-sm font-bold text-amber-800">
+                                Não serão efetuados pagamentos de emendas que utilizem conta bancária previamente utilizada.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                         <div className="flex flex-col">
                           <label className="text-sm font-semibold text-gray-700 mb-2">
                             Extrato Bancário <span className="text-red-600">*</span>

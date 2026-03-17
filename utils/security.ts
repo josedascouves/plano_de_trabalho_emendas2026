@@ -1,9 +1,16 @@
 /**
  * Módulo de Segurança
  * Desabilita console e detecta tentativas de acesso ao DevTools
+ * ⚠️ Desativado em localhost para permitir desenvolvimento/testes
  */
 
 export const initializeSecurity = () => {
+  // Em desenvolvimento (localhost), NÃO aplicar bloqueios de segurança
+  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (isDev) {
+    console.log('🔓 Modo desenvolvimento - segurança desativada');
+    return;
+  }
   // 1️⃣ DESABILITAR TODOS OS MÉTODOS DO CONSOLE
   const noop = () => {};
   
@@ -76,9 +83,25 @@ export const initializeSecurity = () => {
     return false;
   });
 
-  // 5️⃣ LIMPAR STORAGE DE DEBUG (localStorage/sessionStorage)
+  // 5️⃣ LIMPAR STORAGE DE DEBUG (preservando dados do Supabase Auth)
   try {
+    // Preservar chaves do Supabase Auth (tokens de sessão)
+    const keysToKeep: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('sb-') || key.startsWith('supabase'))) {
+        keysToKeep.push(key);
+      }
+    }
+    const preserved: Record<string, string> = {};
+    keysToKeep.forEach(key => {
+      const val = localStorage.getItem(key);
+      if (val) preserved[key] = val;
+    });
+
+    // Limpar e restaurar dados do Supabase
     localStorage.clear();
+    Object.entries(preserved).forEach(([key, val]) => localStorage.setItem(key, val));
     sessionStorage.clear();
   } catch (e) {
     // Ignorar erros de storage

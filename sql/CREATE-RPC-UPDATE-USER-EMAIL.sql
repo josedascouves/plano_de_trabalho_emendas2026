@@ -2,6 +2,9 @@
 -- Execute esta função uma única vez no Supabase SQL Editor
 -- IMPORTANTE: Atualiza TODAS as tabelas necessárias para que o login funcione com o novo email
 
+-- Dropar função antiga (necessário para renomear parâmetros)
+DROP FUNCTION IF EXISTS public.update_user_email(UUID, TEXT);
+
 CREATE OR REPLACE FUNCTION update_user_email(user_id UUID, new_email TEXT)
 RETURNS JSON AS $$
 DECLARE
@@ -66,6 +69,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public, auth;
 
 GRANT EXECUTE ON FUNCTION public.update_user_email(UUID, TEXT) TO authenticated;
+
+-- Forçar reload do schema cache do PostgREST
+NOTIFY pgrst, 'reload schema';
 
 -- Teste da função:
 -- SELECT update_user_email('uuid-do-usuario', 'novo-email@example.com');

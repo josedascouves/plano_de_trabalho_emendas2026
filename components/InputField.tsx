@@ -37,6 +37,7 @@ export const InputField: React.FC<InputFieldProps> = ({
   readOnly = false,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const safeValue = value ?? '';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let newValue = e.target.value;
@@ -47,7 +48,7 @@ export const InputField: React.FC<InputFieldProps> = ({
     onChange(e);
   };
 
-  const isValid = success && value.length > 0;
+  const isValid = success && safeValue.length > 0;
 
   return (
     <div className={hideBottomMargin ? '' : 'mb-12 lg:mb-14'}>
@@ -73,7 +74,7 @@ export const InputField: React.FC<InputFieldProps> = ({
           id={name}
           name={name}
           type={type}
-          value={value}
+          value={safeValue}
           onChange={handleChange}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
@@ -133,7 +134,7 @@ export const InputField: React.FC<InputFieldProps> = ({
       {/* Indicador de caracteres (se maxLength) */}
       {maxLength && (
         <p className="mt-2 text-xs text-gray-500 font-medium">
-          {value.length} / {maxLength} caracteres
+          {safeValue.length} / {maxLength} caracteres
         </p>
       )}
     </div>

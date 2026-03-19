@@ -45,8 +45,7 @@ import {
   Search,
   Eye,
   Landmark,
-  Paperclip,
-  History
+  Paperclip
 } from 'lucide-react';
 import { FormState, User } from './types';
 import { 
@@ -1824,8 +1823,8 @@ const App: React.FC = () => {
       setLastSavedFormData(savedCopy);
       setFormHasChanges(false);
       
-      // 7. Armazenar data de alteração da justificativa para uso no PDF
-      setJustificativaAlteradaEm(plano.justificativa_alterada_em || null);
+      // 7. Resetar estado de alteração de justificativa (será detectado ao salvar)
+      setJustificativaAlteradaEm(null);
       
 
     } catch (error: any) {
@@ -2339,7 +2338,6 @@ const App: React.FC = () => {
             edit_count: newEditCount,
             last_edited_at: new Date().toISOString(),
             last_edited_by: user.id,
-            ...(justificativaMudou ? { justificativa_alterada_em: new Date().toISOString() } : {}),
             created_by_name: currentUser?.name || null,
             created_by_email: currentUser?.username || user.email || null
           })
@@ -5006,12 +5004,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   {isAdmin() && plano.edit_count > 0 && (
                                     <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded">{plano.edit_count}x</span>
                                   )}
-                                  {plano.justificativa_alterada_em && (
-                                    <p className="mt-1 flex items-center gap-1 text-xs text-orange-600 font-semibold">
-                                      <History className="w-3 h-3" />
-                                      <span>Justif. alterada em {new Date(plano.justificativa_alterada_em).toLocaleDateString('pt-BR')}</span>
-                                    </p>
-                                  )}
+
                                 </div>
                               </div>
 

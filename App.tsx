@@ -205,6 +205,8 @@ const App: React.FC = () => {
   const [justificativaHistorico, setJustificativaHistorico] = useState<any[]>([]);
   const [showJustificativaHistorico, setShowJustificativaHistorico] = useState(false);
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
+  const [historicoPlanoNome, setHistoricoPlanoNome] = useState<string>('');
+  const [showHistoricoModal, setShowHistoricoModal] = useState(false);
   const extratoInputRef = useRef<HTMLInputElement>(null);
 
   const LOGO_URL_COLORIDA = "/img/logo_colorido.png";  // Versão oficial colorida
@@ -2058,6 +2060,12 @@ const App: React.FC = () => {
     } finally {
       setIsLoadingHistorico(false);
     }
+  };
+
+  const openHistoricoModal = async (plano: any) => {
+    setHistoricoPlanoNome(plano.parlamentar || plano.numero_emenda || 'Plano');
+    setShowHistoricoModal(true);
+    await fetchJustificativaHistorico(plano.id);
   };
 
   const salvarHistoricoJustificativa = async (
@@ -5068,6 +5076,16 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   {isAdmin() && plano.edit_count > 0 && (
                                     <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded">{plano.edit_count}x</span>
                                   )}
+                                  {plano.edit_count > 0 && (
+                                    <button
+                                      onClick={() => openHistoricoModal(plano)}
+                                      className="mt-1 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold transition-colors cursor-pointer"
+                                      title="Ver histórico de alterações na justificativa"
+                                    >
+                                      <History className="w-3 h-3" />
+                                      <span>Justif. alterada</span>
+                                    </button>
+                                  )}
                                 </div>
                               </div>
 
@@ -6089,137 +6107,6 @@ Secretaria de Estado da Saúde de São Paulo`;
                         </div>
                       </div>
 
-                      {/* HISTÓRICO DE ALTERAÇÕES NA JUSTIFICATIVA */}
-                      {planoSalvoId && (
-                        <div className="border border-gray-200 rounded-xl overflow-hidden">
-                          <button
-                            onClick={() => {
-                              if (!showJustificativaHistorico) {
-                                fetchJustificativaHistorico(planoSalvoId);
-                              }
-                              setShowJustificativaHistorico(!showJustificativaHistorico);
-                            }}
-                            className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-                          >
-                            <div className="flex items-center gap-2">
-                              <History className="w-4 h-4 text-gray-500" />
-                              <span className="text-sm font-semibold text-gray-700">
-                                Histórico de Alterações na Justificativa
-                              </span>
-                              {justificativaHistorico.length > 0 && (
-                                <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                                  {justificativaHistorico.length}
-                                </span>
-                              )}
-                            </div>
-                            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showJustificativaHistorico ? 'rotate-180' : ''}`} />
-                          </button>
-                          
-                          {showJustificativaHistorico && (
-                            <div className="p-4 bg-white max-h-96 overflow-y-auto">
-                              {isLoadingHistorico ? (
-                                <div className="flex items-center justify-center py-6">
-                                  <Loader2 className="w-5 h-5 animate-spin text-blue-500 mr-2" />
-                                  <span className="text-sm text-gray-500">Carregando histórico...</span>
-                                </div>
-                              ) : justificativaHistorico.length === 0 ? (
-                                <div className="text-center py-6">
-                                  <Clock className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                                  <p className="text-sm text-gray-400">Nenhuma alteração registrada ainda</p>
-                                  <p className="text-xs text-gray-300 mt-1">O histórico será registrado a partir da próxima edição</p>
-                                </div>
-                              ) : (
-                                <div className="space-y-4">
-                                  {justificativaHistorico.map((item, idx) => (
-                                    <div key={item.id} className="relative pl-6 pb-4 border-l-2 border-blue-200 last:border-l-0 last:pb-0">
-                                      {/* Timeline dot */}
-                                      <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 ${idx === 0 ? 'bg-blue-500 border-blue-500' : 'bg-white border-blue-300'}`} />
-                                      
-                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                                        {/* Header */}
-                                        <div className="flex items-center justify-between mb-2">
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                                              Edição #{item.edit_number || (justificativaHistorico.length - idx)}
-                                            </span>
-                                            {idx === 0 && (
-                                              <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">
-                                                Mais recente
-                                              </span>
-                                            )}
-                                          </div>
-                                          <span className="text-xs text-gray-400">
-                                            {new Date(item.alterado_em).toLocaleString('pt-BR', {
-                                              day: '2-digit',
-                                              month: '2-digit',
-                                              year: 'numeric',
-                                              hour: '2-digit',
-                                              minute: '2-digit'
-                                            })}
-                                          </span>
-                                        </div>
-                                        
-                                        {/* Author */}
-                                        <p className="text-xs text-gray-500 mb-2">
-                                          <span className="font-medium">Por:</span>{' '}
-                                          {item.alterado_por_nome || item.alterado_por_email || 'Usuário desconhecido'}
-                                        </p>
-                                        
-                                        {/* Changes indicator */}
-                                        {item.caracteres_antes > 0 ? (
-                                          <div className="space-y-2">
-                                            <p className="text-xs text-gray-500 italic">
-                                              {item.resumo_alteracao || 'Texto alterado'}
-                                            </p>
-                                            <details className="group" open={idx === 0}>
-                                              <summary className="cursor-pointer text-xs font-semibold text-gray-600 hover:text-blue-600 transition-colors flex items-center gap-1">
-                                                <Eye className="w-3 h-3" />
-                                                Ver texto desta versão
-                                              </summary>
-                                              <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded text-xs text-gray-600 whitespace-pre-wrap max-h-32 overflow-y-auto">
-                                                {item.justificativa_texto}
-                                              </div>
-                                            </details>
-                                            {/* Character count diff */}
-                                            <p className="text-xs text-gray-400">
-                                              Caracteres: {(item.caracteres_antes || 0).toLocaleString('pt-BR')} → {(item.caracteres_depois || 0).toLocaleString('pt-BR')}
-                                              {' '}
-                                              <span className={
-                                                (item.caracteres_depois || 0) > (item.caracteres_antes || 0) 
-                                                  ? 'text-green-600' 
-                                                  : 'text-red-600'
-                                              }>
-                                                ({(item.caracteres_depois || 0) > (item.caracteres_antes || 0) ? '+' : ''}
-                                                {((item.caracteres_depois || 0) - (item.caracteres_antes || 0)).toLocaleString('pt-BR')})
-                                              </span>
-                                            </p>
-                                          </div>
-                                        ) : (
-                                          <div>
-                                            <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded">
-                                              ✨ Versão inicial
-                                            </span>
-                                            <details className="mt-2 group">
-                                              <summary className="cursor-pointer text-xs font-semibold text-gray-600 hover:text-blue-600 transition-colors flex items-center gap-1">
-                                                <Eye className="w-3 h-3" />
-                                                Ver texto
-                                              </summary>
-                                              <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded text-xs text-gray-600 whitespace-pre-wrap max-h-32 overflow-y-auto">
-                                                {item.justificativa_texto}
-                                              </div>
-                                            </details>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
                       <InputField
                         label="Responsável pela Assinatura"
                         value={formData.responsavelAssinatura}
@@ -6407,6 +6294,129 @@ Secretaria de Estado da Saúde de São Paulo`;
           )}
         </div>
       </main>
+
+      {/* MODAL: HISTÓRICO DE ALTERAÇÕES NA JUSTIFICATIVA */}
+      {showHistoricoModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowHistoricoModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <History className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900">Histórico de Alterações</h3>
+                  <p className="text-xs text-gray-500">{historicoPlanoNome}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowHistoricoModal(false)}
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {isLoadingHistorico ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-500 mr-3" />
+                  <span className="text-sm text-gray-500">Carregando histórico...</span>
+                </div>
+              ) : justificativaHistorico.length === 0 ? (
+                <div className="text-center py-12">
+                  <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500 font-semibold">Nenhuma alteração registrada</p>
+                  <p className="text-xs text-gray-400 mt-1">O histórico será registrado a partir da próxima edição</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {justificativaHistorico.map((item, idx) => {
+                    const isFirst = idx === 0;
+                    const isInitial = (item.caracteres_antes || 0) === 0;
+                    const diff = (item.caracteres_depois || 0) - (item.caracteres_antes || 0);
+                    
+                    return (
+                      <div key={item.id} className="relative pl-7 pb-2">
+                        {/* Timeline line */}
+                        {idx < justificativaHistorico.length - 1 && (
+                          <div className="absolute left-[11px] top-5 bottom-0 w-0.5 bg-blue-200" />
+                        )}
+                        {/* Timeline dot */}
+                        <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                          isFirst ? 'bg-blue-500 border-blue-500' : 'bg-white border-blue-300'
+                        }`}>
+                          {isFirst && <div className="w-2 h-2 bg-white rounded-full" />}
+                        </div>
+                        
+                        <div className={`rounded-xl border p-4 ${isFirst ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-white'}`}>
+                          {/* Header row */}
+                          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                                isFirst ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                {isInitial ? '✨ Versão inicial' : `Edição #${item.edit_number || (justificativaHistorico.length - idx)}`}
+                              </span>
+                              {isFirst && !isInitial && (
+                                <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded">Mais recente</span>
+                              )}
+                              {!isInitial && (
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                                  diff >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
+                                }`}>
+                                  {diff >= 0 ? '+' : ''}{diff.toLocaleString('pt-BR')} caracteres
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-400 font-medium">
+                              {new Date(item.alterado_em).toLocaleString('pt-BR', {
+                                day: '2-digit', month: '2-digit', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          
+                          {/* Author */}
+                          <p className="text-xs text-gray-500 mb-3">
+                            <span className="font-semibold">Por:</span> {item.alterado_por_nome || item.alterado_por_email || 'Usuário'}
+                            {!isInitial && item.resumo_alteracao && (
+                              <span className="text-gray-400 ml-2">— {item.resumo_alteracao}</span>
+                            )}
+                          </p>
+                          
+                          {/* Text content (expandable) */}
+                          <details open={isFirst}>
+                            <summary className="cursor-pointer text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 select-none">
+                              <Eye className="w-3.5 h-3.5" />
+                              Ver justificativa desta versão ({(item.caracteres_depois || item.justificativa_texto?.length || 0).toLocaleString('pt-BR')} caracteres)
+                            </summary>
+                            <div className="mt-3 p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+                              {item.justificativa_texto}
+                            </div>
+                          </details>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+              <button
+                onClick={() => setShowHistoricoModal(false)}
+                className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-sm rounded-lg transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

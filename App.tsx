@@ -1516,7 +1516,26 @@ const App: React.FC = () => {
         throw error;
       }
       
-      setPlanosList(planos || []);
+      // Enriquecer planos sem created_by_name buscando do profiles
+      const enriched = planos || [];
+      const semNome = enriched.filter(p => !p.created_by_name && p.created_by);
+      if (semNome.length > 0) {
+        const userIds = [...new Set(semNome.map(p => p.created_by))];
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
+        if (profiles && profiles.length > 0) {
+          const profileMap = new Map(profiles.map(p => [p.id, p]));
+          for (const p of enriched) {
+            if (!p.created_by_name && p.created_by && profileMap.has(p.created_by)) {
+              const prof = profileMap.get(p.created_by)!;
+              p.created_by_name = prof.full_name || prof.email || null;
+              p.created_by_email = p.created_by_email || prof.email || null;
+              // Atualizar no banco para não precisar buscar de novo
+              supabase.from('planos_trabalho').update({ created_by_name: p.created_by_name, created_by_email: p.created_by_email }).eq('id', p.id).then(() => {});
+            }
+          }
+        }
+      }
+      setPlanosList(enriched);
     } catch (error: any) {
       console.error('❌ Erro ao carregar planos (catch):', error);
       alert(`Erro ao carregar planos: ${error.message}`);

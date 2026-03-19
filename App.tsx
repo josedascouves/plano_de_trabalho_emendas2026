@@ -200,9 +200,8 @@ const App: React.FC = () => {
   const [isUploadingExtrato, setIsUploadingExtrato] = useState(false);
   const [extratoPreviewUrl, setExtratoPreviewUrl] = useState<string | null>(null);
 
-  // Dados de edição do plano (para exibir no PDF)
-  const [planoEditCount, setPlanoEditCount] = useState<number>(0);
-  const [planoLastEditedAt, setPlanoLastEditedAt] = useState<string | null>(null);
+  // Data da alteração da justificativa (para exibir no PDF)
+  const [justificativaAlteradaEm, setJustificativaAlteradaEm] = useState<string | null>(null);
   const extratoInputRef = useRef<HTMLInputElement>(null);
 
   const LOGO_URL_COLORIDA = "/img/logo_colorido.png";  // Versão oficial colorida
@@ -1825,9 +1824,8 @@ const App: React.FC = () => {
       setLastSavedFormData(savedCopy);
       setFormHasChanges(false);
       
-      // 7. Armazenar dados de edição para uso no PDF
-      setPlanoEditCount(plano.edit_count || 0);
-      setPlanoLastEditedAt(plano.last_edited_at || null);
+      // 7. Armazenar data de alteração da justificativa para uso no PDF
+      setJustificativaAlteradaEm(plano.justificativa_alterada_em || null);
       
 
     } catch (error: any) {
@@ -2305,14 +2303,15 @@ const App: React.FC = () => {
       // LÓGICA SIMPLES: SE TEM planoSalvoId, é UPDATE. SENÃO, é CREATE
       if (planoSalvoId) {
         
-        // Buscar o edit_count atual e justificativa para incrementar/comparar
+        // Buscar o edit_count atual e justificativa para comparar
         const { data: currentPlano } = await supabase
           .from('planos_trabalho')
-          .select('edit_count')
+          .select('edit_count, justificativa')
           .eq('id', planoSalvoId)
           .single();
         
         const newEditCount = (currentPlano?.edit_count || 0) + 1;
+        const justificativaMudou = (currentPlano?.justificativa || '') !== formData.justificativa;
         
         // Atualizar plano existente
         const valorTotalUpdate = parseCurrency(formData.emenda.valor);
@@ -2340,6 +2339,7 @@ const App: React.FC = () => {
             edit_count: newEditCount,
             last_edited_at: new Date().toISOString(),
             last_edited_by: user.id,
+            ...(justificativaMudou ? { justificativa_alterada_em: new Date().toISOString() } : {}),
             created_by_name: currentUser?.name || null,
             created_by_email: currentUser?.username || user.email || null
           })
@@ -2355,9 +2355,10 @@ const App: React.FC = () => {
         
         console.log("✅ Plano atualizado (edição #" + newEditCount + ")");
         
-        // Atualizar estado local de edição para o PDF
-        setPlanoEditCount(newEditCount);
-        setPlanoLastEditedAt(new Date().toISOString());
+        // Atualizar estado local só se justificativa mudou
+        if (justificativaMudou) {
+          setJustificativaAlteradaEm(new Date().toISOString());
+        }
         
         // ⚠️ Usar RPC para DELETE+INSERT atômico (resolve problema de RLS)
         console.log("📝 Substituindo dados relacionados via RPC...");
@@ -3449,18 +3450,14 @@ Secretaria de Estado da Saúde de São Paulo`;
               </div>
               <div className="border-t border-gray-300 pt-4 pl-11">
                 <p className="text-xs text-gray-600 mb-4">Fundamentação estratégica e objetivos</p>
-                {planoEditCount > 0 && planoLastEditedAt && (
+                {justificativaAlteradaEm && (
                   <div className="mb-3 border border-orange-300 bg-orange-50 print:bg-white rounded-lg px-4 py-2 flex items-center gap-2">
                     <span className="text-orange-600 font-black text-xs">⚠ JUSTIFICATIVA ALTERADA</span>
                     <span className="text-orange-500 text-[10px] font-semibold">—</span>
                     <span className="text-orange-600 text-[10px] font-semibold">
-                      Última alteração em {new Date(planoLastEditedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      Última alteração em {new Date(justificativaAlteradaEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                       {' às '}
-                      {new Date(planoLastEditedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    <span className="text-orange-500 text-[10px] font-semibold">—</span>
-                    <span className="text-orange-600 text-[10px] font-bold">
-                      ({planoEditCount}ª edição)
+                      {new Date(justificativaAlteradaEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 )}
@@ -3658,7 +3655,7 @@ Secretaria de Estado da Saúde de São Paulo`;
               {isAuthenticated && (
                 <div className="hidden lg:flex items-center gap-6">
                   <button 
-                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setPlanoEditCount(0); setPlanoLastEditedAt(null); }}
+                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaAlteradaEm(null); }}
                     className={`text-sm font-bold uppercase tracking-wide transition-colors ${
                       currentView === 'new' 
                         ? 'text-red-400 border-b-2 border-red-500' 
@@ -5009,10 +5006,10 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   {isAdmin() && plano.edit_count > 0 && (
                                     <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded">{plano.edit_count}x</span>
                                   )}
-                                  {plano.edit_count > 0 && plano.last_edited_at && (
+                                  {plano.justificativa_alterada_em && (
                                     <p className="mt-1 flex items-center gap-1 text-xs text-orange-600 font-semibold">
                                       <History className="w-3 h-3" />
-                                      <span>Justif. alterada em {new Date(plano.last_edited_at).toLocaleDateString('pt-BR')}</span>
+                                      <span>Justif. alterada em {new Date(plano.justificativa_alterada_em).toLocaleDateString('pt-BR')}</span>
                                     </p>
                                   )}
                                 </div>

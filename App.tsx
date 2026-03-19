@@ -1823,8 +1823,10 @@ const App: React.FC = () => {
       setLastSavedFormData(savedCopy);
       setFormHasChanges(false);
       
-      // 7. Carregar data de alteração da justificativa (persistido no banco)
-      setJustificativaAlteradaEm(plano.justificativa_alterada_em || null);
+      // 7. Carregar data de alteração da justificativa (banco ou localStorage)
+      const justAltDB = plano.justificativa_alterada_em || null;
+      const justAltLocal = (() => { try { return localStorage.getItem(`justificativa_alterada_${planoId}`); } catch(e) { return null; } })();
+      setJustificativaAlteradaEm(justAltDB || justAltLocal);
       
 
     } catch (error: any) {
@@ -2338,7 +2340,6 @@ const App: React.FC = () => {
             edit_count: newEditCount,
             last_edited_at: new Date().toISOString(),
             last_edited_by: user.id,
-            ...(justificativaMudou ? { justificativa_alterada_em: new Date().toISOString() } : {}),
             created_by_name: currentUser?.name || null,
             created_by_email: currentUser?.username || user.email || null
           })
@@ -2354,9 +2355,15 @@ const App: React.FC = () => {
         
         console.log("✅ Plano atualizado (edição #" + newEditCount + ")");
         
-        // Atualizar estado local só se justificativa mudou
+        // Atualizar estado local + localStorage se justificativa mudou
         if (justificativaMudou) {
-          setJustificativaAlteradaEm(new Date().toISOString());
+          const novaData = new Date().toISOString();
+          setJustificativaAlteradaEm(novaData);
+          try { localStorage.setItem(`justificativa_alterada_${planoSalvoId}`, novaData); } catch(e) {}
+          // Tentar salvar na coluna do banco (pode falhar se schema cache não atualizou)
+          try {
+            await supabase.from('planos_trabalho').update({ justificativa_alterada_em: novaData }).eq('id', planoSalvoId);
+          } catch(e) { console.warn('⚠️ Não foi possível salvar justificativa_alterada_em no banco:', e); }
         }
         
         // ⚠️ Usar RPC para DELETE+INSERT atômico (resolve problema de RLS)

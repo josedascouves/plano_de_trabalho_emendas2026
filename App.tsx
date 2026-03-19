@@ -1823,8 +1823,8 @@ const App: React.FC = () => {
       setLastSavedFormData(savedCopy);
       setFormHasChanges(false);
       
-      // 7. Resetar estado de alteração de justificativa (será detectado ao salvar)
-      setJustificativaAlteradaEm(null);
+      // 7. Carregar data de alteração da justificativa (persistido no banco)
+      setJustificativaAlteradaEm(plano.justificativa_alterada_em || null);
       
 
     } catch (error: any) {
@@ -2338,6 +2338,7 @@ const App: React.FC = () => {
             edit_count: newEditCount,
             last_edited_at: new Date().toISOString(),
             last_edited_by: user.id,
+            ...(justificativaMudou ? { justificativa_alterada_em: new Date().toISOString() } : {}),
             created_by_name: currentUser?.name || null,
             created_by_email: currentUser?.username || user.email || null
           })
@@ -3448,20 +3449,14 @@ Secretaria de Estado da Saúde de São Paulo`;
               </div>
               <div className="border-t border-gray-300 pt-4 pl-11">
                 <p className="text-xs text-gray-600 mb-4">Fundamentação estratégica e objetivos</p>
-                {justificativaAlteradaEm && (
-                  <div className="mb-3 border border-orange-300 bg-orange-50 print:bg-white rounded-lg px-4 py-2 flex items-center gap-2">
-                    <span className="text-orange-600 font-black text-xs">⚠ JUSTIFICATIVA ALTERADA</span>
-                    <span className="text-orange-500 text-[10px] font-semibold">—</span>
-                    <span className="text-orange-600 text-[10px] font-semibold">
-                      Última alteração em {new Date(justificativaAlteradaEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                      {' às '}
-                      {new Date(justificativaAlteradaEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                )}
                 <div className="border-l-4 border-red-700 bg-gray-50 print:bg-white pl-4 pr-3 py-3 text-xs leading-relaxed text-gray-900 text-justify whitespace-pre-wrap break-words">
                   {formData.justificativa || '—'}
                 </div>
+                {justificativaAlteradaEm && (
+                  <p className="mt-2 text-[10px] text-gray-400 italic text-right">
+                    Justificativa alterada em {new Date(justificativaAlteradaEm).toLocaleDateString('pt-BR')} às {new Date(justificativaAlteradaEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
               </div>
             </section>
 

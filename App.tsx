@@ -208,6 +208,9 @@ const App: React.FC = () => {
   const LOGO_URL_COLORIDA = "/img/logo_colorido.png";  // Versão oficial colorida
   const LOGO_URL_BRANCA = "/img/logo_branco.png";      // Versão oficial branca para header
 
+  // CNES isentos de conta bancária e extrato bancário obrigatório
+  const CNES_ISENTO_CONTA_EXTRATO = ['2090236', '7066376', '2071568', '2079798'];
+
   // ======== RBAC - CONTROLE DE ACESSO ========
   const isAdmin = (): boolean => {
     const adminStatus = currentUser?.role === 'admin';
@@ -1573,12 +1576,14 @@ const App: React.FC = () => {
         formData.emenda.valor !== '0,00' &&
         formData.emenda.programa?.trim()
       ),
-      // Seção 2: Beneficiário - completa se nome, cnpj, conta bancária e extrato preenchidos
+      // Seção 2: Beneficiário - completa se nome, cnpj preenchidos (conta/extrato opcional para CNES isentos)
       'beneficiario': !!(
         formData.beneficiario.nome?.trim() &&
         formData.beneficiario.cnpj?.trim() &&
-        formData.beneficiario.contaBancaria?.trim() &&
-        formData.beneficiario.extratoUrl?.trim()
+        (CNES_ISENTO_CONTA_EXTRATO.includes(formData.beneficiario.cnes?.trim()) || (
+          formData.beneficiario.contaBancaria?.trim() &&
+          formData.beneficiario.extratoUrl?.trim()
+        ))
       ),
       // Seção 3: Alinhamento - completa se diretriz e objetivo selecionados
       'alinhamento': !!(
@@ -2558,8 +2563,9 @@ const App: React.FC = () => {
     // DADOS DO BENEFICIÁRIO - obrigatório
     if (!formData.beneficiario.nome?.trim()) missingFields.push('Nome do Beneficiário');
     if (!formData.beneficiario.cnpj?.trim()) missingFields.push('CNPJ do Beneficiário');
-    if (!formData.beneficiario.contaBancaria?.trim()) missingFields.push('Conta Bancária');
-    if (!formData.beneficiario.extratoUrl?.trim()) missingFields.push('Extrato Bancário (faça upload do arquivo)');
+    const cnesIsento = CNES_ISENTO_CONTA_EXTRATO.includes(formData.beneficiario.cnes?.trim());
+    if (!cnesIsento && !formData.beneficiario.contaBancaria?.trim()) missingFields.push('Conta Bancária');
+    if (!cnesIsento && !formData.beneficiario.extratoUrl?.trim()) missingFields.push('Extrato Bancário (faça upload do arquivo)');
 
     // ALINHAMENTO ESTRATÉGICO - obrigatório
     if (!formData.planejamento.diretrizId) missingFields.push('Diretriz Estratégica');

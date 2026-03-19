@@ -46,8 +46,7 @@ import {
   Eye,
   Landmark,
   Paperclip,
-  History,
-  Clock
+  History
 } from 'lucide-react';
 import { FormState, User } from './types';
 import { 
@@ -201,12 +200,7 @@ const App: React.FC = () => {
   const [isUploadingExtrato, setIsUploadingExtrato] = useState(false);
   const [extratoPreviewUrl, setExtratoPreviewUrl] = useState<string | null>(null);
 
-  // Histórico de alterações na justificativa
-  const [justificativaHistorico, setJustificativaHistorico] = useState<any[]>([]);
-  const [showJustificativaHistorico, setShowJustificativaHistorico] = useState(false);
-  const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
-  const [historicoPlanoNome, setHistoricoPlanoNome] = useState<string>('');
-  const [showHistoricoModal, setShowHistoricoModal] = useState(false);
+  // Dados de edição do plano (para exibir no PDF)
   const [planoEditCount, setPlanoEditCount] = useState<number>(0);
   const [planoLastEditedAt, setPlanoLastEditedAt] = useState<string | null>(null);
   const extratoInputRef = useRef<HTMLInputElement>(null);
@@ -1830,8 +1824,7 @@ const App: React.FC = () => {
       setPlanoEditCount(plano.edit_count || 0);
       setPlanoLastEditedAt(plano.last_edited_at || null);
       
-      // 8. Carregar histórico de alterações na justificativa
-      fetchJustificativaHistorico(planoId);
+
     } catch (error: any) {
       console.error('❌ ERRO CRÍTICO ao carregar plano:', error);
       alert(`Erro ao carregar plano para editar:\n\n${error?.message || 'Erro desconhecido'}`);
@@ -2044,80 +2037,7 @@ const App: React.FC = () => {
     return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
   };
 
-  // ======== HISTÓRICO DE ALTERAÇÕES NA JUSTIFICATIVA ========
-  const fetchJustificativaHistorico = async (planoId: string) => {
-    setIsLoadingHistorico(true);
-    try {
-      const { data, error } = await supabase
-        .from('justificativa_historico')
-        .select('*')
-        .eq('plano_id', planoId)
-        .order('alterado_em', { ascending: false });
 
-      if (error) {
-        console.error('Erro ao buscar histórico de justificativa:', error);
-        setJustificativaHistorico([]);
-      } else {
-        setJustificativaHistorico(data || []);
-      }
-    } catch (err) {
-      console.error('Erro ao buscar histórico:', err);
-      setJustificativaHistorico([]);
-    } finally {
-      setIsLoadingHistorico(false);
-    }
-  };
-
-  const openHistoricoModal = async (plano: any) => {
-    setHistoricoPlanoNome(plano.parlamentar || plano.numero_emenda || 'Plano');
-    setShowHistoricoModal(true);
-    await fetchJustificativaHistorico(plano.id);
-  };
-
-  const salvarHistoricoJustificativa = async (
-    planoId: string,
-    justificativaAnterior: string | null,
-    justificativaNova: string,
-    userId: string,
-    userName: string | null,
-    userEmail: string | null,
-    editNumber: number
-  ) => {
-    try {
-      const charsAntes = justificativaAnterior?.length || 0;
-      const charsDepois = justificativaNova?.length || 0;
-      const diff = charsDepois - charsAntes;
-      const resumo = justificativaAnterior 
-        ? `Texto alterado (${diff >= 0 ? '+' : ''}${diff} caracteres)`
-        : 'Versão inicial da justificativa';
-
-      const { error: insertError } = await supabase
-        .from('justificativa_historico')
-        .insert({
-          plano_id: planoId,
-          justificativa_texto: justificativaNova,
-          resumo_alteracao: resumo,
-          caracteres_antes: charsAntes,
-          caracteres_depois: charsDepois,
-          alterado_por: userId,
-          alterado_por_nome: userName,
-          alterado_por_email: userEmail,
-          alterado_em: new Date().toISOString(),
-          edit_number: editNumber
-        });
-
-      if (insertError) {
-        console.error('❌ Erro ao inserir histórico de justificativa:', insertError.message, insertError.details, insertError.hint);
-      } else {
-        console.log('✅ Histórico de justificativa salvo com sucesso');
-        // Atualizar estado local
-        setPlanoEditCount(editNumber);
-        setPlanoLastEditedAt(new Date().toISOString());
-      }
-    } catch (err) {
-      console.error('Erro ao salvar histórico de justificativa:', err);
-    }
-  };
 
   // ======== COMPARAÇÃO DE DADOS PARA EVITAR DUPLICAÇÃO ========
   const hasDataChanged = async (): Promise<boolean> => {
@@ -2383,12 +2303,11 @@ const App: React.FC = () => {
         // Buscar o edit_count atual e justificativa para incrementar/comparar
         const { data: currentPlano } = await supabase
           .from('planos_trabalho')
-          .select('edit_count, justificativa')
+          .select('edit_count')
           .eq('id', planoSalvoId)
           .single();
         
         const newEditCount = (currentPlano?.edit_count || 0) + 1;
-        const justificativaAnterior = currentPlano?.justificativa || null;
         
         // Atualizar plano existente
         const valorTotalUpdate = parseCurrency(formData.emenda.valor);
@@ -2431,19 +2350,9 @@ const App: React.FC = () => {
         
         console.log("✅ Plano atualizado (edição #" + newEditCount + ")");
         
-        // Registrar alteração na justificativa se houve mudança
-        if (justificativaAnterior !== formData.justificativa) {
-          await salvarHistoricoJustificativa(
-            planoSalvoId,
-            justificativaAnterior,
-            formData.justificativa,
-            user.id,
-            currentUser?.name || null,
-            currentUser?.username || user.email || null,
-            newEditCount
-          );
-          console.log("📝 Histórico de justificativa registrado");
-        }
+        // Atualizar estado local de edição para o PDF
+        setPlanoEditCount(newEditCount);
+        setPlanoLastEditedAt(new Date().toISOString());
         
         // ⚠️ Usar RPC para DELETE+INSERT atômico (resolve problema de RLS)
         console.log("📝 Substituindo dados relacionados via RPC...");
@@ -2603,19 +2512,7 @@ const App: React.FC = () => {
 
       setPlanoSalvoId(plano.id);
       
-      // Registrar justificativa inicial no histórico
-      if (formData.justificativa?.trim()) {
-        await salvarHistoricoJustificativa(
-          plano.id,
-          null,
-          formData.justificativa,
-          user.id,
-          currentUser?.name || null,
-          currentUser?.username || user.email || null,
-          1
-        );
-        console.log("📝 Histórico inicial de justificativa registrado");
-      }
+
       
       // Atualizar lastSavedFormData após salvar com sucesso
       const savedCopy = JSON.parse(JSON.stringify(formData));
@@ -3755,7 +3652,7 @@ Secretaria de Estado da Saúde de São Paulo`;
               {isAuthenticated && (
                 <div className="hidden lg:flex items-center gap-6">
                   <button 
-                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaHistorico([]); setShowJustificativaHistorico(false); setPlanoEditCount(0); setPlanoLastEditedAt(null); }}
+                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setPlanoEditCount(0); setPlanoLastEditedAt(null); }}
                     className={`text-sm font-bold uppercase tracking-wide transition-colors ${
                       currentView === 'new' 
                         ? 'text-red-400 border-b-2 border-red-500' 
@@ -5106,15 +5003,11 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   {isAdmin() && plano.edit_count > 0 && (
                                     <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded">{plano.edit_count}x</span>
                                   )}
-                                  {plano.edit_count > 0 && (
-                                    <button
-                                      onClick={() => openHistoricoModal(plano)}
-                                      className="mt-1 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold transition-colors cursor-pointer"
-                                      title="Ver histórico de alterações na justificativa"
-                                    >
+                                  {plano.edit_count > 0 && plano.last_edited_at && (
+                                    <p className="mt-1 flex items-center gap-1 text-xs text-orange-600 font-semibold">
                                       <History className="w-3 h-3" />
-                                      <span>Justif. alterada</span>
-                                    </button>
+                                      <span>Justif. alterada em {new Date(plano.last_edited_at).toLocaleDateString('pt-BR')}</span>
+                                    </p>
                                   )}
                                 </div>
                               </div>
@@ -6324,129 +6217,6 @@ Secretaria de Estado da Saúde de São Paulo`;
           )}
         </div>
       </main>
-
-      {/* MODAL: HISTÓRICO DE ALTERAÇÕES NA JUSTIFICATIVA */}
-      {showHistoricoModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowHistoricoModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-2xl">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-full">
-                  <History className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-gray-900">Histórico de Alterações</h3>
-                  <p className="text-xs text-gray-500">{historicoPlanoNome}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowHistoricoModal(false)}
-                className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {isLoadingHistorico ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-6 h-6 animate-spin text-blue-500 mr-3" />
-                  <span className="text-sm text-gray-500">Carregando histórico...</span>
-                </div>
-              ) : justificativaHistorico.length === 0 ? (
-                <div className="text-center py-12">
-                  <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm text-gray-500 font-semibold">Nenhuma alteração registrada</p>
-                  <p className="text-xs text-gray-400 mt-1">O histórico será registrado a partir da próxima edição</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {justificativaHistorico.map((item, idx) => {
-                    const isFirst = idx === 0;
-                    const isInitial = (item.caracteres_antes || 0) === 0;
-                    const diff = (item.caracteres_depois || 0) - (item.caracteres_antes || 0);
-                    
-                    return (
-                      <div key={item.id} className="relative pl-7 pb-2">
-                        {/* Timeline line */}
-                        {idx < justificativaHistorico.length - 1 && (
-                          <div className="absolute left-[11px] top-5 bottom-0 w-0.5 bg-blue-200" />
-                        )}
-                        {/* Timeline dot */}
-                        <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                          isFirst ? 'bg-blue-500 border-blue-500' : 'bg-white border-blue-300'
-                        }`}>
-                          {isFirst && <div className="w-2 h-2 bg-white rounded-full" />}
-                        </div>
-                        
-                        <div className={`rounded-xl border p-4 ${isFirst ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-white'}`}>
-                          {/* Header row */}
-                          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                                isFirst ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-                              }`}>
-                                {isInitial ? '✨ Versão inicial' : `Edição #${item.edit_number || (justificativaHistorico.length - idx)}`}
-                              </span>
-                              {isFirst && !isInitial && (
-                                <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded">Mais recente</span>
-                              )}
-                              {!isInitial && (
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                                  diff >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
-                                }`}>
-                                  {diff >= 0 ? '+' : ''}{diff.toLocaleString('pt-BR')} caracteres
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-xs text-gray-400 font-medium">
-                              {new Date(item.alterado_em).toLocaleString('pt-BR', {
-                                day: '2-digit', month: '2-digit', year: 'numeric',
-                                hour: '2-digit', minute: '2-digit'
-                              })}
-                            </span>
-                          </div>
-                          
-                          {/* Author */}
-                          <p className="text-xs text-gray-500 mb-3">
-                            <span className="font-semibold">Por:</span> {item.alterado_por_nome || item.alterado_por_email || 'Usuário'}
-                            {!isInitial && item.resumo_alteracao && (
-                              <span className="text-gray-400 ml-2">— {item.resumo_alteracao}</span>
-                            )}
-                          </p>
-                          
-                          {/* Text content (expandable) */}
-                          <details open={isFirst}>
-                            <summary className="cursor-pointer text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 select-none">
-                              <Eye className="w-3.5 h-3.5" />
-                              Ver justificativa desta versão ({(item.caracteres_depois || item.justificativa_texto?.length || 0).toLocaleString('pt-BR')} caracteres)
-                            </summary>
-                            <div className="mt-3 p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
-                              {item.justificativa_texto}
-                            </div>
-                          </details>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            
-            {/* Footer */}
-            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-              <button
-                onClick={() => setShowHistoricoModal(false)}
-                className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-sm rounded-lg transition-colors"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

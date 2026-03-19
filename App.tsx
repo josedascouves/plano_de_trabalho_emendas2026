@@ -207,6 +207,8 @@ const App: React.FC = () => {
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
   const [historicoPlanoNome, setHistoricoPlanoNome] = useState<string>('');
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
+  const [planoEditCount, setPlanoEditCount] = useState<number>(0);
+  const [planoLastEditedAt, setPlanoLastEditedAt] = useState<string | null>(null);
   const extratoInputRef = useRef<HTMLInputElement>(null);
 
   const LOGO_URL_COLORIDA = "/img/logo_colorido.png";  // Versão oficial colorida
@@ -1824,7 +1826,11 @@ const App: React.FC = () => {
       setLastSavedFormData(savedCopy);
       setFormHasChanges(false);
       
-      // 7. Carregar histórico de alterações na justificativa
+      // 7. Armazenar dados de edição para uso no PDF
+      setPlanoEditCount(plano.edit_count || 0);
+      setPlanoLastEditedAt(plano.last_edited_at || null);
+      
+      // 8. Carregar histórico de alterações na justificativa
       fetchJustificativaHistorico(planoId);
     } catch (error: any) {
       console.error('❌ ERRO CRÍTICO ao carregar plano:', error);
@@ -2085,7 +2091,7 @@ const App: React.FC = () => {
         ? `Texto alterado (${diff >= 0 ? '+' : ''}${diff} caracteres)`
         : 'Versão inicial da justificativa';
 
-      await supabase
+      const { error: insertError } = await supabase
         .from('justificativa_historico')
         .insert({
           plano_id: planoId,
@@ -2099,6 +2105,15 @@ const App: React.FC = () => {
           alterado_em: new Date().toISOString(),
           edit_number: editNumber
         });
+
+      if (insertError) {
+        console.error('❌ Erro ao inserir histórico de justificativa:', insertError.message, insertError.details, insertError.hint);
+      } else {
+        console.log('✅ Histórico de justificativa salvo com sucesso');
+        // Atualizar estado local
+        setPlanoEditCount(editNumber);
+        setPlanoLastEditedAt(new Date().toISOString());
+      }
     } catch (err) {
       console.error('Erro ao salvar histórico de justificativa:', err);
     }
@@ -3531,6 +3546,21 @@ Secretaria de Estado da Saúde de São Paulo`;
               </div>
               <div className="border-t border-gray-300 pt-4 pl-11">
                 <p className="text-xs text-gray-600 mb-4">Fundamentação estratégica e objetivos</p>
+                {planoEditCount > 0 && planoLastEditedAt && (
+                  <div className="mb-3 border border-orange-300 bg-orange-50 print:bg-white rounded-lg px-4 py-2 flex items-center gap-2">
+                    <span className="text-orange-600 font-black text-xs">⚠ JUSTIFICATIVA ALTERADA</span>
+                    <span className="text-orange-500 text-[10px] font-semibold">—</span>
+                    <span className="text-orange-600 text-[10px] font-semibold">
+                      Última alteração em {new Date(planoLastEditedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      {' às '}
+                      {new Date(planoLastEditedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <span className="text-orange-500 text-[10px] font-semibold">—</span>
+                    <span className="text-orange-600 text-[10px] font-bold">
+                      ({planoEditCount}ª edição)
+                    </span>
+                  </div>
+                )}
                 <div className="border-l-4 border-red-700 bg-gray-50 print:bg-white pl-4 pr-3 py-3 text-xs leading-relaxed text-gray-900 text-justify whitespace-pre-wrap break-words">
                   {formData.justificativa || '—'}
                 </div>
@@ -3725,7 +3755,7 @@ Secretaria de Estado da Saúde de São Paulo`;
               {isAuthenticated && (
                 <div className="hidden lg:flex items-center gap-6">
                   <button 
-                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaHistorico([]); setShowJustificativaHistorico(false); }}
+                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaHistorico([]); setShowJustificativaHistorico(false); setPlanoEditCount(0); setPlanoLastEditedAt(null); }}
                     className={`text-sm font-bold uppercase tracking-wide transition-colors ${
                       currentView === 'new' 
                         ? 'text-red-400 border-b-2 border-red-500' 

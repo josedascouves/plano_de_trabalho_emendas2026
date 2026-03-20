@@ -45,7 +45,24 @@ import {
   Search,
   Eye,
   Landmark,
-  Paperclip
+  Paperclip,
+  Calendar,
+  Clock,
+  Filter,
+  Activity,
+  Award,
+  Zap,
+  RefreshCw,
+  TrendingDown,
+  MapPin,
+  Hash,
+  FileBarChart2,
+  PieChart,
+  Layers,
+  CheckSquare,
+  XCircle,
+  Bell,
+  Globe
 } from 'lucide-react';
 import { FormState, User } from './types';
 import { 
@@ -114,6 +131,18 @@ const App: React.FC = () => {
     parlamentar: '',
     emenda: '',
     cnpj: ''
+  });
+
+  // Visualizar Plano - Modal Read-Only
+  const [showViewPlanModal, setShowViewPlanModal] = useState(false);
+  const [viewingPlanData, setViewingPlanData] = useState<any>(null);
+  const [isLoadingViewPlan, setIsLoadingViewPlan] = useState(false);
+
+  // Dashboard Filtros Avançados
+  const [dashboardFiltros, setDashboardFiltros] = useState({
+    programa: '',
+    cnes: '',
+    periodo: ''
   });
 
   // Form Progress State
@@ -1523,10 +1552,12 @@ const App: React.FC = () => {
         const userIds = [...new Set(semNome.map(p => p.created_by))];
         const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
         if (profiles && profiles.length > 0) {
-          const profileMap = new Map(profiles.map(p => [p.id, p]));
+          // Usar objeto simples em vez de Map (compatibilidade)
+          const profileMap: { [key: string]: { id: string; full_name: string; email: string } } = {};
+          profiles.forEach(p => { profileMap[p.id] = p; });
           for (const p of enriched) {
-            if (!p.created_by_name && p.created_by && profileMap.has(p.created_by)) {
-              const prof = profileMap.get(p.created_by)!;
+            if (!p.created_by_name && p.created_by && profileMap[p.created_by]) {
+              const prof = profileMap[p.created_by];
               p.created_by_name = prof.full_name || prof.email || null;
               p.created_by_email = p.created_by_email || prof.email || null;
               // Atualizar no banco para não precisar buscar de novo
@@ -1860,6 +1891,41 @@ const App: React.FC = () => {
     } finally {
       // SEMPRE LIMPAR A REF ao final
       loadingPlanIdRef.current = null;
+    }
+  };
+
+  // CARREGAR PLANO PARA VISUALIZAÇÃO (read-only)
+  const loadPlanForViewing = async (planoId: string) => {
+    setIsLoadingViewPlan(true);
+    setShowViewPlanModal(true);
+    setViewingPlanData(null);
+    try {
+      const { data: plano, error: planoErr } = await supabase
+        .from('planos_trabalho').select('*').eq('id', planoId).single();
+      if (planoErr || !plano) throw new Error(planoErr?.message || 'Plano não encontrado');
+
+      const { data: acoesRaw } = await supabase
+        .from('acoes_servicos').select('*').eq('plano_id', planoId).order('created_at', { ascending: false }).limit(50);
+      const { data: metasRaw } = await supabase
+        .from('metas_qualitativas').select('*').eq('plano_id', planoId).order('created_at', { ascending: false }).limit(20);
+      const { data: naturezasRaw } = await supabase
+        .from('naturezas_despesa_plano').select('*').eq('plano_id', planoId).order('created_at', { ascending: false }).limit(20);
+
+      // Dedup
+      const dedupBy = <T extends Record<string, any>>(arr: T[], key: (item: T) => string): T[] => {
+        const seen = new Set<string>();
+        return (arr || []).filter(item => { const k = key(item); if (seen.has(k)) return false; seen.add(k); return true; });
+      };
+      const acoes = dedupBy(acoesRaw || [], a => `${a.categoria}|${a.item}`);
+      const metas = dedupBy(metasRaw || [], m => m.meta_descricao);
+      const naturezas = dedupBy(naturezasRaw || [], n => n.codigo);
+
+      setViewingPlanData({ plano, acoes, metas, naturezas });
+    } catch (err: any) {
+      alert(`Erro ao carregar plano: ${err.message}`);
+      setShowViewPlanModal(false);
+    } finally {
+      setIsLoadingViewPlan(false);
     }
   };
 
@@ -3753,6 +3819,304 @@ Secretaria de Estado da Saúde de São Paulo`;
       <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         {/* Container centralizado - largura adaptável por view */}
         <div style={{ maxWidth: currentView === 'list' || currentView === 'dashboard' ? '1600px' : '1120px', margin: '0 auto', padding: '2rem 1.5rem' }}>
+
+          {/* MODAL VISUALIZAR PLANO - READ ONLY */}
+          {showViewPlanModal && (
+            <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden animate-fadeIn">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-6 py-5 flex items-center justify-between flex-shrink-0 border-b-4 border-red-600">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-red-600/20">
+                      <FileBarChart2 className="text-red-400 w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-black text-white">Visualizar Plano de Trabalho</h2>
+                      <p className="text-xs text-gray-400 mt-0.5">Modo leitura — sem alterações</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setShowViewPlanModal(false); setViewingPlanData(null); }}
+                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors">
+                    <X className="w-5 h-5 text-gray-400 hover:text-white" />
+                  </button>
+                </div>
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
+                  {isLoadingViewPlan ? (
+                    <div className="flex flex-col items-center justify-center py-24 gap-4">
+                      <Loader2 className="w-12 h-12 text-red-600 animate-spin" />
+                      <p className="text-gray-500 font-semibold">Carregando plano...</p>
+                    </div>
+                  ) : viewingPlanData ? (() => {
+                    const { plano, acoes, metas, naturezas } = viewingPlanData;
+                    const valorTotal = parseFloat(plano.valor_total) || 0;
+                    const totalAcoes = acoes.reduce((s: number, a: any) => s + (parseFloat(a.valor) || 0), 0);
+                    const totalNaturezas = naturezas.reduce((s: number, n: any) => s + (parseFloat(n.valor) || 0), 0);
+                    const diretriz = DIRETRIZES.find(d => d.id === plano.diretriz_id);
+                    const objetivo = diretriz?.objetivos.find(o => o.id === plano.objetivo_id);
+                    return (
+                      <div className="space-y-5">
+                        {/* Status bar */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="bg-white rounded-xl p-4 border border-gray-200 text-center shadow-sm">
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Valor Total</p>
+                            <p className="text-lg font-black text-red-600">R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          </div>
+                          <div className="bg-white rounded-xl p-4 border border-gray-200 text-center shadow-sm">
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Ações Cadastradas</p>
+                            <p className="text-2xl font-black text-gray-900">{acoes.length}</p>
+                          </div>
+                          <div className="bg-white rounded-xl p-4 border border-gray-200 text-center shadow-sm">
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Edições</p>
+                            <p className="text-2xl font-black text-orange-600">{plano.edit_count || 0}</p>
+                          </div>
+                          <div className="bg-white rounded-xl p-4 border border-gray-200 text-center shadow-sm">
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Criado em</p>
+                            <p className="text-sm font-black text-gray-900">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                        </div>
+
+                        {/* Seção 1: Info Emenda */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="bg-red-600 px-5 py-3 flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-white" />
+                            <h3 className="text-sm font-black text-white uppercase tracking-wider">1. Identificação da Emenda</h3>
+                          </div>
+                          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Parlamentar</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5">{plano.parlamentar || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Nº da Emenda</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5 font-mono">{plano.numero_emenda || '—'}</p>
+                            </div>
+                            <div className="md:col-span-2">
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Programa</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5">{plano.programa || '—'}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Seção 2: Beneficiário */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="bg-blue-600 px-5 py-3 flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-white" />
+                            <h3 className="text-sm font-black text-white uppercase tracking-wider">2. Beneficiário</h3>
+                          </div>
+                          <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-3">
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Razão Social</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5">{plano.beneficiario_nome || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase">CNPJ</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5 font-mono">{plano.beneficiario_cnpj || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase">CNES</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5 font-mono">{plano.cnes || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Conta Bancária</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5 font-mono">{plano.conta_bancaria || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Email</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5">{plano.beneficiario_email || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Telefone</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5">{plano.beneficiario_telefone || '—'}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Seção 3: Alinhamento */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="bg-green-600 px-5 py-3 flex items-center gap-2">
+                            <Target className="w-4 h-4 text-white" />
+                            <h3 className="text-sm font-black text-white uppercase tracking-wider">3. Alinhamento Estratégico</h3>
+                          </div>
+                          <div className="p-5 space-y-3">
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Diretriz</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5">{diretriz ? `${diretriz.numero}. ${diretriz.titulo}` : (plano.diretriz_id || '—')}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Objetivo Estratégico</p>
+                              <p className="text-sm font-bold text-gray-900 mt-0.5">{objetivo ? objetivo.titulo : (plano.objetivo_id || '—')}</p>
+                            </div>
+                            {Array.isArray(plano.metas_ids) && plano.metas_ids.length > 0 && (
+                              <div>
+                                <p className="text-xs text-gray-500 font-semibold uppercase mb-2">Metas Relacionadas ({plano.metas_ids.length})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {plano.metas_ids.map((metaId: string) => {
+                                    const metaObj = objetivo?.metas?.find((m: any) => m.id === metaId);
+                                    return (
+                                      <span key={metaId} className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 font-semibold px-2 py-1 rounded-full border border-green-200">
+                                        <CheckSquare className="w-3 h-3" />
+                                        {metaObj?.descricao || metaId}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Seção 4: Metas Quantitativas */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="bg-amber-500 px-5 py-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <BarChart3 className="w-4 h-4 text-white" />
+                              <h3 className="text-sm font-black text-white uppercase tracking-wider">4. Metas Quantitativas</h3>
+                            </div>
+                            <span className="text-xs font-bold text-amber-100">Total: R$ {totalAcoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          {acoes.length > 0 ? (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-gray-50 border-b border-gray-200">
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Categoria</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Ação / Serviço</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Valor</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {acoes.map((a: any, i: number) => (
+                                    <tr key={i} className="hover:bg-gray-50">
+                                      <td className="px-4 py-2.5 text-xs text-gray-600 font-medium">{a.categoria}</td>
+                                      <td className="px-4 py-2.5 text-xs font-bold text-gray-900">{a.item}</td>
+                                      <td className="px-4 py-2.5 text-xs font-black text-red-600 text-right">R$ {(parseFloat(a.valor) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-center text-sm text-gray-400 py-6">Nenhuma ação registrada</p>
+                          )}
+                        </div>
+
+                        {/* Seção 5: Metas Qualitativas */}
+                        {metas.length > 0 && (
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="bg-purple-600 px-5 py-3 flex items-center gap-2">
+                              <TrendingUp className="w-4 h-4 text-white" />
+                              <h3 className="text-sm font-black text-white uppercase tracking-wider">5. Indicadores Qualitativos</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-gray-50 border-b border-gray-200">
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Indicador</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Meta (%)</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {metas.map((m: any, i: number) => (
+                                    <tr key={i} className="hover:bg-gray-50">
+                                      <td className="px-4 py-2.5 text-xs font-bold text-gray-900">{m.meta_descricao}</td>
+                                      <td className="px-4 py-2.5 text-xs font-black text-purple-600 text-right">{m.indicador}%</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Seção 6: Naturezas de Despesa */}
+                        {naturezas.length > 0 && (
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="bg-teal-600 px-5 py-3 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="w-4 h-4 text-white" />
+                                <h3 className="text-sm font-black text-white uppercase tracking-wider">6. Execução Financeira</h3>
+                              </div>
+                              <span className="text-xs font-bold text-teal-100">Total: R$ {totalNaturezas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-gray-50 border-b border-gray-200">
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Natureza de Despesa</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Valor</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">% do Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {naturezas.map((n: any, i: number) => {
+                                    const nat = NATUREZAS_DESPESA.find((nd: any) => nd.codigo === n.codigo);
+                                    const pct = valorTotal > 0 ? ((parseFloat(n.valor) || 0) / valorTotal * 100) : 0;
+                                    return (
+                                      <tr key={i} className="hover:bg-gray-50">
+                                        <td className="px-4 py-2.5 text-xs font-bold text-gray-900">
+                                          <span className="font-mono text-gray-500 mr-2">{n.codigo}</span>
+                                          {nat ? (nat as any).descricao : n.codigo}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs font-black text-teal-600 text-right">R$ {(parseFloat(n.valor) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                        <td className="px-4 py-2.5 text-xs text-gray-600 text-right">{pct.toFixed(1)}%</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Seção 7: Justificativa */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="bg-gray-700 px-5 py-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileCheck className="w-4 h-4 text-white" />
+                              <h3 className="text-sm font-black text-white uppercase tracking-wider">7. Justificativa Técnica</h3>
+                            </div>
+                            {plano.justificativa_alterada_em && (
+                              <span className="inline-flex items-center gap-1.5 text-xs bg-purple-500/30 text-purple-200 font-bold px-2.5 py-1 rounded-full">
+                                <Clock className="w-3 h-3" />
+                                Alterada em {new Date(plano.justificativa_alterada_em).toLocaleDateString('pt-BR')} às {new Date(plano.justificativa_alterada_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-5 space-y-4">
+                            <div className="border-l-4 border-red-600 bg-gray-50 pl-4 pr-3 py-3 text-sm leading-relaxed text-gray-900 whitespace-pre-wrap break-words rounded-r-lg max-h-64 overflow-y-auto">
+                              {plano.justificativa || '—'}
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span>{(plano.justificativa || '').length.toLocaleString('pt-BR')} caracteres</span>
+                              <span>Responsável: <strong className="text-gray-700">{plano.responsavel_assinatura || '—'}</strong></span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Rodapé */}
+                        <div className="bg-gray-100 rounded-xl p-4 border border-gray-200 text-xs text-gray-500 flex flex-wrap gap-4 justify-between">
+                          <span>Criado por: <strong className="text-gray-700">{plano.created_by_name || '—'}</strong> ({plano.created_by_email || '—'})</span>
+                          <span>Última edição: <strong className="text-gray-700">{plano.last_edited_at ? new Date(plano.last_edited_at).toLocaleString('pt-BR') : '—'}</strong></span>
+                          <span>Total de edições: <strong className="text-gray-700">{plano.edit_count || 0}</strong></span>
+                        </div>
+                      </div>
+                    );
+                  })() : null}
+                </div>
+                {/* Footer */}
+                <div className="flex-shrink-0 border-t border-gray-200 px-6 py-4 bg-white flex justify-end">
+                  <button
+                    onClick={() => { setShowViewPlanModal(false); setViewingPlanData(null); }}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-gray-800 text-white rounded-xl font-bold text-sm hover:bg-gray-700 transition-all"
+                  >
+                    <X className="w-4 h-4" /> Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* MODAL GERENCIAMENTO DE USUÁRIOS */}
           {showUserManagement && currentUser?.role === 'admin' && (
             <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
@@ -5025,7 +5389,14 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   {isAdmin() && plano.edit_count > 0 && (
                                     <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded">{plano.edit_count}x</span>
                                   )}
-
+                                  {plano.justificativa_alterada_em && (
+                                    <div className="mt-1">
+                                      <span className="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded-full border border-purple-200" title={`Justificativa alterada em ${new Date(plano.justificativa_alterada_em).toLocaleDateString('pt-BR')} às ${new Date(plano.justificativa_alterada_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}>
+                                        <Clock className="w-2.5 h-2.5" />
+                                        Justif. alterada {new Date(plano.justificativa_alterada_em).toLocaleDateString('pt-BR')}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -5038,6 +5409,14 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-md font-bold text-xs uppercase hover:bg-blue-100 transition-all"
                                 >
                                   <Eye className="w-4 h-4" /> Extrato
+                                </button>
+                              )}
+                              {canViewPlan(plano.created_by) && (
+                                <button
+                                  onClick={() => loadPlanForViewing(plano.id)}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-600 rounded-md font-bold text-xs uppercase hover:bg-indigo-100 transition-all"
+                                >
+                                  <Eye className="w-4 h-4" /> Ver
                                 </button>
                               )}
                               {canEditPlan(plano.created_by) && (
@@ -5097,125 +5476,434 @@ Secretaria de Estado da Saúde de São Paulo`;
                   variant="primary"
                 />
               </div>
-            ) : (
-              <div className="space-y-8 animate-fadeIn">
-                <h2 className="text-base font-black text-gray-900 uppercase tracking-wider text-center">Dashboard - Relatórios e Estatísticas</h2>
-              
+            ) : (() => {
+              // Aplicar filtros de dashboard
+              const dashPlanos = planosList.filter(p => {
+                if (dashboardFiltros.programa && p.programa !== dashboardFiltros.programa) return false;
+                if (dashboardFiltros.cnes && !(p.cnes || '').toLowerCase().includes(dashboardFiltros.cnes.toLowerCase())) return false;
+                if (dashboardFiltros.periodo) {
+                  const [year, month] = dashboardFiltros.periodo.split('-').map(Number);
+                  const d = new Date(p.created_at);
+                  if (d.getFullYear() !== year || (d.getMonth() + 1) !== month) return false;
+                }
+                return true;
+              });
 
-              
-              {isLoadingPlanos ? (
-                <div className="flex justify-center py-20">
-                  <Loader2 className="w-16 h-16 text-red-600 animate-spin" />
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white border border-gray-200 p-6 rounded-lg">
-                      <div className="flex justify-between items-start mb-4">
-                        <FileCheck className="w-5 h-5 text-gray-600" />
-                        <span className="text-3xl font-bold text-black">{planosList.length}</span>
-                      </div>
-                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Planos Cadastrados</p>
-                    </div>
+              const totalValor = dashPlanos.reduce((s, p) => s + (parseFloat(p.valor_total) || 0), 0);
+              const avgValor = dashPlanos.length > 0 ? totalValor / dashPlanos.length : 0;
+              const planosComJustifAlterada = dashPlanos.filter(p => p.justificativa_alterada_em);
+              const planosEditados = dashPlanos.filter(p => p.edit_count > 0);
+              const planosMac = dashPlanos.filter(p => p.programa === PROGRAMAS[0]);
 
-                    <div className="bg-white border border-gray-200 p-6 rounded-lg">
-                      <div className="flex justify-between items-start mb-4">
-                        <DollarSign className="w-5 h-5 text-gray-600" />
-                        <span className="text-2xl font-bold text-gray-900">R$ {(planosList.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0)).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Valor Total</p>
-                    </div>
+              // Agrupar por programa com valor
+              const programaStats = PROGRAMAS.map(prog => {
+                const pts = dashPlanos.filter(p => p.programa === prog);
+                return { programa: prog, count: pts.length, valor: pts.reduce((s, p) => s + (parseFloat(p.valor_total) || 0), 0) };
+              }).filter(ps => ps.count > 0).sort((a, b) => b.valor - a.valor);
 
-                    <div className="bg-white border border-gray-200 p-6 rounded-lg">
-                      <div className="flex justify-between items-start mb-4">
-                        <TrendingUp className="w-5 h-5 text-gray-600" />
-                        <span className="text-3xl font-bold text-black">{planosList.length > 0 ? ((planosList.filter(p => p.programa === PROGRAMAS[0]).length / planosList.length) * 100).toFixed(1) : 0}%</span>
-                      </div>
-                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">CUSTEIO MAC</p>
-                    </div>
+              // Top parlamentares
+              const parlamentarMap: Record<string, { count: number; valor: number }> = {};
+              dashPlanos.forEach(p => {
+                const k = p.parlamentar || 'Sem nome';
+                if (!parlamentarMap[k]) parlamentarMap[k] = { count: 0, valor: 0 };
+                parlamentarMap[k].count++;
+                parlamentarMap[k].valor += parseFloat(p.valor_total) || 0;
+              });
+              const topParlamentares = Object.entries(parlamentarMap)
+                .sort(([, a], [, b]) => b.valor - a.valor).slice(0, 8);
 
-                    <div className="bg-white border border-gray-200 p-6 rounded-lg">
-                      <div className="flex justify-between items-start mb-4">
-                        <BarChart3 className="w-5 h-5 text-gray-600" />
-                        <span className="text-2xl font-bold text-gray-900">R$ {planosList.length > 0 ? ((planosList.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0) / planosList.length)).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) : 0}</span>
-                      </div>
-                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Valor Médio</p>
+              // Agrupar por CNES
+              const cnesMap: Record<string, { count: number; valor: number }> = {};
+              dashPlanos.forEach(p => {
+                const k = p.cnes || '—';
+                if (!cnesMap[k]) cnesMap[k] = { count: 0, valor: 0 };
+                cnesMap[k].count++;
+                cnesMap[k].valor += parseFloat(p.valor_total) || 0;
+              });
+              const topCnes = Object.entries(cnesMap)
+                .sort(([, a], [, b]) => b.count - a.count).slice(0, 6);
+
+              const hasFiltros = dashboardFiltros.programa || dashboardFiltros.cnes || dashboardFiltros.periodo;
+
+              return (
+                <div className="space-y-6 animate-fadeIn">
+                  {/* TÍTULO + ACÕES */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-black text-gray-900 tracking-tight">Dashboard Analítico</h2>
+                      <p className="text-sm text-gray-500 mt-0.5">Visão consolidada dos planos de trabalho da SES-SP</p>
                     </div>
+                    <button onClick={() => loadPlanos()}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-50 shadow-sm hover:shadow transition-all">
+                      <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+                    </button>
                   </div>
 
-                    <div className="bg-white border border-gray-200 p-8 rounded-lg mt-8">
-                      <h3 className="text-lg font-bold text-black uppercase tracking-wide mb-6">Resumo por Programa</h3>
-                      <div className="space-y-3">
-                        {PROGRAMAS.map(programa => {
-                          const planosDoPrograma = planosList.filter(p => p.programa === programa);
-                          const valorTotal = planosDoPrograma.reduce((sum, p) => sum + (parseFloat(p.valor_total) || 0), 0);
-                          return planosDoPrograma.length > 0 ? (
-                            <div key={programa} className="flex justify-between items-center p-4 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
-                              <div>
-                                <p className="text-sm font-semibold text-black">{programa}</p>
-                                <p className="text-xs text-gray-600 font-medium">{planosDoPrograma.length} plano(s)</p>
-                              </div>
-                              <p className="text-lg font-bold text-red-600">R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  {/* FILTROS */}
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Filter className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm font-black text-gray-700 uppercase tracking-wider">Filtros</span>
+                      {hasFiltros && (
+                        <button onClick={() => setDashboardFiltros({ programa: '', cnes: '', periodo: '' })}
+                          className="ml-auto text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1">
+                          <XCircle className="w-3.5 h-3.5" /> Limpar filtros
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-gray-600 uppercase tracking-wider block mb-1.5">Programa</label>
+                        <select
+                          value={dashboardFiltros.programa}
+                          onChange={e => setDashboardFiltros(f => ({ ...f, programa: e.target.value }))}
+                          className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 bg-gray-50 font-semibold text-gray-700"
+                        >
+                          <option value="">Todos os programas</option>
+                          {PROGRAMAS.map(p => <option key={p} value={p}>{p.length > 60 ? p.slice(0, 60) + '...' : p}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-gray-600 uppercase tracking-wider block mb-1.5">CNES</label>
+                        <input
+                          type="text"
+                          value={dashboardFiltros.cnes}
+                          onChange={e => setDashboardFiltros(f => ({ ...f, cnes: e.target.value }))}
+                          placeholder="Filtrar por CNES..."
+                          className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 bg-gray-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-gray-600 uppercase tracking-wider block mb-1.5">Mês/Ano de Cadastro</label>
+                        <input
+                          type="month"
+                          value={dashboardFiltros.periodo}
+                          onChange={e => setDashboardFiltros(f => ({ ...f, periodo: e.target.value }))}
+                          className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 bg-gray-50"
+                        />
+                      </div>
+                    </div>
+                    {hasFiltros && (
+                      <p className="text-xs text-amber-600 font-bold mt-3 flex items-center gap-1.5">
+                        <Bell className="w-3 h-3" /> Mostrando {dashPlanos.length} de {planosList.length} planos filtrados
+                      </p>
+                    )}
+                  </div>
+
+                  {isLoadingPlanos ? (
+                    <div className="flex flex-col items-center justify-center py-24 gap-4">
+                      <Loader2 className="w-14 h-14 text-red-600 animate-spin" />
+                      <p className="text-gray-500 font-semibold">Carregando dados...</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* KPIs — Linha 1 */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {/* Total Planos */}
+                        <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-5 shadow-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="p-2 bg-white/10 rounded-xl">
+                              <FileCheck className="w-5 h-5 text-white" />
                             </div>
-                          ) : null;
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 p-8 rounded-lg mt-8">
-                      <h3 className="text-lg font-bold text-black uppercase tracking-wide mb-6">📋 Histórico de Edições</h3>
-                      
-                      
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-gray-100 border-b border-gray-200">
-                              <th className="px-4 py-3 text-left font-bold text-gray-900 uppercase text-xs">Emenda</th>
-                              <th className="px-4 py-3 text-left font-bold text-gray-900 uppercase text-xs">Parlamentar</th>
-                              <th className="px-4 py-3 text-left font-bold text-gray-900 uppercase text-xs">Criada em</th>
-                              <th className="px-4 py-3 text-center font-bold text-gray-900 uppercase text-xs">Edições</th>
-                              <th className="px-4 py-3 text-left font-bold text-gray-900 uppercase text-xs">Última Edição</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200">
-                            {planosList
-                              .filter(p => (p.edit_count > 0 || p.last_edited_at) && p.edit_count !== undefined)
-                              .sort((a, b) => new Date(b.last_edited_at || b.created_at).getTime() - new Date(a.last_edited_at || a.created_at).getTime())
-                              .slice(0, 10)
-                              .map(plano => (
-                                <tr key={plano.id} className="hover:bg-gray-50">
-                                  <td className="px-4 py-3 font-bold text-gray-900">{plano.numero_emenda}</td>
-                                  <td className="px-4 py-3 text-gray-700">{plano.parlamentar}</td>
-                                  <td className="px-4 py-3 text-gray-700">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</td>
-                                  <td className="px-4 py-3 text-center">
-                                    {plano.edit_count > 0 ? (
-                                      <span className="px-3 py-1 bg-orange-100 text-orange-700 font-bold text-xs rounded-full">
-                                        {plano.edit_count}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-400">—</span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-gray-700">
-                                    {plano.last_edited_at ? new Date(plano.last_edited_at).toLocaleDateString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                                  </td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
-                        {planosList.filter(p => (p.edit_count > 0 || p.last_edited_at) && p.edit_count !== undefined).length === 0 && (
-                          <div className="text-center py-8 text-gray-500">
-                            <p className="text-sm">Nenhum plano foi editado ainda</p>
+                            <span className="text-3xl font-black text-white">{dashPlanos.length}</span>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                </>
-              )}
-            </div>
-            )
-          )}
+                          <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Planos Cadastrados</p>
+                          {hasFiltros && <p className="text-[10px] text-gray-500 mt-0.5">de {planosList.length} no total</p>}
+                        </div>
 
+                        {/* Valor Total */}
+                        <div className="bg-gradient-to-br from-red-700 to-red-600 rounded-2xl p-5 shadow-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="p-2 bg-white/10 rounded-xl">
+                              <DollarSign className="w-5 h-5 text-white" />
+                            </div>
+                            <span className="text-lg font-black text-white leading-tight text-right">R$ {(totalValor / 1_000_000).toFixed(2)}M</span>
+                          </div>
+                          <p className="text-xs font-bold text-red-200 uppercase tracking-widest">Valor Total</p>
+                          <p className="text-[10px] text-red-300 mt-0.5">R$ {totalValor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                        </div>
+
+                        {/* Média por Plano */}
+                        <div className="bg-gradient-to-br from-blue-700 to-blue-600 rounded-2xl p-5 shadow-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="p-2 bg-white/10 rounded-xl">
+                              <BarChart3 className="w-5 h-5 text-white" />
+                            </div>
+                            <span className="text-base font-black text-white leading-tight text-right">R$ {(avgValor / 1_000).toFixed(0)}K</span>
+                          </div>
+                          <p className="text-xs font-bold text-blue-200 uppercase tracking-widest">Valor Médio/Plano</p>
+                          <p className="text-[10px] text-blue-300 mt-0.5">R$ {avgValor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                        </div>
+
+                        {/* % MAC */}
+                        <div className="bg-gradient-to-br from-emerald-700 to-emerald-600 rounded-2xl p-5 shadow-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="p-2 bg-white/10 rounded-xl">
+                              <TrendingUp className="w-5 h-5 text-white" />
+                            </div>
+                            <span className="text-3xl font-black text-white">{dashPlanos.length > 0 ? ((planosMac.length / dashPlanos.length) * 100).toFixed(0) : 0}%</span>
+                          </div>
+                          <p className="text-xs font-bold text-emerald-200 uppercase tracking-widest">Custeio MAC</p>
+                          <p className="text-[10px] text-emerald-300 mt-0.5">{planosMac.length} plano(s)</p>
+                        </div>
+                      </div>
+
+                      {/* KPIs — Linha 2 (detalhes de status) */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center gap-4">
+                          <div className="p-3 bg-orange-100 rounded-xl flex-shrink-0">
+                            <Activity className="w-5 h-5 text-orange-600" />
+                          </div>
+                          <div>
+                            <p className="text-2xl font-black text-gray-900">{planosEditados.length}</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Com Edições</p>
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center gap-4">
+                          <div className="p-3 bg-purple-100 rounded-xl flex-shrink-0">
+                            <Clock className="w-5 h-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="text-2xl font-black text-gray-900">{planosComJustifAlterada.length}</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Justif. Alteradas</p>
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center gap-4">
+                          <div className="p-3 bg-teal-100 rounded-xl flex-shrink-0">
+                            <MapPin className="w-5 h-5 text-teal-600" />
+                          </div>
+                          <div>
+                            <p className="text-2xl font-black text-gray-900">{Object.keys(cnesMap).length}</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">CNES Únicos</p>
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center gap-4">
+                          <div className="p-3 bg-amber-100 rounded-xl flex-shrink-0">
+                            <Users className="w-5 h-5 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="text-2xl font-black text-gray-900">{Object.keys(parlamentarMap).length}</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Parlamentares</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* LINHA PRINCIPAL: Programas + Parlamentares */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Distribuição por Programa */}
+                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+                            <div className="p-2 bg-gray-100 rounded-lg">
+                              <Layers className="w-4 h-4 text-gray-600" />
+                            </div>
+                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Distribuição por Programa</h3>
+                          </div>
+                          <div className="p-6 space-y-4">
+                            {programaStats.length === 0 ? (
+                              <p className="text-sm text-gray-400 text-center py-6">Nenhum programa encontrado</p>
+                            ) : programaStats.map((ps, idx) => {
+                              const pct = totalValor > 0 ? (ps.valor / totalValor * 100) : 0;
+                              const colors = ['red', 'blue', 'emerald', 'amber'];
+                              const c = colors[idx % colors.length];
+                              const barColors: Record<string, string> = { red: 'bg-red-500', blue: 'bg-blue-500', emerald: 'bg-emerald-500', amber: 'bg-amber-500' };
+                              const textColors: Record<string, string> = { red: 'text-red-600', blue: 'text-blue-600', emerald: 'text-emerald-600', amber: 'text-amber-600' };
+                              const bgColors: Record<string, string> = { red: 'bg-red-50', blue: 'bg-blue-50', emerald: 'bg-emerald-50', amber: 'bg-amber-50' };
+                              return (
+                                <div key={ps.programa} className={`${bgColors[c]} rounded-xl p-4 border border-gray-100`}>
+                                  <div className="flex items-start justify-between mb-2 gap-2">
+                                    <p className="text-xs font-bold text-gray-800 leading-tight flex-1">{ps.programa.length > 55 ? ps.programa.slice(0, 55) + '...' : ps.programa}</p>
+                                    <span className={`${textColors[c]} text-sm font-black flex-shrink-0`}>{pct.toFixed(1)}%</span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
+                                    <div className={`${barColors[c]} h-1.5 rounded-full transition-all duration-700`} style={{ width: `${pct}%` }} />
+                                  </div>
+                                  <div className="flex items-center justify-between text-xs text-gray-500">
+                                    <span>{ps.count} plano(s)</span>
+                                    <span className="font-bold">R$ {(ps.valor / 1_000_000).toFixed(2)}M</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Top Parlamentares */}
+                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+                            <div className="p-2 bg-gray-100 rounded-lg">
+                              <Award className="w-4 h-4 text-gray-600" />
+                            </div>
+                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Top Parlamentares</h3>
+                          </div>
+                          <div className="divide-y divide-gray-50">
+                            {topParlamentares.length === 0 ? (
+                              <p className="text-sm text-gray-400 text-center py-6">Nenhum dado</p>
+                            ) : topParlamentares.map(([parl, stats], i) => (
+                              <div key={parl} className="flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 transition-colors">
+                                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${i === 0 ? 'bg-amber-400 text-amber-900' : i === 1 ? 'bg-gray-300 text-gray-700' : i === 2 ? 'bg-orange-300 text-orange-800' : 'bg-gray-100 text-gray-600'}`}>{i + 1}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-gray-900 truncate">{parl}</p>
+                                  <p className="text-xs text-gray-400">{stats.count} plano(s)</p>
+                                </div>
+                                <p className="text-sm font-black text-red-600 flex-shrink-0">R$ {(stats.valor / 1_000_000).toFixed(2)}M</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* LINHA: CNES + Justificativas Alteradas */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* CNES Breakdown */}
+                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+                            <div className="p-2 bg-teal-50 rounded-lg">
+                              <MapPin className="w-4 h-4 text-teal-600" />
+                            </div>
+                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Distribuição por CNES</h3>
+                          </div>
+                          {topCnes.length === 0 ? (
+                            <p className="text-sm text-gray-400 text-center py-6">Nenhum dado</p>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-gray-50 border-b border-gray-100">
+                                    <th className="px-5 py-3 text-left text-xs font-black text-gray-600 uppercase tracking-wider">CNES</th>
+                                    <th className="px-5 py-3 text-center text-xs font-black text-gray-600 uppercase tracking-wider">Planos</th>
+                                    <th className="px-5 py-3 text-right text-xs font-black text-gray-600 uppercase tracking-wider">Valor Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                  {topCnes.map(([cnes, stats]) => (
+                                    <tr key={cnes} className="hover:bg-teal-50/50 transition-colors">
+                                      <td className="px-5 py-3 font-mono text-sm font-bold text-gray-900">{cnes}</td>
+                                      <td className="px-5 py-3 text-center">
+                                        <span className="inline-flex items-center justify-center w-7 h-7 bg-teal-100 text-teal-700 font-black text-xs rounded-full">{stats.count}</span>
+                                      </td>
+                                      <td className="px-5 py-3 text-right text-sm font-bold text-gray-800">R$ {(stats.valor / 1_000).toFixed(0)}K</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Justificativas Alteradas */}
+                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+                            <div className="p-2 bg-purple-50 rounded-lg">
+                              <Clock className="w-4 h-4 text-purple-600" />
+                            </div>
+                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Justificativas Alteradas</h3>
+                            <span className="ml-auto inline-flex items-center justify-center px-2.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-black rounded-full">{planosComJustifAlterada.length}</span>
+                          </div>
+                          {planosComJustifAlterada.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-400">
+                              <CheckCircle2 className="w-10 h-10 text-green-300" />
+                              <p className="text-sm font-semibold">Nenhuma justificativa alterada</p>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                              {planosComJustifAlterada
+                                .sort((a, b) => new Date(b.justificativa_alterada_em).getTime() - new Date(a.justificativa_alterada_em).getTime())
+                                .map(plano => (
+                                  <div key={plano.id} className="flex items-start gap-3 px-5 py-3.5 hover:bg-purple-50/50 transition-colors">
+                                    <div className="p-1.5 bg-purple-100 rounded-lg flex-shrink-0 mt-0.5">
+                                      <Clock className="w-3.5 h-3.5 text-purple-600" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-bold text-gray-900 truncate">{plano.numero_emenda} — {plano.parlamentar}</p>
+                                      <p className="text-xs text-gray-500">{plano.created_by_name || '—'}</p>
+                                    </div>
+                                    <p className="text-xs font-semibold text-purple-600 flex-shrink-0 text-right leading-tight">
+                                      {new Date(plano.justificativa_alterada_em).toLocaleDateString('pt-BR')}<br/>
+                                      <span className="text-[10px] text-gray-400">{new Date(plano.justificativa_alterada_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </p>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* TABELA: Histórico de Edições */}
+                      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+                          <div className="p-2 bg-orange-50 rounded-lg">
+                            <Activity className="w-4 h-4 text-orange-600" />
+                          </div>
+                          <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Histórico de Edições Recentes</h3>
+                          <span className="ml-auto inline-flex items-center justify-center px-2.5 py-0.5 bg-orange-100 text-orange-700 text-xs font-black rounded-full">{planosEditados.length} editado(s)</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="px-5 py-3 text-left text-xs font-black text-gray-600 uppercase tracking-wider">Emenda</th>
+                                <th className="px-5 py-3 text-left text-xs font-black text-gray-600 uppercase tracking-wider">Parlamentar</th>
+                                <th className="px-5 py-3 text-left text-xs font-black text-gray-600 uppercase tracking-wider">CNES</th>
+                                <th className="px-5 py-3 text-left text-xs font-black text-gray-600 uppercase tracking-wider">Preenchedor</th>
+                                <th className="px-5 py-3 text-left text-xs font-black text-gray-600 uppercase tracking-wider">Cadastro</th>
+                                <th className="px-5 py-3 text-center text-xs font-black text-gray-600 uppercase tracking-wider">Edições</th>
+                                <th className="px-5 py-3 text-left text-xs font-black text-gray-600 uppercase tracking-wider">Última Edição</th>
+                                <th className="px-5 py-3 text-left text-xs font-black text-gray-600 uppercase tracking-wider">Just. Alterada</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {dashPlanos
+                                .filter(p => p.edit_count !== undefined)
+                                .sort((a, b) => new Date(b.last_edited_at || b.created_at).getTime() - new Date(a.last_edited_at || a.created_at).getTime())
+                                .slice(0, 15)
+                                .map(plano => (
+                                  <tr key={plano.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-5 py-3 font-mono font-bold text-gray-900 text-xs">{plano.numero_emenda}</td>
+                                    <td className="px-5 py-3 text-xs text-gray-700 max-w-[140px] truncate">{plano.parlamentar}</td>
+                                    <td className="px-5 py-3 font-mono text-xs text-gray-500">{plano.cnes || '—'}</td>
+                                    <td className="px-5 py-3 text-xs text-gray-600 max-w-[120px] truncate">{plano.created_by_name || '—'}</td>
+                                    <td className="px-5 py-3 text-xs text-gray-500">{new Date(plano.created_at).toLocaleDateString('pt-BR')}</td>
+                                    <td className="px-5 py-3 text-center">
+                                      {plano.edit_count > 0 ? (
+                                        <span className="inline-flex items-center justify-center px-2 py-0.5 bg-orange-100 text-orange-700 font-black text-xs rounded-full">{plano.edit_count}</span>
+                                      ) : (
+                                        <span className="text-gray-300 text-xs">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-5 py-3 text-xs text-gray-500">{plano.last_edited_at ? new Date(plano.last_edited_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                                    <td className="px-5 py-3">
+                                      {plano.justificativa_alterada_em ? (
+                                        <span className="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full border border-purple-200">
+                                          <Clock className="w-2.5 h-2.5" />
+                                          {new Date(plano.justificativa_alterada_em).toLocaleDateString('pt-BR')}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-300 text-xs">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                          {dashPlanos.filter(p => p.edit_count !== undefined).length === 0 && (
+                            <div className="text-center py-10 text-gray-400">
+                              <p className="text-sm">Nenhum plano encontrado</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* FOOTER INFO */}
+                      <div className="flex items-center justify-between text-xs text-gray-400 pb-2">
+                        <span>Atualizado em {new Date().toLocaleString('pt-BR')}</span>
+                        <span>{dashPlanos.length} plano(s) exibido(s) • Valor total: R$ {totalValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()
+          )}
           {/* VIEW: NOVO PLANO - ONE PAGE DESIGN */}
           {currentView === 'new' && (
             <>

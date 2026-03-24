@@ -232,6 +232,35 @@ const App: React.FC = () => {
   const [justificativaAlteradaEm, setJustificativaAlteradaEm] = useState<string | null>(null);
   const extratoInputRef = useRef<HTMLInputElement>(null);
 
+  // ======== VALIDAÇÃO ADMIN ========
+  const [validandoPlanoId, setValidandoPlanoId] = useState<string | null>(null);
+
+  // ======== IMPRESSÃO DE PLANO DA LISTA ========
+  const pendingPrintPlanoIdRef = useRef<string | null>(null);
+
+  // ======== INLINE EDIÇÃO CONTA/EXTRATO EM MEUS PLANOS ========
+  const [inlineEditContaId, setInlineEditContaId] = useState<string | null>(null);
+  const [inlineContaValue, setInlineContaValue] = useState('');
+  const [isUploadingInlineExtrato, setIsUploadingInlineExtrato] = useState(false);
+  const [inlineExtratoUploadId, setInlineExtratoUploadId] = useState<string | null>(null);
+  const inlineExtratoInputRef = useRef<HTMLInputElement>(null);
+
+  // ======== MENU HAMBÚRGUER PARA BOTÕES ========
+  const [openMenuPlanoId, setOpenMenuPlanoId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Fechar menu hambúrguer ao clicar fora
+  useEffect(() => {
+    if (!openMenuPlanoId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuPlanoId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenuPlanoId]);
+
   const LOGO_URL_COLORIDA = "/img/logo_colorido.png";  // Versão oficial colorida
   const LOGO_URL_BRANCA = "/img/logo_branco.png";      // Versão oficial branca para header
 
@@ -248,8 +277,10 @@ const App: React.FC = () => {
     return adminStatus;
   };
   
-  const canEditPlan = (planCreatedBy: string): boolean => {
+  const canEditPlan = (planCreatedBy: string, planValidado?: boolean): boolean => {
     if (!currentUser) return false;
+    // Planos validados não podem ser editados por ninguém
+    if (planValidado) return false;
     // Only admin e owner (user) podem editar
     // Intermediate users NÃO podem editar
     return isAdmin() || (currentUser.role === 'user' && planCreatedBy === currentUser.id);
@@ -1605,8 +1636,21 @@ const App: React.FC = () => {
 
     // Carregar o plano (SEMPRE, sem cache)
     loadPlanForEditing(editingPlanId)
+      .then(() => {
+        // Se há impressão pendente para este plano, mostrar documento PDF e imprimir
+        if (pendingPrintPlanoIdRef.current === editingPlanId) {
+          pendingPrintPlanoIdRef.current = null;
+          // Mostrar a view de documento PDF estruturado
+          setShowDocument(true);
+          // Dar tempo para o documento renderizar completamente na tela
+          setTimeout(() => { 
+            window.print();
+          }, 1200);
+        }
+      })
       .catch((error) => {
         console.error('❌ Erro ao carregar plano:', error);
+        pendingPrintPlanoIdRef.current = null;
       })
       .finally(() => {
         // Limpar "em carregamento"
@@ -1626,14 +1670,10 @@ const App: React.FC = () => {
         formData.emenda.valor !== '0,00' &&
         formData.emenda.programa?.trim()
       ),
-      // Seção 2: Beneficiário - completa se nome, cnpj preenchidos (conta/extrato opcional para CNES isentos)
+      // Seção 2: Beneficiário - completa se nome e cnpj preenchidos (conta/extrato são opcionais)
       'beneficiario': !!(
         formData.beneficiario.nome?.trim() &&
-        formData.beneficiario.cnpj?.trim() &&
-        (CNES_ISENTO_CONTA_EXTRATO.includes(formData.beneficiario.cnes?.trim()) || (
-          formData.beneficiario.contaBancaria?.trim() &&
-          formData.beneficiario.extratoUrl?.trim()
-        ))
+        formData.beneficiario.cnpj?.trim()
       ),
       // Seção 3: Alinhamento - completa se diretriz e objetivo selecionados
       'alinhamento': !!(
@@ -2657,9 +2697,7 @@ const App: React.FC = () => {
     // DADOS DO BENEFICIÁRIO - obrigatório
     if (!formData.beneficiario.nome?.trim()) missingFields.push('Nome do Beneficiário');
     if (!formData.beneficiario.cnpj?.trim()) missingFields.push('CNPJ do Beneficiário');
-    const cnesIsento = CNES_ISENTO_CONTA_EXTRATO.includes(formData.beneficiario.cnes?.trim());
-    if (!cnesIsento && !formData.beneficiario.contaBancaria?.trim()) missingFields.push('Conta Bancária');
-    if (!cnesIsento && !formData.beneficiario.extratoUrl?.trim()) missingFields.push('Extrato Bancário (faça upload do arquivo)');
+    // Conta bancária e extrato bancário não são mais obrigatórios
 
     // ALINHAMENTO ESTRATÉGICO - obrigatório
     if (!formData.planejamento.diretrizId) missingFields.push('Diretriz Estratégica');
@@ -3003,7 +3041,182 @@ const App: React.FC = () => {
     }
   };
 
-  // Gerar e salvar PDF
+  const handleDownloadExtrato = async (extratoPath: string, filename?: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('extratos-bancarios')
+        .createSignedUrl(extratoPath, 300);
+      if (error) throw error;
+      const response = await fetch(data.signedUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || extratoPath.split('/').pop() || 'extrato.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('❌ Erro ao baixar extrato:', error);
+      alert(`❌ Erro ao baixar extrato:\n${error.message}`);
+    }
+  };
+
+  // ======== VALIDAR PLANO (Admin) ========
+  const handleValidarPlano = async (planoId: string, currentlyValidated: boolean) => {
+    if (!isAdmin()) return;
+    const action = currentlyValidated ? 'desvalidar' : 'validar';
+    if (!confirm(`Tem certeza que deseja ${action} este plano?\n${currentlyValidated ? 'O usuário poderá editar novamente.' : 'O usuário não poderá mais editar o plano após validação.'}`)) return;
+    setValidandoPlanoId(planoId);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessão expirada');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada');
+
+      const updatePayload = {
+        validado: !currentlyValidated,
+        validado_por: !currentlyValidated ? user.id : null,
+        validado_em: !currentlyValidated ? new Date().toISOString() : null,
+      };
+
+      // Tentar via RPC primeiro (mais confiável, bypassa schema cache)
+      let success = false;
+      try {
+        const { error: rpcError } = await supabase.rpc('toggle_validacao_plano', {
+          p_plano_id: planoId,
+          p_user_id: user.id,
+          p_validar: !currentlyValidated,
+        });
+        if (!rpcError) success = true;
+      } catch (e) { /* fallback abaixo */ }
+
+      // Fallback: tentar .update() direto (funciona se PostgREST schema cache está atualizado)
+      if (!success) {
+        try {
+          const { error: updateError } = await supabase
+            .from('planos_trabalho')
+            .update(updatePayload)
+            .eq('id', planoId);
+          if (!updateError) success = true;
+        } catch (e) { /* fallback abaixo */ }
+      }
+
+      // Último fallback: REST API direto (bypassa SDK e schema cache)
+      if (!success) {
+        const supabaseUrl = 'https://tlpmspfnswaxwqzmwski.supabase.co';
+        const response = await fetch(`${supabaseUrl}/rest/v1/planos_trabalho?id=eq.${encodeURIComponent(planoId)}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': session.access_token,
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(updatePayload)
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Erro ao atualizar: ${errText}`);
+        }
+        success = true;
+      }
+
+      await loadPlanos();
+      alert(`✅ Plano ${!currentlyValidated ? 'validado' : 'desvalidado'} com sucesso!`);
+    } catch (error: any) {
+      console.error('❌ Erro ao validar plano:', error);
+      alert(`❌ Erro ao validar plano:\n${error.message}`);
+    } finally {
+      setValidandoPlanoId(null);
+    }
+  };
+
+  // ======== SALVAR CONTA BANCÁRIA INLINE ========
+  const handleSaveInlineConta = async (planoId: string) => {
+    try {
+      const { error } = await supabase
+        .from('planos_trabalho')
+        .update({ conta_bancaria: inlineContaValue.trim() || null })
+        .eq('id', planoId);
+      if (error) throw error;
+      setInlineEditContaId(null);
+      await loadPlanos();
+    } catch (error: any) {
+      alert(`❌ Erro ao salvar conta bancária:\n${error.message}`);
+    }
+  };
+
+  // ======== UPLOAD EXTRATO INLINE (diretamente de Meus Planos) ========
+  const handleInlineExtratoUpload = async (planoId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('❌ Tipo de arquivo não permitido.\n\nFormatos aceitos: PDF, JPEG, PNG, WebP');
+      if (inlineExtratoInputRef.current) inlineExtratoInputRef.current.value = '';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('❌ Arquivo muito grande.\n\nTamanho máximo: 10MB');
+      if (inlineExtratoInputRef.current) inlineExtratoInputRef.current.value = '';
+      return;
+    }
+    setIsUploadingInlineExtrato(true);
+    setInlineExtratoUploadId(planoId);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessão expirada');
+      const { blob: uploadBlob, ext: uploadExt, mime: uploadMimeType } = await compressFile(file);
+      if (uploadBlob.size > 1 * 1024 * 1024) {
+        alert(`❌ Arquivo ainda muito grande após compressão (${(uploadBlob.size / 1024).toFixed(0)} KB). Limite: 1.000 KB.`);
+        return;
+      }
+      // Buscar extrato atual para remover
+      const { data: planoAtual } = await supabase.from('planos_trabalho').select('extrato_url').eq('id', planoId).single();
+      if (planoAtual?.extrato_url) {
+        await supabase.storage.from('extratos-bancarios').remove([planoAtual.extrato_url]);
+      }
+      const filePath = `${user.id}/${Date.now()}.${uploadExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from('extratos-bancarios')
+        .upload(filePath, uploadBlob, { contentType: uploadMimeType, upsert: false });
+      if (uploadError) throw uploadError;
+      const { error: updateError } = await supabase
+        .from('planos_trabalho')
+        .update({ extrato_url: filePath, extrato_filename: file.name })
+        .eq('id', planoId);
+      if (updateError) throw updateError;
+      await loadPlanos();
+      alert(`✅ Extrato enviado com sucesso!\n\nArquivo: ${file.name}`);
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar extrato inline:', error);
+      alert(`❌ Erro ao enviar extrato:\n${error.message}`);
+    } finally {
+      setIsUploadingInlineExtrato(false);
+      setInlineExtratoUploadId(null);
+      if (inlineExtratoInputRef.current) inlineExtratoInputRef.current.value = '';
+    }
+  };
+
+  // ======== IMPRIMIR PLANO DIRETO DA LISTA ========
+  const handlePrintFromList = (planoId: string) => {
+    setFormData(getInitialFormData());
+    setLastSavedFormData(null);
+    setPlanoSalvoId(null);
+    setFormHasChanges(false);
+    setCurrentSelection({ categoria: '', item: '', metas: [''] });
+    setCurrentMetaQualitativa({ meta: '', valor: '' });
+    setCurrentNatureza({ codigo: '', valor: '' });
+    setCurrentView('new');
+    setActiveSection('info-emenda');
+    setSentSuccess(false);
+    pendingPrintPlanoIdRef.current = planoId;
+    loadingPlanIdRef.current = null;
+    planLoadCompletedRef.current.delete(planoId);
+    setTimeout(() => { setEditingPlanId(planoId); }, 50);
+  };
   const handleGeneratePDF = async () => {
     // Proteção contra duplo clique/envio
     if (isSending) {
@@ -5148,6 +5361,14 @@ Secretaria de Estado da Saúde de São Paulo`;
           {/* VIEW: LISTA DE PLANOS */}
           {currentView === 'list' && (
             <div className="space-y-6 animate-fadeIn">
+              {/* Input oculto para upload inline de extrato bancário */}
+              <input
+                ref={inlineExtratoInputRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                className="hidden"
+                onChange={(e) => { if (inlineExtratoUploadId) handleInlineExtratoUpload(inlineExtratoUploadId, e); }}
+              />
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-base font-black text-gray-900 uppercase tracking-wider">Meus Planos de Trabalho</h2>
@@ -5368,13 +5589,38 @@ Secretaria de Estado da Saúde de São Paulo`;
                                 </div>
                                 <div className="min-w-0">
                                   <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Conta Bancária</p>
-                                  {plano.conta_bancaria && planosList.filter(p => p.conta_bancaria && p.conta_bancaria.trim() === plano.conta_bancaria.trim() && p.id !== plano.id).length > 0 ? (
-                                    <div className="flex items-center gap-1">
-                                      <p className="text-sm font-bold text-amber-700 font-mono">{plano.conta_bancaria}</p>
-                                      <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                                  {inlineEditContaId === plano.id ? (
+                                    <div className="flex items-center gap-2 mt-1 bg-blue-50 p-2 rounded border border-blue-200">
+                                      <input
+                                        type="text"
+                                        value={inlineContaValue}
+                                        onChange={(e) => setInlineContaValue(e.target.value)}
+                                        maxLength={25}
+                                        className="flex-1 px-2 py-1 text-xs border border-blue-400 rounded font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                                        placeholder="001/1234-5/12345-6"
+                                        autoFocus
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveInlineConta(plano.id); if (e.key === 'Escape') setInlineEditContaId(null); }}
+                                      />
+                                      <button onClick={() => handleSaveInlineConta(plano.id)} className="px-2 py-1 bg-green-500 text-white rounded text-xs font-bold hover:bg-green-600 whitespace-nowrap">Salvar</button>
+                                      <button onClick={() => setInlineEditContaId(null)} className="px-2 py-1 bg-gray-400 text-white rounded text-xs font-bold hover:bg-gray-500 whitespace-nowrap">Cancel</button>
                                     </div>
                                   ) : (
-                                    <p className="text-sm font-bold text-gray-900 font-mono">{plano.conta_bancaria || '—'}</p>
+                                    <div className="flex items-center justify-between gap-2 mt-1">
+                                      {plano.conta_bancaria && planosList.filter(p => p.conta_bancaria && p.conta_bancaria.trim() === plano.conta_bancaria.trim() && p.id !== plano.id).length > 0 ? (
+                                        <p className="text-sm font-bold text-amber-700 font-mono flex-1">{plano.conta_bancaria} <AlertTriangle className="w-3 h-3 text-amber-500 inline" /></p>
+                                      ) : (
+                                        <p className="text-sm font-bold text-gray-900 font-mono flex-1">{plano.conta_bancaria || '—'}</p>
+                                      )}
+                                      {!((plano.validado ?? false)) && (
+                                        <button
+                                          onClick={() => { setInlineEditContaId(plano.id); setInlineContaValue(plano.conta_bancaria || ''); }}
+                                          className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200 whitespace-nowrap"
+                                          title="Editar conta bancária"
+                                        >
+                                          Editar
+                                        </button>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                                 <div className="min-w-0">
@@ -5391,6 +5637,13 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   {isAdmin() && plano.edit_count > 0 && (
                                     <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded">{plano.edit_count}x</span>
                                   )}
+                                  {((plano.validado ?? false)) && (
+                                    <div className="mt-1">
+                                      <span className="inline-flex items-center gap-1 text-[10px] bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded-full border border-green-300" title={(plano.validado_em) ? `Validado em ${new Date(plano.validado_em).toLocaleDateString('pt-BR')}` : 'Plano validado'}>
+                                        <CheckCircle2 className="w-2.5 h-2.5" /> Validado
+                                      </span>
+                                    </div>
+                                  )}
                                   {plano.justificativa_alterada_em && (
                                     <div className="mt-1">
                                       <span className="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded-full border border-purple-200" title={`Justificativa alterada em ${new Date(plano.justificativa_alterada_em).toLocaleDateString('pt-BR')} às ${new Date(plano.justificativa_alterada_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}>
@@ -5403,56 +5656,123 @@ Secretaria de Estado da Saúde de São Paulo`;
                               </div>
 
                             </div>
-                            {/* Botões inline */}
-                            <div className="flex gap-1.5 flex-shrink-0 items-start">
-                              {plano.extrato_url && (
+                            {/* Menu Hambúrguer - Todas as ações */}
+                            <div className="flex-shrink-0">
+                              <div className="relative" ref={openMenuPlanoId === plano.id ? menuRef : undefined}>
                                 <button
-                                  onClick={() => handleViewExtrato(plano.extrato_url)}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-md font-bold text-xs uppercase hover:bg-blue-100 transition-all"
+                                  onClick={() => setOpenMenuPlanoId(openMenuPlanoId === plano.id ? null : plano.id)}
+                                  className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg font-bold text-xs uppercase hover:bg-gray-200 transition-all border border-gray-300 shadow-sm"
+                                  title="Mais opções"
                                 >
-                                  <Eye className="w-4 h-4" /> Extrato
+                                  <ChevronDown className={`w-4 h-4 transition-transform ${openMenuPlanoId === plano.id ? 'rotate-180' : ''}`} />
                                 </button>
-                              )}
-                              {canViewPlan(plano.created_by) && (
-                                <button
-                                  onClick={() => loadPlanForViewing(plano.id)}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-600 rounded-md font-bold text-xs uppercase hover:bg-indigo-100 transition-all"
-                                >
-                                  <Eye className="w-4 h-4" /> Ver
-                                </button>
-                              )}
-                              {canEditPlan(plano.created_by) && (
-                                <>
-                                  <button 
-                                    onClick={() => { 
-                                      setFormData(getInitialFormData());
-                                      setLastSavedFormData(null);
-                                      setPlanoSalvoId(null);
-                                      setFormHasChanges(false);
-                                      setCurrentSelection({ categoria: '', item: '', metas: [''] });
-                                      setCurrentMetaQualitativa({ meta: '', valor: '' });
-                                      setCurrentNatureza({ codigo: '', valor: '' });
-                                      setCurrentView('new'); 
-                                      setActiveSection('info-emenda'); 
-                                      setSentSuccess(false);
-                                      loadingPlanIdRef.current = null;
-                                      planLoadCompletedRef.current.delete(plano.id);
-                                      setTimeout(() => { setEditingPlanId(plano.id); }, 50);
-                                    }}
-                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-orange-50 text-orange-600 rounded-md font-bold text-xs uppercase hover:bg-orange-100 transition-all"
-                                  >
-                                    <Settings2 className="w-4 h-4" /> Editar
-                                  </button>
-                                  {isAdmin() && (
-                                    <button 
-                                      onClick={() => deletePlan(plano.id)}
-                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-600 rounded-md font-bold text-xs uppercase hover:bg-red-100 transition-all"
-                                    >
-                                      <Trash2 className="w-4 h-4" /> Del
-                                    </button>
-                                  )}
-                                </>
-                              )}
+                                
+                                {/* Menu Dropdown */}
+                                {openMenuPlanoId === plano.id && (
+                                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden">
+                                    {/* PDF */}
+                                    {canViewPlan(plano.created_by) && (
+                                      <button
+                                        onClick={() => { handlePrintFromList(plano.id); setOpenMenuPlanoId(null); }}
+                                        className="flex items-center gap-2 w-full px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-100 text-sm font-semibold"
+                                      >
+                                        <Printer className="w-4 h-4" /> Gerar PDF
+                                      </button>
+                                    )}
+                                    
+                                    {/* Upload Extrato */}
+                                    {!((plano.validado ?? false)) && (
+                                      <button
+                                        onClick={() => { setInlineExtratoUploadId(plano.id); setTimeout(() => inlineExtratoInputRef.current?.click(), 50); setOpenMenuPlanoId(null); }}
+                                        disabled={isUploadingInlineExtrato && inlineExtratoUploadId === plano.id}
+                                        className="flex items-center gap-2 w-full px-4 py-2.5 text-teal-600 hover:bg-teal-50 transition-colors border-b border-gray-100 text-sm font-semibold disabled:opacity-60"
+                                      >
+                                        {isUploadingInlineExtrato && inlineExtratoUploadId === plano.id ? (
+                                          <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                          <UploadCloud className="w-4 h-4" />
+                                        )}
+                                        {plano.extrato_url ? '✓ Substituir' : 'Enviar'} Extrato
+                                      </button>
+                                    )}
+                                    
+                                    {/* Ver Extrato */}
+                                    {plano.extrato_url && (
+                                      <button
+                                        onClick={() => { handleViewExtrato(plano.extrato_url); setOpenMenuPlanoId(null); }}
+                                        className="flex items-center gap-2 w-full px-4 py-2.5 text-blue-600 hover:bg-blue-50 transition-colors border-b border-gray-100 text-sm font-semibold"
+                                      >
+                                        <Eye className="w-4 h-4" /> Ver Extrato
+                                      </button>
+                                    )}
+                                    
+                                    {/* Download Extrato */}
+                                    {plano.extrato_url && (
+                                      <button
+                                        onClick={() => { handleDownloadExtrato(plano.extrato_url, plano.extrato_filename); setOpenMenuPlanoId(null); }}
+                                        className="flex items-center gap-2 w-full px-4 py-2.5 text-green-600 hover:bg-green-50 transition-colors border-b border-gray-100 text-sm font-semibold"
+                                      >
+                                        <Download className="w-4 h-4" /> Baixar Extrato
+                                      </button>
+                                    )}
+                                    
+                                    {/* Editar Plano */}
+                                    {canEditPlan(plano.created_by, plano.validado ?? false) && (
+                                      <button 
+                                        onClick={() => { 
+                                          setFormData(getInitialFormData());
+                                          setLastSavedFormData(null);
+                                          setPlanoSalvoId(null);
+                                          setFormHasChanges(false);
+                                          setCurrentSelection({ categoria: '', item: '', metas: [''] });
+                                          setCurrentMetaQualitativa({ meta: '', valor: '' });
+                                          setCurrentNatureza({ codigo: '', valor: '' });
+                                          setCurrentView('new'); 
+                                          setActiveSection('info-emenda'); 
+                                          setSentSuccess(false);
+                                          loadingPlanIdRef.current = null;
+                                          planLoadCompletedRef.current.delete(plano.id);
+                                          setOpenMenuPlanoId(null);
+                                          setTimeout(() => { setEditingPlanId(plano.id); }, 50);
+                                        }}
+                                        className="flex items-center gap-2 w-full px-4 py-2.5 text-orange-600 hover:bg-orange-50 transition-colors border-b border-gray-100 text-sm font-semibold"
+                                      >
+                                        <Settings2 className="w-4 h-4" /> Editar
+                                      </button>
+                                    )}
+                                    
+                                    {/* Validar (Admin) */}
+                                    {isAdmin() && (
+                                      <button
+                                        onClick={() => { handleValidarPlano(plano.id, plano.validado ?? false); setOpenMenuPlanoId(null); }}
+                                        disabled={validandoPlanoId === plano.id}
+                                        className={`flex items-center gap-2 w-full px-4 py-2.5 hover:bg-opacity-50 transition-colors border-b border-gray-100 text-sm font-semibold disabled:opacity-60 ${
+                                          (plano.validado ?? false)
+                                            ? 'text-green-600 hover:bg-green-50'
+                                            : 'text-purple-600 hover:bg-purple-50'
+                                        }`}
+                                      >
+                                        {validandoPlanoId === plano.id ? (
+                                          <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                          <CheckCircle2 className="w-4 h-4" />
+                                        )}
+                                        {(plano.validado ?? false) ? '✓ Desvalidar' : 'Validar'}
+                                      </button>
+                                    )}
+                                    
+                                    {/* Deletar (Admin) */}
+                                    {isAdmin() && (
+                                      <button 
+                                        onClick={() => { deletePlan(plano.id); setOpenMenuPlanoId(null); }}
+                                        className="flex items-center gap-2 w-full px-4 py-2.5 text-red-600 hover:bg-red-50 transition-colors text-sm font-semibold"
+                                      >
+                                        <Trash2 className="w-4 h-4" /> Deletar
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -6084,7 +6404,6 @@ Secretaria de Estado da Saúde de São Paulo`;
                             value={formData.beneficiario.contaBancaria}
                             onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, contaBancaria: e.target.value })}
                             placeholder="Banco / Agência / Conta (Ex: 001 / 1234-5 / 12345-6)"
-                            required
                             maxLength={25}
                             help="Informe somente números para banco, agência e conta."
                           />
@@ -6104,7 +6423,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                         </div>
                         <div className="flex flex-col">
                           <label className="text-sm font-semibold text-gray-700 mb-2">
-                            Extrato Bancário <span className="text-red-600">*</span>
+                            Extrato Bancário
                           </label>
                           {formData.beneficiario.extratoUrl ? (
                             <div className="flex items-center gap-3 p-3 bg-green-50 border-2 border-green-300 rounded-xl">

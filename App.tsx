@@ -269,6 +269,8 @@ const App: React.FC = () => {
       return 'PORTARIA GM/MS Nº 10.297';
     } else if (programa.includes('PORTARIA 10.169')) {
       return 'Portaria GM/MS nº 10.169';
+    } else if (programa.includes('10.352')) {
+      return 'Portaria GM/MS Nº 10.352';
     }
     return 'PORTARIA GM/MS Nº 10.297'; // Padrão
   };

@@ -435,8 +435,10 @@ export const DIRETRIZES: Diretriz[] = [
 export const PROGRAMAS = [
   "EMENDA INDIVIDUAL - CUSTEIO MAC - 2E90",
   "EMENDA INDIVIDUAL - PMAE COMPONENTE CIRURGIA - (PNRF/MUTIRÃO)",
-  "PORTARIA 10.169 - PARCELA SUPLEMENTAR - CUSTEIO DA MÉDIA E ALTA COMPLEXIDADE",
-  "PORTARIA 10.169 - PARCELA SUPLEMENTAR - PROGRAMA AGORA TEM ESPECIALISTA"
+  "EMENDA COLETIVA - PORTARIA 10.352 - CUSTEIO DE SERVIÇOS DA ATENÇÃO ESPECIALIZADA À SAÚDE",
+  "EMENDA COLETIVA - PORTARIA 10.352 - PROGRAMA AGORA TEM ESPECIALISTAS - CARRETA DA SAÚDE",
+  "PARCELA SUPLEMENTAR - PORTARIA 10.169 - CUSTEIO DA MÉDIA E ALTA COMPLEXIDADE",
+  "PARCELA SUPLEMENTAR - PORTARIA 10.169 - PROGRAMA AGORA TEM ESPECIALISTA",
 ];
 
 export const ACOES_SERVICOS_POR_PROGRAMA: Record<string, AcaoServico[]> = {
@@ -508,7 +510,7 @@ export const ACOES_SERVICOS_POR_PROGRAMA: Record<string, AcaoServico[]> = {
       itens: ['OCI em Cardiologia', 'OCI em Ginecologia', 'OCI em Oftalmologia', 'OCI em Oncologia', 'OCI em Ortopedia', 'OCI em Otorrinolaringologia']
     }
   ],
-  "PORTARIA 10.169 - PARCELA SUPLEMENTAR - CUSTEIO DA MÉDIA E ALTA COMPLEXIDADE": [
+  "PARCELA SUPLEMENTAR - PORTARIA 10.169 - CUSTEIO DA MÉDIA E ALTA COMPLEXIDADE": [
     {
       categoria: 'III - REDE ALYNE',
       itens: [
@@ -561,7 +563,7 @@ export const ACOES_SERVICOS_POR_PROGRAMA: Record<string, AcaoServico[]> = {
       ]
     }
   ],
-  "PORTARIA 10.169 - PARCELA SUPLEMENTAR - PROGRAMA AGORA TEM ESPECIALISTA": [
+  "PARCELA SUPLEMENTAR - PORTARIA 10.169 - PROGRAMA AGORA TEM ESPECIALISTA": [
     {
       categoria: 'I - PROGRAMA AGORA TEM ESPECIALISTA - COMPONENTE AMBULATORIAL',
       itens: [
@@ -617,6 +619,151 @@ export const ACOES_SERVICOS_POR_PROGRAMA: Record<string, AcaoServico[]> = {
         'Unidade Coronariana',
         'Unidade de Cuidados Prolongados',
         'Unidade de Terapia Intensiva'
+      ]
+    }
+  ],
+  "EMENDA COLETIVA - PORTARIA 10.352 - CUSTEIO DE SERVIÇOS DA ATENÇÃO ESPECIALIZADA À SAÚDE": [
+    {
+      categoria: 'METAS QUALITATIVAS',
+      itens: [
+        'Adequação de Ambiência',
+        'Adoção de Políticas de Humanização',
+        'Aperfeiçoamento de Práticas',
+        'Condições de Funcionamento das Unidades',
+        'Correto Funcionamento das Comissões Hospitalares',
+        'Implantação de Protocolos',
+        'Média de Permanência',
+        'Satisfação do Usuário',
+        'Taxa de Ocupação',
+        'Tempo Médio de Realização de Procedimentos'
+      ]
+    },
+    {
+      categoria: 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE',
+      itens: [
+        'Alta Complexidade',
+        'Atenção Domiciliar',
+        'Doenças Raras',
+        'Leitos UTI Adulto',
+        'Leitos UTI Neonatal',
+        'Leitos UTI Pediátrico',
+        'Leitos UTI Queimados',
+        'Leitos Unidade Coronariana - UCO',
+        'Leitos de Unidade de Cuidados Intermediário Adulto - UCIa',
+        'Leitos de Unidade de Cuidados Intermediário Pediátrico - UCIp',
+        'Média Complexidade',
+        'Procedimentos Clínicos',
+        'Saúde do Trabalhador',
+        'UTI - Unidade de Terapia Intensiva',
+        'Unidade de Cuidados Prolongados'
+      ]
+    },
+    {
+      categoria: 'PESSOA COM DEFICIÊNCIA',
+      itens: [
+        'Centro Especializado de Reabilitação - CER',
+        'Oficinas Ortopédicas'
+      ]
+    },
+    {
+      categoria: 'POLÍTICA NACIONAL DE PREVENÇÃO E CONTROLE DO CÂNCER',
+      itens: [
+        'Anatomia Patológica - Anticorpos para Imunoistoquímica',
+        'Anatomia Patológica - Reagentes em Geral',
+        'Cirurgia Oncológica - Material para Cirurgia Videolaparoscópica',
+        'Medicina Nuclear - Diagnóstico em Oncologia',
+        'Medicina Nuclear - Radiofármacos',
+        'Medicina Nuclear - Teranóstico',
+        'Quimioterapia - Custeio para Infusão',
+        'Quimioterapia - Custeio para Quimioterápicos e Agentes Antineoplásicos Padronizados na CONITEC',
+        'Radiointervenção - Material para Drenagem Biliar Percutânea',
+        'Radiointervenção - Material para Nefrostomia',
+        'Radiointervenção - Material para Radioablação',
+        'Radioterapia - Custeio de Procedimentos em Radioterapia',
+        'Radioterapia - Custeio para o Transporte Sanitário',
+        'Radioterapia - Tratamento Fora de Domicílio',
+        'Reabilitação - Próteses'
+      ]
+    },
+    {
+      categoria: 'PROGRAMA AGORA TEM ESPECIALISTA - COMPONENTE AMBULATORIAL',
+      itens: [
+        'OCI em Cardiologia',
+        'OCI em Ginecologia',
+        'OCI em Oftalmologia',
+        'OCI em Oncologia',
+        'OCI em Ortopedia',
+        'OCI em Otorrinolaringologia'
+      ]
+    },
+    {
+      categoria: 'PROGRAMA AGORA TEM ESPECIALISTA - COMPONENTE CIRÚRGICO',
+      itens: [
+        'Cardiologia - Alta Complexidade',
+        'Cardiologia - Média Complexidade',
+        'Ginecologia - Alta Complexidade',
+        'Ginecologia - Baixa Complexidade',
+        'Ginecologia - Média Complexidade',
+        'Oftalmologia - Alta Complexidade',
+        'Oftalmologia - Baixa Complexidade',
+        'Oftalmologia - Média Complexidade',
+        'Oncologia - Alta Complexidade',
+        'Oncologia - Baixa Complexidade',
+        'Oncologia - Média Complexidade',
+        'Oncologia ou Outros - Alta Complexidade',
+        'Oncologia ou Outros - Média Complexidade',
+        'Ortopédia - Alta Complexidade',
+        'Ortopédia - Baixa Complexidade',
+        'Ortopédia - Média Complexidade',
+        'Otorrinolaringologia - Alta Complexidade',
+        'Otorrinolaringologia - Baixa Complexidade',
+        'Otorrinolaringologia - Média Complexidade',
+        'Outras Cirurgias - Alta Complexidade',
+        'Outras Cirurgias - Baixa Complexidade',
+        'Outras Cirurgias - Média Complexidade'
+      ]
+    },
+    {
+      categoria: 'REDE ALYNE',
+      itens: [
+        'Casa da Gestante, Bebê e Puerpéra (CGBP)',
+        'Central de Regulação Médica das Urgências - Qualificação Rede Alyne',
+        'Central de Regulação do Acesso - Qualificação Rede Alyne',
+        'Centro de Parto Normal (CPN)',
+        'Parto e Nascimento Alto Risco',
+        'Parto e Nascimento Baixo Risco',
+        'Pré-Natal de Alto Risco',
+        'Seguimento do RN e Criança de Risco',
+        'Transporte inter-hospitalar da Rede Alyne',
+        'Unidades Neonatais'
+      ]
+    },
+    {
+      categoria: 'SAÚDE MENTAL',
+      itens: [
+        'CAPS - Centro de Atenção Psicossocial',
+        'UAA - Unidade de Acolhimento Adulto',
+        'UAI - Unidade de Acolhimento Infantil'
+      ]
+    },
+    {
+      categoria: 'URGÊNCIA E EMERGÊNCIA',
+      itens: [
+        'CRU - Centrais de Regulação das Urgências',
+        'Porta de Entrada',
+        'Pronto Atendimento',
+        'SAMU - Serviço de Atendimento Móvel de Urgência',
+        'SAMU MTT - Medicamento Trombolítico Tenecteplase',
+        'UPA 24h - Unidade de Pronto Atendimento'
+      ]
+    }
+  ],
+  "EMENDA COLETIVA - PORTARIA 10.352 - PROGRAMA AGORA TEM ESPECIALISTAS - CARRETA DA SAÚDE": [
+    {
+      categoria: 'SERVIÇOS DE UNIDADES MÓVEIS DE ATENÇÃO ESPECIALIZADA',
+      itens: [
+        'UMAE - Unidade Móvel de Atenção Especializada - Tipo 1 - Exames de Imagens',
+        'UMAE - Unidade Móvel de Atenção Especializada - Tipo 2 - Prevenção e Cuidado da Saúde da Mulher'
       ]
     }
   ]
@@ -745,13 +892,21 @@ export const METAS_QUANTITATIVAS_OPTIONS: Record<string, string[]> = {
 };
 
 export const NATUREZAS_DESPESA: NaturezaDespesa[] = [
-  { codigo: '339004', descricao: 'CONTRATACAO POR TEMPO DETERMINADO - PES.CIVIL' },
-  { codigo: '339092', descricao: 'DESPESAS DE EXERCICIOS ANTERIORES' },
-  { codigo: '339037', descricao: 'LOCACAO DE MAO-DE-OBRA' },
-  { codigo: '339030', descricao: 'MATERIAL DE CONSUMO' },
-  { codigo: '339039', descricao: 'OUTROS SERVICOS DE TERCEIROS-PESSOA JURIDICA' },
-  { codigo: '339033', descricao: 'PASSAGENS E DESPESAS COM LOCOMOÇÃO' },
-  { codigo: '339040', descricao: 'SERVICOS DE TECNOLOGIA DA INFORMACAO E COMUNICACAO - PESSOA JURIDICA' },
+  { codigo: '310000', descricao: 'PESSOAL E ENCARGOS SOCIAIS' },
+  { codigo: '333220', descricao: 'AUXILIO FINANCEIRO A PESQUISADORES' },
+  { codigo: '333235', descricao: 'CONSULTORIA' },
   { codigo: '335043', descricao: 'SUBVENCOES SOCIAIS' },
-  { codigo: '335085', descricao: 'TRANSFERENCIAS POR MEIO DE CONTRATO DE GESTAO' }
+  { codigo: '335085', descricao: 'TRANSFERENCIAS POR MEIO DE CONTRATO DE GESTAO' },
+  { codigo: '337100', descricao: 'TRANSFERÊNCIAS A CONSÓRCIOS PÚBLICOS MEDIANTE CONTRATO DE RATEIO' },
+  { codigo: '337170', descricao: 'RATEIO PELA PARTICIPAÇÃO EM CONSÓRCIO PÚBLICO' },
+  { codigo: '337200', descricao: 'EXECUÇÃO ORÇAMENTÁRIA DELEGADA A CONSÓRCIOS PÚBLICOS' },
+  { codigo: '339004', descricao: 'CONTRATACAO POR TEMPO DETERMINADO - PES.CIVIL' },
+  { codigo: '339030', descricao: 'MATERIAL DE CONSUMO' },
+  { codigo: '339033', descricao: 'PASSAGENS E DESPESAS COM LOCOMOCAO' },
+  { codigo: '339036', descricao: 'OUTROS SERVICOS DE TERCEIROS - PESSOA FISICA' },
+  { codigo: '339037', descricao: 'LOCACAO DE MAO-DE-OBRA' },
+  { codigo: '339039', descricao: 'OUTROS SERVICOS DE TERCEIROS-PESSOA JURIDICA' },
+  { codigo: '339040', descricao: 'SERVICOS DE TECNOLOGIA DA INFORMACAO E COMUNICACAO - PESSOA JURIDICA' },
+  { codigo: '339048', descricao: 'OUTROS AUXILIOS FINANCEIROS A PESSOA FISICA' },
+  { codigo: '339092', descricao: 'DESPESAS DE EXERCICIOS ANTERIORES' }
 ];

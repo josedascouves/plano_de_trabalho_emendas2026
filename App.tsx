@@ -139,8 +139,8 @@ const App: React.FC = () => {
   const [showInactiveUsers, setShowInactiveUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as 'user' | 'admin' | 'intermediate', cnes: '' });
-  // Controle do mínimo de caracteres da justificativa (padrão 2000)
-  const [minJustificativa, setMinJustificativa] = useState<number>(2000);
+  // Controle do mínimo de caracteres da justificativa (padrão 0 = sem mínimo)
+  const [minJustificativa, setMinJustificativa] = useState<number>(0);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
   const [csvUploading, setCsvUploading] = useState(false);

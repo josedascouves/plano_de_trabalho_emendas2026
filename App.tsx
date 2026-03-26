@@ -6650,6 +6650,13 @@ Secretaria de Estado da Saúde de São Paulo`;
                   onHelpClick={() => openHelpModal('metas-quantitativas')}
                 >
                   <div className="space-y-6">
+                    {/* AVISO 50% GRUPO VI/PORTARIA 10.169 */}
+                    {formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.169') &&
+                      currentSelection.categoria && currentSelection.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE') && (
+                        <div className="p-4 mb-2 rounded-lg bg-yellow-100 border-l-4 border-yellow-400 text-yellow-900 font-semibold">
+                          Atenção: Para ações do Grupo VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE, você só poderá apontar até <b>50% do valor do recurso</b>.
+                        </div>
+                    )}
                     <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Select

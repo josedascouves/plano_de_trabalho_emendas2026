@@ -89,20 +89,17 @@ export const validateCNPJ = (cnpj: string): boolean => {
 export const maskCurrency = (value: string): string => {
   // Remove tudo que não é número
   const cleaned = value.replace(/\D/g, '');
-  
   // Se vazio, retorna vazio
   if (!cleaned) return '';
-  
+  // Remove zeros à esquerda
+  const noLeadingZeros = cleaned.replace(/^0+(?!$)/, '');
   // Adiciona zeros à esquerda se necessário (para divisão por 100)
-  const padded = cleaned.padStart(3, '0');
-  
+  const padded = noLeadingZeros.padStart(3, '0');
   // Separa inteiro e decimal
   const integer = padded.slice(0, -2) || '0';
   const decimal = padded.slice(-2);
-  
   // Formata o inteiro com separador de milhares
   const formatted = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  
   // Retorna no formato brasileiro
   return `${formatted},${decimal}`;
 };

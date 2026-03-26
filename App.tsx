@@ -2404,7 +2404,26 @@ const App: React.FC = () => {
       // VALIDAÇÃO 2: Total de Naturezas de Despesa não pode ultrapassar Total de Metas Quantitativas
       const totalMetasQuantitativas = formData.acoesServicos.reduce((sum, acao) => sum + parseCurrency(acao.valor), 0);
       const totalDespesas = formData.naturezasDespesa.reduce((sum, despesa) => sum + parseCurrency(despesa.valor), 0);
-      
+
+      // NOVA REGRA: Limitar a 50% do valor do recurso para Portaria 10.169, Grupo de Ação VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE
+      const isPortaria10169 = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.169');
+      const hasGrupoAcaoVI = formData.acoesServicos.some(acao => acao.categoria && acao.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE'));
+      if (isPortaria10169 && hasGrupoAcaoVI) {
+        // Somar apenas os valores das ações do Grupo VI
+        const totalGrupoVI = formData.acoesServicos
+          .filter(acao => acao.categoria && acao.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE'))
+          .reduce((sum, acao) => sum + parseCurrency(acao.valor), 0);
+        const valorRecurso = parseCurrency(formData.emenda.valor);
+        const limiteGrupoVI = valorRecurso * 0.5;
+        if (totalGrupoVI > limiteGrupoVI) {
+          const diferenca = (totalGrupoVI - limiteGrupoVI).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          alert(`⚠️ ERRO DE VALIDAÇÃO!\n\nPara ações do Grupo VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE, o valor total não pode ultrapassar 50% do valor do recurso (R$ ${limiteGrupoVI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).\n\nO valor informado foi R$ ${totalGrupoVI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, excedendo o limite em R$ ${diferenca}.\n\nAjuste os valores antes de salvar.`);
+          setIsSending(false);
+          isSavingRef.current = false;
+          return null;
+        }
+      }
+
       if (totalDespesas > totalMetasQuantitativas) {
         const diferenca = (totalDespesas - totalMetasQuantitativas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         alert(`⚠️ ERRO DE VALIDAÇÃO!\n\nO total de Naturezas de Despesa (R$ ${totalDespesas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) ultrapassa o Total de Metas Quantitativas (R$ ${totalMetasQuantitativas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) em R$ ${diferenca}.\n\nAjuste os valores de despesa antes de salvar.`);
@@ -3357,6 +3376,29 @@ const App: React.FC = () => {
       alert('Por favor, selecione o Grupo de Ação e a Ação Específica.');
       return;
     }
+
+    // Validação de limite antes de adicionar nova meta
+    const recursoValue = parseFloat(formData.emenda.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+    const isPortaria10169 = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.169');
+    const isGrupoVI = currentSelection.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE');
+    let totalMetas = formData.acoesServicos.reduce((sum, acao) => sum + (parseFloat((acao.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0), 0);
+    let totalGrupoVI = formData.acoesServicos
+      .filter(acao => acao.categoria && acao.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE'))
+      .reduce((sum, acao) => sum + (parseFloat((acao.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0), 0);
+
+    // Se for adicionar mais uma do Grupo VI, já soma +0 (pois valor inicial é vazio)
+    if (isPortaria10169 && isGrupoVI) {
+      if ((totalGrupoVI) >= recursoValue * 0.5) {
+        alert('Você já atingiu o limite de 50% do valor do recurso para o Grupo VI. Não é possível adicionar mais metas deste grupo.');
+        return;
+      }
+    } else {
+      if (totalMetas >= recursoValue) {
+        alert('Você já atingiu o valor total do recurso. Não é possível adicionar mais metas.');
+        return;
+      }
+    }
+
     const newAcao = {
       categoria: currentSelection.categoria,
       item: currentSelection.item,

@@ -92,6 +92,35 @@ import {
 } from './utils/masks';
 import { initializeSecurity } from './utils/security';
 
+// Componente de menu hamburguer para ações do usuário na gestão
+function MenuHamburguerUserActions({ user, onEdit, onChangeRole, onToggleActive, onResetPassword, onDelete }: { user: any; onEdit: () => void; onChangeRole: (role: string) => void; onToggleActive: () => void; onResetPassword: () => void; onDelete: () => void }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} className="p-2 rounded-full hover:bg-gray-100 border border-gray-200">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-gray-700">
+          <circle cx="12" cy="5" r="1.5" />
+          <circle cx="12" cy="12" r="1.5" />
+          <circle cx="12" cy="19" r="1.5" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 z-50 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg flex flex-col py-2">
+          <button onClick={() => { setOpen(false); onEdit(); }} className="px-4 py-2 text-left hover:bg-green-50 text-green-800 font-bold text-xs">Editar</button>
+          <select value={user.role} onChange={e => { setOpen(false); onChangeRole(e.target.value); }} className="px-4 py-2 rounded-lg border text-xs font-bold bg-blue-50 text-blue-700 my-1">
+            <option value="user">Usuário</option>
+            <option value="intermediate">Intermediário</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button onClick={() => { setOpen(false); onToggleActive(); }} className={`px-4 py-2 text-left font-bold text-xs ${user.disabled ? 'text-gray-500 hover:bg-gray-100' : 'text-yellow-800 hover:bg-yellow-50'}`}>{user.disabled ? 'Ativar' : 'Desativar'}</button>
+          <button onClick={() => { setOpen(false); onResetPassword(); }} className="px-4 py-2 text-left hover:bg-blue-50 text-blue-800 font-bold text-xs">Senha</button>
+          <button onClick={() => { setOpen(false); onDelete(); }} className="px-4 py-2 text-left hover:bg-red-50 text-red-800 font-bold text-xs">Deletar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const App: React.FC = () => {
   // Authentication & Session State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -110,6 +139,8 @@ const App: React.FC = () => {
   const [showInactiveUsers, setShowInactiveUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as 'user' | 'admin' | 'intermediate', cnes: '' });
+  // Controle do mínimo de caracteres da justificativa (padrão 2000)
+  const [minJustificativa, setMinJustificativa] = useState<number>(2000);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
   const [csvUploading, setCsvUploading] = useState(false);
@@ -1686,8 +1717,8 @@ const App: React.FC = () => {
       'metas-qualitativas': formData.metasQualitativas.length > 0,
       // Seção 6: Execução Financeira - OPCIONAL (só completa se houver itens)
       'execucao-financeira': formData.naturezasDespesa.length > 0,
-      // Seção 7: Finalização - completa se justificativa (min 2000 chars) e responsável preenchidos
-      'finalizacao': !!(formData.justificativa?.trim() && formData.justificativa.trim().length >= 2000 && formData.responsavelAssinatura?.trim())
+      // Seção 7: Finalização - completa se justificativa (minJustificativa chars) e responsável preenchidos
+      'finalizacao': !!(formData.justificativa?.trim() && formData.justificativa.trim().length >= minJustificativa && formData.responsavelAssinatura?.trim())
     }));
   }, [formData]);
 
@@ -2731,11 +2762,11 @@ const App: React.FC = () => {
     // EXECUÇÃO FINANCEIRA - obrigatório (pelo menos um item)
     if (formData.naturezasDespesa.length === 0) missingFields.push('Execução Financeira - Natureza de Despesa (adicione pelo menos uma despesa)');
 
-    // JUSTIFICATIVA TÉCNICA - obrigatório (mínimo 2000 caracteres)
+    // JUSTIFICATIVA TÉCNICA - obrigatório (mínimo minJustificativa caracteres)
     if (!formData.justificativa?.trim()) {
       missingFields.push('Justificativa Técnica');
-    } else if (formData.justificativa.trim().length < 2000) {
-      missingFields.push(`Justificativa Técnica (mínimo 2.000 caracteres — atual: ${formData.justificativa.trim().length})`);
+    } else if (formData.justificativa.trim().length < minJustificativa) {
+      missingFields.push(`Justificativa Técnica (mínimo ${minJustificativa.toLocaleString('pt-BR')} caracteres — atual: ${formData.justificativa.trim().length})`);
     }
 
     // RESPONSÁVEL PELA ASSINATURA - obrigatório
@@ -4607,6 +4638,26 @@ Secretaria de Estado da Saúde de São Paulo`;
 
                     {/* SEÇÃO 2: LISTA DE USUÁRIOS */}
                     <div className="space-y-6">
+                      {/* Configuração global do mínimo de caracteres da justificativa */}
+                      <div className="mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-xl flex flex-col md:flex-row md:items-center gap-4">
+                        <div className="flex-1">
+                          <h3 className="text-base font-black text-yellow-900 flex items-center gap-2">
+                            <AlertCircle className="w-5 h-5 text-yellow-600" />
+                            Configuração Global: Justificativa Técnica
+                          </h3>
+                          <p className="text-sm text-yellow-800 mt-1">Defina o número mínimo de caracteres obrigatórios para a justificativa técnica de todos os usuários.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-gray-700">Mínimo de caracteres:</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={minJustificativa}
+                            onChange={e => setMinJustificativa(Number(e.target.value))}
+                            className="w-24 px-2 py-1 border rounded text-xs font-mono"
+                          />
+                        </div>
+                      </div>
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="text-lg font-black text-gray-900 flex items-center gap-3">
@@ -4720,83 +4771,38 @@ Secretaria de Estado da Saúde de São Paulo`;
                                 </p>
                               )}
 
-                              {/* Ações */}
-                              <div className="flex gap-2 pt-4 border-t border-gray-100 flex-wrap">
-                                {/* Editar */}
-                                <button 
-                                  onClick={() => {
-                                    setEditingUser({
-                                      id: u.id,
-                                      email: u.email,
-                                      name: u.name,
-                                      cnes: u.cnes || '',
-                                      password: ''
-                                    });
-                                    setShowEditUserModal(true);
-                                  }}
-                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-green-700 bg-green-100 hover:bg-green-200 transition-colors flex items-center justify-center gap-2"
-                                  title="Editar dados do usuário"
-                                >
-                                  <Settings2 className="w-4 h-4" />
-                                  Editar
-                                </button>
+                              {/* Ações - Menu Hamburguer */}
+                              <MenuHamburguerUserActions
+                                user={u}
+                                onEdit={() => {
+                                  setEditingUser({
+                                    id: u.id,
+                                    email: u.email,
+                                    name: u.name,
+                                    cnes: u.cnes || '',
+                                    password: ''
+                                  });
+                                  setShowEditUserModal(true);
+                                }}
+                                onChangeRole={(role) => {
+                                  const roleNames = {
+                                    'user': 'USUÁRIO PADRÃO',
+                                    'intermediate': 'USUÁRIO INTERMEDIÁRIO',
+                                    'admin': 'ADMINISTRADOR'
+                                  };
+                                  if (window.confirm(`Deseja alterar ${u.name} para ${roleNames[role]}?`)) {
+                                    handleChangeUserRole(u.id, u.name, role);
+                                  }
+                                }}
+                                onToggleActive={() => handleToggleUserDisable(u.id)}
+                                onResetPassword={() => handleChangePassword(u.email)}
+                                onDelete={() => {
+                                  if (window.confirm(`Tem certeza que deseja deletar o usuário ${u.name}? ESTA AÇÃO NÃO PODE SER DESFEITA.`)) {
+                                    handleDeleteUser(u.id, u.email);
+                                  }
+                                }}
+                              />
 
-                                {/* Alterar Papel do Usuário */}
-                                <select 
-                                  value={u.role}
-                                  onChange={(e) => {
-                                    const newRole = e.target.value as 'user' | 'intermediate' | 'admin';
-                                    const roleNames: {[key: string]: string} = {
-                                      'user': 'USUÁRIO PADRÃO',
-                                      'intermediate': 'USUÁRIO INTERMEDIÁRIO',
-                                      'admin': 'ADMINISTRADOR'
-                                    };
-                                    if (window.confirm(`Deseja alterar ${u.name} para ${roleNames[newRole]}?`)) {
-                                      handleChangeUserRole(u.id, u.name, newRole);
-                                    }
-                                  }}
-                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-indigo-700 bg-indigo-100 hover:bg-indigo-200 transition-colors"
-                                  title="Alterar papel do usuário"
-                                >
-                                  <option value="user">Padrão</option>
-                                  <option value="intermediate">Intermediário</option>
-                                  <option value="admin">Admin</option>
-                                </select>
-
-                                {/* Ativar/Desativar */}
-                                <button 
-                                  onClick={() => handleToggleUserDisable(u.id)} 
-                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors flex items-center justify-center gap-2"
-                                  title={u.disabled ? "Ativar usuário" : "Desativar usuário"}
-                                >
-                                  <Lock className="w-4 h-4" />
-                                  {u.disabled ? "Ativar" : "Desativar"}
-                                </button>
-
-                                {/* Resetar Senha */}
-                                <button 
-                                  onClick={() => handleChangePassword(u.email)} 
-                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
-                                  title="Enviar email de reset de senha"
-                                >
-                                  <Key className="w-4 h-4" />
-                                  Senha
-                                </button>
-
-                                {/* Deletar */}
-                                <button 
-                                  onClick={() => {
-                                    if (window.confirm(`Tem certeza que deseja deletar o usuário ${u.name}? ESTA AÇÃO NÃO PODE SER DESFEITA.`)) {
-                                      handleDeleteUser(u.id, u.email);
-                                    }
-                                  }}
-                                  className="flex-1 px-4 py-2.5 rounded-lg font-bold text-xs uppercase text-red-700 bg-red-100 hover:bg-red-200 transition-colors flex items-center justify-center gap-2"
-                                  title="Deletar usuário permanentemente"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Deletar
-                                </button>
-                              </div>
                             </div>
                           ))
                           ) : (
@@ -6707,17 +6713,34 @@ Secretaria de Estado da Saúde de São Paulo`;
                                 value={acao.valor}
                                 onChange={(e) => {
                                   const recursoValue = parseFloat(formData.emenda.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                  const isPortaria10169 = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.169');
+                                  const isGrupoVI = acao.categoria && acao.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE');
+                                  // Calcula o novo total considerando o valor editado
                                   const totalMetas = formData.acoesServicos.reduce((sum, item, i) => {
                                     if (i === idx) return sum + parseFloat(e.target.value.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
-                                    const value = parseFloat(item.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                    const value = parseFloat((item.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
                                     return sum + value;
                                   }, 0);
-                                  
-                                  if (totalMetas > recursoValue) {
-                                    alert(`⚠️ Atenção!\n\nO valor total das Metas Quantitativas não pode ultrapassar o Valor do Recurso (R$ ${recursoValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
-                                    return;
+                                  const totalGrupoVI = formData.acoesServicos.reduce((sum, item, i) => {
+                                    if (item.categoria && item.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE')) {
+                                      if (i === idx) {
+                                        return sum + (parseFloat(e.target.value.replace(/[^\d,-]/g, '').replace(',', '.')) || 0);
+                                      }
+                                      return sum + (parseFloat((item.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0);
+                                    }
+                                    return sum;
+                                  }, 0);
+                                  if (isPortaria10169 && isGrupoVI) {
+                                    if (totalGrupoVI > recursoValue * 0.5) {
+                                      alert(`⚠️ Atenção!\n\nPara ações do Grupo VI, o valor total não pode ultrapassar 50% do valor do recurso (R$ ${(recursoValue * 0.5).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+                                      return;
+                                    }
+                                  } else {
+                                    if (totalMetas > recursoValue) {
+                                      alert(`⚠️ Atenção!\n\nO valor total das Metas Quantitativas não pode ultrapassar o Valor do Recurso (R$ ${recursoValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+                                      return;
+                                    }
                                   }
-                                  
                                   const newAcoes = [...formData.acoesServicos];
                                   newAcoes[idx].valor = maskCurrency(e.target.value);
                                   updateFormData('acoesServicos', newAcoes);
@@ -7090,16 +7113,16 @@ Secretaria de Estado da Saúde de São Paulo`;
                           label="Justificativa Técnica"
                           value={formData.justificativa}
                           onChange={(e) => updateFormData('justificativa', e.target.value)}
-                          placeholder="Descreva a justificativa técnica do plano de trabalho (mínimo 2.000 caracteres)..."
+                          placeholder={`Descreva a justificativa técnica do plano de trabalho (mínimo ${minJustificativa.toLocaleString('pt-BR')} caracteres)...`}
                           rows={8}
                           required
                         />
-                        <div className={`mt-2 text-xs font-bold tracking-wider ${(formData.justificativa?.trim().length || 0) >= 2000 ? 'text-green-600' : 'text-red-600'}`}>
-                          {(formData.justificativa?.trim().length || 0).toLocaleString('pt-BR')} / 2.000 caracteres
-                          {(formData.justificativa?.trim().length || 0) < 2000 && (
-                            <span className="ml-2 text-red-500">— faltam {(2000 - (formData.justificativa?.trim().length || 0)).toLocaleString('pt-BR')}</span>
+                        <div className={`mt-2 text-xs font-bold tracking-wider ${(formData.justificativa?.trim().length || 0) >= minJustificativa ? 'text-green-600' : 'text-red-600'}`}>
+                          {(formData.justificativa?.trim().length || 0).toLocaleString('pt-BR')} / {minJustificativa.toLocaleString('pt-BR')} caracteres
+                          {(formData.justificativa?.trim().length || 0) < minJustificativa && (
+                            <span className="ml-2 text-red-500">— faltam {(minJustificativa - (formData.justificativa?.trim().length || 0)).toLocaleString('pt-BR')}</span>
                           )}
-                          {(formData.justificativa?.trim().length || 0) >= 2000 && (
+                          {(formData.justificativa?.trim().length || 0) >= minJustificativa && (
                             <span className="ml-2">✓ Mínimo atingido</span>
                           )}
                         </div>

@@ -507,6 +507,26 @@ const App: React.FC = () => {
     checkSession();
   }, []);
 
+  // Carregar configurações globais do Supabase (para todos os usuários)
+  useEffect(() => {
+    const loadAppSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('key, value');
+        if (!error && data) {
+          const minJust = data.find((s: any) => s.key === 'min_justificativa');
+          if (minJust) {
+            setMinJustificativa(Number(minJust.value));
+          }
+        }
+      } catch (e) {
+        // silenciado
+      }
+    };
+    loadAppSettings();
+  }, []);
+
   // Fetch users if admin
   const prevShowUserManagementRef = useRef(showUserManagement);
   const loadingPlanIdRef = useRef<string | null>(null);
@@ -4656,6 +4676,23 @@ Secretaria de Estado da Saúde de São Paulo`;
                             onChange={e => setMinJustificativa(Number(e.target.value))}
                             className="w-24 px-2 py-1 border rounded text-xs font-mono"
                           />
+                          <button
+                            onClick={async () => {
+                              try {
+                                const { error } = await supabase.rpc('set_app_setting', {
+                                  p_key: 'min_justificativa',
+                                  p_value: String(minJustificativa)
+                                });
+                                if (error) throw error;
+                                alert(`✅ Mínimo de ${minJustificativa} caracteres salvo para todos os usuários!`);
+                              } catch (e: any) {
+                                alert(`❌ Erro ao salvar: ${e.message}`);
+                              }
+                            }}
+                            className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-bold rounded"
+                          >
+                            Salvar
+                          </button>
                         </div>
                       </div>
                       <div className="flex items-center justify-between">

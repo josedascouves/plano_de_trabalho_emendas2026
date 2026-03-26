@@ -507,26 +507,6 @@ const App: React.FC = () => {
     checkSession();
   }, []);
 
-  // Carregar configurações globais do Supabase (para todos os usuários)
-  useEffect(() => {
-    const loadAppSettings = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select('key, value');
-        if (!error && data) {
-          const minJust = data.find((s: any) => s.key === 'min_justificativa');
-          if (minJust) {
-            setMinJustificativa(Number(minJust.value));
-          }
-        }
-      } catch (e) {
-        // silenciado
-      }
-    };
-    loadAppSettings();
-  }, []);
-
   // Fetch users if admin
   const prevShowUserManagementRef = useRef(showUserManagement);
   const loadingPlanIdRef = useRef<string | null>(null);
@@ -4658,43 +4638,6 @@ Secretaria de Estado da Saúde de São Paulo`;
 
                     {/* SEÇÃO 2: LISTA DE USUÁRIOS */}
                     <div className="space-y-6">
-                      {/* Configuração global do mínimo de caracteres da justificativa */}
-                      <div className="mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-xl flex flex-col md:flex-row md:items-center gap-4">
-                        <div className="flex-1">
-                          <h3 className="text-base font-black text-yellow-900 flex items-center gap-2">
-                            <AlertCircle className="w-5 h-5 text-yellow-600" />
-                            Configuração Global: Justificativa Técnica
-                          </h3>
-                          <p className="text-sm text-yellow-800 mt-1">Defina o número mínimo de caracteres obrigatórios para a justificativa técnica de todos os usuários.</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs font-bold text-gray-700">Mínimo de caracteres:</label>
-                          <input
-                            type="number"
-                            min={1}
-                            value={minJustificativa}
-                            onChange={e => setMinJustificativa(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border rounded text-xs font-mono"
-                          />
-                          <button
-                            onClick={async () => {
-                              try {
-                                const { error } = await supabase.rpc('salvar_configuracao', {
-                                  p_key: 'min_justificativa',
-                                  p_value: String(minJustificativa)
-                                });
-                                if (error) throw error;
-                                alert(`✅ Mínimo de ${minJustificativa} caracteres salvo para todos os usuários!`);
-                              } catch (e: any) {
-                                alert(`❌ Erro ao salvar: ${e.message}`);
-                              }
-                            }}
-                            className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-bold rounded"
-                          >
-                            Salvar
-                          </button>
-                        </div>
-                      </div>
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="text-lg font-black text-gray-900 flex items-center gap-3">

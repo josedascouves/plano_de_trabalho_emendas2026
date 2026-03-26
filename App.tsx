@@ -4679,10 +4679,9 @@ Secretaria de Estado da Saúde de São Paulo`;
                           <button
                             onClick={async () => {
                               try {
-                                const { error } = await supabase.rpc('set_app_setting', {
-                                  p_key: 'min_justificativa',
-                                  p_value: String(minJustificativa)
-                                });
+                                const { error } = await supabase
+                                  .from('app_settings')
+                                  .upsert({ key: 'min_justificativa', value: String(minJustificativa), updated_at: new Date().toISOString() }, { onConflict: 'key' });
                                 if (error) throw error;
                                 alert(`✅ Mínimo de ${minJustificativa} caracteres salvo para todos os usuários!`);
                               } catch (e: any) {

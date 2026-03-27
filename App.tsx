@@ -229,12 +229,9 @@ const App: React.FC = () => {
   const [showInactiveUsers, setShowInactiveUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as 'user' | 'admin' | 'intermediate', cnes: '' });
-  // Controle do mínimo de caracteres da justificativa — lido diretamente do localStorage
+  // Controle do mínimo de caracteres da justificativa
   const [minJustificativa, setMinJustificativa] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem('min_justificativa');
-      return saved !== null ? Number(saved) : 0;
-    } catch { return 0; }
+    try { return Number(localStorage.getItem('min_justificativa') ?? 0); } catch { return 0; }
   });
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
@@ -600,6 +597,18 @@ const App: React.FC = () => {
       }
     };
     checkSession();
+  }, []);
+
+  // Carregar min_justificativa do Supabase (fonte de verdade para todos os usuários)
+  useEffect(() => {
+    supabase.from('app_settings').select('value').eq('key', 'min_justificativa').maybeSingle()
+      .then(({ data }) => {
+        if (data?.value !== undefined && data.value !== null) {
+          const val = Number(data.value);
+          setMinJustificativa(val);
+          try { localStorage.setItem('min_justificativa', String(val)); } catch {}
+        }
+      });
   }, []);
 
   // Fetch users if admin
@@ -4754,9 +4763,18 @@ Secretaria de Estado da Saúde de São Paulo`;
                             className="w-24 px-3 py-2 border-2 border-amber-200 rounded-xl text-sm font-mono font-bold text-center focus:outline-none focus:border-amber-400 bg-white"
                           />
                           <button
-                            onClick={() => {
-                              localStorage.setItem('min_justificativa', String(minJustificativa));
-                              alert(`✅ Mínimo de ${minJustificativa} caracteres salvo!`);
+                            onClick={async () => {
+                              try {
+                                const { error } = await supabase.from('app_settings')
+                                  .upsert({ key: 'min_justificativa', value: String(minJustificativa), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+                                if (error) throw error;
+                                try { localStorage.setItem('min_justificativa', String(minJustificativa)); } catch {}
+                                alert(`✅ Mínimo de ${minJustificativa} caracteres salvo para todos os usuários!`);
+                              } catch (e: any) {
+                                // Fallback: salvar apenas local­mente
+                                try { localStorage.setItem('min_justificativa', String(minJustificativa)); } catch {}
+                                alert(`⚠️ Salvo localmente (${minJustificativa} chars). Para persistir para todos, execute o SQL:\nALTER TABLE public.app_settings DISABLE ROW LEVEL SECURITY;\nNOTIFY pgrst, 'reload schema';`);
+                              }
                             }}
                             className="px-4 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
                           >

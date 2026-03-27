@@ -6093,10 +6093,9 @@ Secretaria de Estado da Saúde de São Paulo`;
                             <div className="p-2 bg-white/10 rounded-xl">
                               <DollarSign className="w-5 h-5 text-white" />
                             </div>
-                            <span className="text-lg font-black text-white leading-tight text-right">R$ {(totalValor / 1_000_000).toFixed(2)}M</span>
+                            <span className="text-lg font-black text-white leading-tight text-right">{totalValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
                           </div>
                           <p className="text-xs font-bold text-red-200 uppercase tracking-widest">Valor Total</p>
-                          <p className="text-[10px] text-red-300 mt-0.5">R$ {totalValor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
                         </div>
 
                         {/* Média por Plano */}
@@ -6105,10 +6104,9 @@ Secretaria de Estado da Saúde de São Paulo`;
                             <div className="p-2 bg-white/10 rounded-xl">
                               <BarChart3 className="w-5 h-5 text-white" />
                             </div>
-                            <span className="text-base font-black text-white leading-tight text-right">R$ {(avgValor / 1_000).toFixed(0)}K</span>
+                            <span className="text-base font-black text-white leading-tight text-right">{avgValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
                           </div>
                           <p className="text-xs font-bold text-blue-200 uppercase tracking-widest">Valor Médio/Plano</p>
-                          <p className="text-[10px] text-blue-300 mt-0.5">R$ {avgValor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
                         </div>
 
                         {/* % MAC */}
@@ -6195,7 +6193,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   </div>
                                   <div className="flex items-center justify-between text-xs text-gray-500">
                                     <span>{ps.count} plano(s)</span>
-                                    <span className="font-bold">R$ {(ps.valor / 1_000_000).toFixed(2)}M</span>
+                                    <span className="font-bold">{ps.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
                                   </div>
                                 </div>
                               );
@@ -6221,7 +6219,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   <p className="text-sm font-bold text-gray-900 truncate">{parl}</p>
                                   <p className="text-xs text-gray-400">{stats.count} plano(s)</p>
                                 </div>
-                                <p className="text-sm font-black text-red-600 flex-shrink-0">R$ {(stats.valor / 1_000_000).toFixed(2)}M</p>
+                                <p className="text-sm font-black text-red-600 flex-shrink-0">{stats.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</p>
                               </div>
                             ))}
                           </div>
@@ -6257,7 +6255,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                       <td className="px-5 py-3 text-center">
                                         <span className="inline-flex items-center justify-center w-7 h-7 bg-teal-100 text-teal-700 font-black text-xs rounded-full">{stats.count}</span>
                                       </td>
-                                      <td className="px-5 py-3 text-right text-sm font-bold text-gray-800">R$ {(stats.valor / 1_000).toFixed(0)}K</td>
+                                      <td className="px-5 py-3 text-right text-sm font-bold text-gray-800">{stats.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</td>
                                     </tr>
                                   ))}
                                 </tbody>

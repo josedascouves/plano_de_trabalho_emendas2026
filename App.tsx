@@ -229,8 +229,13 @@ const App: React.FC = () => {
   const [showInactiveUsers, setShowInactiveUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'user' as 'user' | 'admin' | 'intermediate', cnes: '' });
-  // Controle do mínimo de caracteres da justificativa (padrão 0 = sem mínimo)
-  const [minJustificativa, setMinJustificativa] = useState<number>(0);
+  // Controle do mínimo de caracteres da justificativa — lido diretamente do localStorage
+  const [minJustificativa, setMinJustificativa] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('min_justificativa');
+      return saved !== null ? Number(saved) : 0;
+    } catch { return 0; }
+  });
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
   const [csvUploading, setCsvUploading] = useState(false);
@@ -595,12 +600,6 @@ const App: React.FC = () => {
       }
     };
     checkSession();
-  }, []);
-
-  // Carregar min_justificativa do localStorage (compartilhado por dispositivo)
-  useEffect(() => {
-    const saved = localStorage.getItem('min_justificativa');
-    if (saved !== null) setMinJustificativa(Number(saved));
   }, []);
 
   // Fetch users if admin

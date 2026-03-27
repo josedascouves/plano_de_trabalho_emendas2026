@@ -4866,51 +4866,50 @@ Secretaria de Estado da Saúde de São Paulo`;
                                   }`}>
                                     {u.role === 'admin' ? 'Admin' : u.role === 'intermediate' ? 'Intermediário' : 'Usuário'}
                                   </div>
+
+                                  {/* Ações - Menu Hamburguer */}
+                                  <MenuHamburguerUserActions
+                                    user={u}
+                                    onEdit={() => {
+                                      setEditingUser({
+                                        id: u.id,
+                                        email: u.email,
+                                        name: u.name,
+                                        cnes: u.cnes || '',
+                                        password: ''
+                                      });
+                                      setShowEditUserModal(true);
+                                    }}
+                                    onChangeRole={(role) => {
+                                      const roleNames = {
+                                        'user': 'USUÁRIO PADRÃO',
+                                        'intermediate': 'USUÁRIO INTERMEDIÁRIO',
+                                        'admin': 'ADMINISTRADOR'
+                                      };
+                                      if (window.confirm(`Deseja alterar ${u.name} para ${roleNames[role]}?`)) {
+                                        handleChangeUserRole(u.id, u.name, role);
+                                      }
+                                    }}
+                                    onToggleActive={() => handleToggleUserDisable(u.id)}
+                                    onResetPassword={() => handleChangePassword(u.email)}
+                                    onDelete={() => {
+                                      if (window.confirm(`Tem certeza que deseja deletar o usuário ${u.name}? ESTA AÇÃO NÃO PODE SER DESFEITA.`)) {
+                                        handleDeleteUser(u.id, u.email);
+                                      }
+                                    }}
+                                  />
                                 </div>
                               </div>
 
                               {/* E-mail */}
-                              <p className="text-sm text-gray-600 mb-4 ml-13">{u.email}</p>
+                              <p className="text-sm text-gray-600 mb-1 ml-13">{u.email}</p>
 
                               {/* CNES */}
                               {u.cnes && (
-                                <p className="text-sm text-gray-600 mb-4 ml-13 font-mono">
+                                <p className="text-sm text-gray-600 ml-13 font-mono">
                                   <span className="font-bold text-gray-700">CNES:</span> {u.cnes}
                                 </p>
                               )}
-
-                              {/* Ações - Menu Hamburguer */}
-                              <MenuHamburguerUserActions
-                                user={u}
-                                onEdit={() => {
-                                  setEditingUser({
-                                    id: u.id,
-                                    email: u.email,
-                                    name: u.name,
-                                    cnes: u.cnes || '',
-                                    password: ''
-                                  });
-                                  setShowEditUserModal(true);
-                                }}
-                                onChangeRole={(role) => {
-                                  const roleNames = {
-                                    'user': 'USUÁRIO PADRÃO',
-                                    'intermediate': 'USUÁRIO INTERMEDIÁRIO',
-                                    'admin': 'ADMINISTRADOR'
-                                  };
-                                  if (window.confirm(`Deseja alterar ${u.name} para ${roleNames[role]}?`)) {
-                                    handleChangeUserRole(u.id, u.name, role);
-                                  }
-                                }}
-                                onToggleActive={() => handleToggleUserDisable(u.id)}
-                                onResetPassword={() => handleChangePassword(u.email)}
-                                onDelete={() => {
-                                  if (window.confirm(`Tem certeza que deseja deletar o usuário ${u.name}? ESTA AÇÃO NÃO PODE SER DESFEITA.`)) {
-                                    handleDeleteUser(u.id, u.email);
-                                  }
-                                }}
-                              />
-
                             </div>
                           ))
                           ) : (

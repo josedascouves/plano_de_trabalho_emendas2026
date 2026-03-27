@@ -95,26 +95,116 @@ import { initializeSecurity } from './utils/security';
 // Componente de menu hamburguer para ações do usuário na gestão
 function MenuHamburguerUserActions({ user, onEdit, onChangeRole, onToggleActive, onResetPassword, onDelete }: { user: any; onEdit: () => void; onChangeRole: (role: string) => void; onToggleActive: () => void; onResetPassword: () => void; onDelete: () => void }) {
   const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const roleOptions = [
+    { value: 'user', label: 'Usuário', color: 'text-gray-700' },
+    { value: 'intermediate', label: 'Intermediário', color: 'text-blue-700' },
+    { value: 'admin', label: 'Admin', color: 'text-red-700' },
+  ];
+
   return (
-    <div className="relative">
-      <button onClick={() => setOpen(o => !o)} className="p-2 rounded-full hover:bg-gray-100 border border-gray-200">
-        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-gray-700">
-          <circle cx="12" cy="5" r="1.5" />
-          <circle cx="12" cy="12" r="1.5" />
-          <circle cx="12" cy="19" r="1.5" />
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center justify-center w-9 h-9 rounded-lg border transition-all duration-150 ${open ? 'bg-gray-100 border-gray-300 shadow-inner' : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300 hover:shadow-sm'}`}
+        title="Ações"
+      >
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" className="text-gray-500">
+          <circle cx="12" cy="5" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="12" cy="19" r="2" />
         </svg>
       </button>
+
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg flex flex-col py-2">
-          <button onClick={() => { setOpen(false); onEdit(); }} className="px-4 py-2 text-left hover:bg-green-50 text-green-800 font-bold text-xs">Editar</button>
-          <select value={user.role} onChange={e => { setOpen(false); onChangeRole(e.target.value); }} className="px-4 py-2 rounded-lg border text-xs font-bold bg-blue-50 text-blue-700 my-1">
-            <option value="user">Usuário</option>
-            <option value="intermediate">Intermediário</option>
-            <option value="admin">Admin</option>
-          </select>
-          <button onClick={() => { setOpen(false); onToggleActive(); }} className={`px-4 py-2 text-left font-bold text-xs ${user.disabled ? 'text-gray-500 hover:bg-gray-100' : 'text-yellow-800 hover:bg-yellow-50'}`}>{user.disabled ? 'Ativar' : 'Desativar'}</button>
-          <button onClick={() => { setOpen(false); onResetPassword(); }} className="px-4 py-2 text-left hover:bg-blue-50 text-blue-800 font-bold text-xs">Senha</button>
-          <button onClick={() => { setOpen(false); onDelete(); }} className="px-4 py-2 text-left hover:bg-red-50 text-red-800 font-bold text-xs">Deletar</button>
+        <div className="absolute right-0 z-50 mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden">
+          {/* Cabeçalho */}
+          <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ações do usuário</p>
+          </div>
+
+          {/* Editar */}
+          <button
+            onClick={() => { setOpen(false); onEdit(); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-green-50 transition-colors group"
+          >
+            <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-100 group-hover:bg-green-200 transition-colors">
+              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} className="text-green-700"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 113.182 3.182L7.5 19.213l-4 1 1-4L16.862 3.487z"/></svg>
+            </span>
+            <span className="text-sm font-semibold text-green-800">Editar dados</span>
+          </button>
+
+          {/* Alterar perfil */}
+          <div className="px-4 py-2.5 border-t border-gray-50">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Perfil de acesso</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {roleOptions.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setOpen(false); onChangeRole(opt.value); }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                    user.role === opt.value
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-400 hover:text-indigo-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100" />
+
+          {/* Ativar/Desativar */}
+          <button
+            onClick={() => { setOpen(false); onToggleActive(); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-amber-50 transition-colors group"
+          >
+            <span className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${user.disabled ? 'bg-gray-100 group-hover:bg-gray-200' : 'bg-amber-100 group-hover:bg-amber-200'}`}>
+              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} className={user.disabled ? 'text-gray-600' : 'text-amber-700'}>
+                {user.disabled
+                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  : <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                }
+              </svg>
+            </span>
+            <span className={`text-sm font-semibold ${user.disabled ? 'text-gray-700' : 'text-amber-800'}`}>
+              {user.disabled ? 'Ativar usuário' : 'Desativar usuário'}
+            </span>
+          </button>
+
+          {/* Redefinir senha */}
+          <button
+            onClick={() => { setOpen(false); onResetPassword(); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-blue-50 transition-colors group border-t border-gray-50"
+          >
+            <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-100 group-hover:bg-blue-200 transition-colors">
+              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} className="text-blue-700"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+            </span>
+            <span className="text-sm font-semibold text-blue-800">Redefinir senha</span>
+          </button>
+
+          {/* Deletar */}
+          <button
+            onClick={() => { setOpen(false); onDelete(); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-red-50 transition-colors group border-t border-gray-100"
+          >
+            <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-red-100 group-hover:bg-red-200 transition-colors">
+              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} className="text-red-700"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+            </span>
+            <span className="text-sm font-semibold text-red-700">Deletar usuário</span>
+          </button>
         </div>
       )}
     </div>
@@ -505,6 +595,12 @@ const App: React.FC = () => {
       }
     };
     checkSession();
+  }, []);
+
+  // Carregar min_justificativa do localStorage (compartilhado por dispositivo)
+  useEffect(() => {
+    const saved = localStorage.getItem('min_justificativa');
+    if (saved !== null) setMinJustificativa(Number(saved));
   }, []);
 
   // Fetch users if admin
@@ -4638,6 +4734,38 @@ Secretaria de Estado da Saúde de São Paulo`;
 
                     {/* SEÇÃO 2: LISTA DE USUÁRIOS */}
                     <div className="space-y-6">
+
+                      {/* Configuração global do mínimo de caracteres */}
+                      <div className="p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row md:items-center gap-4">
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-100 shrink-0">
+                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="text-amber-700"><path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z"/><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-black text-amber-900">Mínimo de caracteres — Justificativa Técnica</h3>
+                            <p className="text-xs text-amber-700 mt-0.5">Define quantos caracteres mínimos os usuários devem escrever. Use <span className="font-bold">0</span> para sem limite.</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <input
+                            type="number"
+                            min={0}
+                            value={minJustificativa}
+                            onChange={e => setMinJustificativa(Number(e.target.value))}
+                            className="w-24 px-3 py-2 border-2 border-amber-200 rounded-xl text-sm font-mono font-bold text-center focus:outline-none focus:border-amber-400 bg-white"
+                          />
+                          <button
+                            onClick={() => {
+                              localStorage.setItem('min_justificativa', String(minJustificativa));
+                              alert(`✅ Mínimo de ${minJustificativa} caracteres salvo!`);
+                            }}
+                            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
+                          >
+                            Salvar
+                          </button>
+                        </div>
+                      </div>
+
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="text-lg font-black text-gray-900 flex items-center gap-3">

@@ -2835,47 +2835,75 @@ const App: React.FC = () => {
         throw planoError;
       }
 
-      if (formData.acoesServicos.length > 0) {
-        const acoesData = formData.acoesServicos.map(a => ({
-          plano_id: plano.id,
-          categoria: a.categoria,
-          item: a.item,
-          meta: a.metasQuantitativas[0],
-          valor: parseCurrency(a.valor),
-          created_by: user.id
-        }));
-        const { error: acoesError } = await supabase.from('acoes_servicos').insert(acoesData);
-        if (acoesError) {
-          console.error("❌ Erro ao inserir ações:", acoesError);
-          throw acoesError;
-        }
-      }
+      // Usar RPC para INSERT atômico (SECURITY DEFINER - bypassa RLS)
+      const acoesJsonCreate = formData.acoesServicos.map(a => ({
+        categoria: a.categoria,
+        item: a.item,
+        meta: a.metasQuantitativas[0],
+        valor: parseCurrency(a.valor),
+        created_by: user.id
+      }));
+      const metasQualJsonCreate = formData.metasQualitativas.map(q => ({
+        meta_descricao: q.meta,
+        indicador: q.valor,
+        created_by: user.id
+      }));
+      const naturezasJsonCreate = formData.naturezasDespesa.map(n => ({
+        codigo: n.codigo,
+        valor: parseCurrency(n.valor),
+        created_by: user.id
+      }));
 
-      if (formData.metasQualitativas.length > 0) {
-        const qualData = formData.metasQualitativas.map(q => ({
-          plano_id: plano.id,
-          meta_descricao: q.meta,
-          indicador: q.valor,
-          created_by: user.id
-        }));
-        const { error: qualError } = await supabase.from('metas_qualitativas').insert(qualData);
-        if (qualError) {
-          console.error("❌ Erro ao inserir metas qualitativas:", qualError);
-          throw qualError;
-        }
-      }
+      const { error: rpcCreateError } = await supabase.rpc('replace_plano_children', {
+        p_plano_id: plano.id,
+        p_acoes: acoesJsonCreate,
+        p_metas_qual: metasQualJsonCreate,
+        p_naturezas: naturezasJsonCreate
+      });
 
-      if (formData.naturezasDespesa.length > 0) {
-        const natData = formData.naturezasDespesa.map(n => ({
-          plano_id: plano.id,
-          codigo: n.codigo,
-          valor: parseCurrency(n.valor),
-          created_by: user.id
-        }));
-        const { error: natError } = await supabase.from('naturezas_despesa_plano').insert(natData);
-        if (natError) {
-          console.error("❌ Erro ao inserir naturezas:", natError);
-          throw natError;
+      if (rpcCreateError) {
+        console.warn("⚠️ RPC replace_plano_children falhou no create, usando fallback:", rpcCreateError.message);
+        // Fallback: inserção direta
+        if (formData.acoesServicos.length > 0) {
+          const acoesData = formData.acoesServicos.map(a => ({
+            plano_id: plano.id,
+            categoria: a.categoria,
+            item: a.item,
+            meta: a.metasQuantitativas[0],
+            valor: parseCurrency(a.valor),
+            created_by: user.id
+          }));
+          const { error: acoesError } = await supabase.from('acoes_servicos').insert(acoesData);
+          if (acoesError) {
+            console.error("❌ Erro ao inserir ações:", acoesError);
+            throw acoesError;
+          }
+        }
+        if (formData.metasQualitativas.length > 0) {
+          const qualData = formData.metasQualitativas.map(q => ({
+            plano_id: plano.id,
+            meta_descricao: q.meta,
+            indicador: q.valor,
+            created_by: user.id
+          }));
+          const { error: qualError } = await supabase.from('metas_qualitativas').insert(qualData);
+          if (qualError) {
+            console.error("❌ Erro ao inserir metas qualitativas:", qualError);
+            throw qualError;
+          }
+        }
+        if (formData.naturezasDespesa.length > 0) {
+          const natData = formData.naturezasDespesa.map(n => ({
+            plano_id: plano.id,
+            codigo: n.codigo,
+            valor: parseCurrency(n.valor),
+            created_by: user.id
+          }));
+          const { error: natError } = await supabase.from('naturezas_despesa_plano').insert(natData);
+          if (natError) {
+            console.error("❌ Erro ao inserir naturezas:", natError);
+            throw natError;
+          }
         }
       }
 
@@ -2934,13 +2962,32 @@ const App: React.FC = () => {
     if (!formData.planejamento.objetivoId) missingFields.push('Objetivo Específico');
 
     // METAS QUANTITATIVAS - obrigatório (pelo menos um item)
-    if (formData.acoesServicos.length === 0) missingFields.push('Metas Quantitativas (adicione pelo menos uma ação/serviço)');
+    if (formData.acoesServicos.length === 0) {
+      missingFields.push('Metas Quantitativas — adicione pelo menos uma Ação/Serviço');
+    } else {
+      // Verificar se cada item está completamente preenchido
+      formData.acoesServicos.forEach((acao, idx) => {
+        const n = idx + 1;
+        if (!acao.categoria?.trim()) missingFields.push(`Ação ${n}: Grupo de Ação não selecionado`);
+        if (!acao.item?.trim()) missingFields.push(`Ação ${n}: Ação Específica não selecionada`);
+        if (!acao.metasQuantitativas[0]?.trim()) missingFields.push(`Ação ${n}: Meta Quantitativa não informada`);
+        if (!acao.valor?.trim() || acao.valor === '0,00') missingFields.push(`Ação ${n}: Valor da ação não informado`);
+      });
+    }
 
     // INDICADORES QUALITATIVOS - OPCIONAL (não é obrigatório)
     // Removido: validação de requiredFields
 
     // EXECUÇÃO FINANCEIRA - obrigatório (pelo menos um item)
-    if (formData.naturezasDespesa.length === 0) missingFields.push('Execução Financeira - Natureza de Despesa (adicione pelo menos uma despesa)');
+    if (formData.naturezasDespesa.length === 0) {
+      missingFields.push('Execução Financeira — adicione pelo menos uma Natureza de Despesa');
+    } else {
+      formData.naturezasDespesa.forEach((nd, idx) => {
+        const n = idx + 1;
+        if (!nd.codigo?.trim()) missingFields.push(`Natureza de Despesa ${n}: Código não selecionado`);
+        if (!nd.valor?.trim() || nd.valor === '0,00') missingFields.push(`Natureza de Despesa ${n}: Valor não informado`);
+      });
+    }
 
     // JUSTIFICATIVA TÉCNICA - obrigatório (mínimo minJustificativa caracteres)
     if (!formData.justificativa?.trim()) {

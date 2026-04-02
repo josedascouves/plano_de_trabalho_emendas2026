@@ -64,15 +64,17 @@ import {
   Bell,
   Globe
 } from 'lucide-react';
-import { FormState, User } from './types';
+import { FormState, User, AcaoServico, NaturezaDespesa } from './types';
 import { 
   DIRETRIZES, 
   PROGRAMAS,
   ACOES_SERVICOS_POR_PROGRAMA,
   METAS_QUALITATIVAS_OPTIONS,
   METAS_QUANTITATIVAS_OPTIONS,
-  NATUREZAS_DESPESA 
+  NATUREZAS_DESPESA,
+  NATUREZAS_POR_PROGRAMA
 } from './constants';
+import { AdminTreeEditor } from './components/AdminTreeEditor';
 import { supabase } from './supabase';
 import { InputField } from './components/InputField';
 import { Section } from './components/Section';
@@ -224,6 +226,15 @@ const App: React.FC = () => {
   
   // Admin & User Management
   const [showUserManagement, setShowUserManagement] = useState(false);
+  const [showAdminTreeEditor, setShowAdminTreeEditor] = useState(false);
+
+  // Dynamic lists loaded from DB (fall back to constants when DB is empty)
+  const [dynamicProgramas, setDynamicProgramas] = useState<string[]>(PROGRAMAS);
+  const [dynamicAcoes, setDynamicAcoes] = useState<Record<string, AcaoServico[]>>(ACOES_SERVICOS_POR_PROGRAMA);
+  const [dynamicMetasQuant, setDynamicMetasQuant] = useState<Record<string, string[]>>(METAS_QUANTITATIVAS_OPTIONS);
+  const [dynamicNaturezas, setDynamicNaturezas] = useState<NaturezaDespesa[]>(NATUREZAS_DESPESA);
+  // Per-program naturezas: keyed by program name. Empty = show all naturezas.
+  const [dynamicProgramaNaturezas, setDynamicProgramaNaturezas] = useState<Record<string, NaturezaDespesa[]>>({});
   const [usersList, setUsersList] = useState<any[]>([]);
   const [inactiveUsersList, setInactiveUsersList] = useState<any[]>([]);
   const [showInactiveUsers, setShowInactiveUsers] = useState(false);
@@ -389,6 +400,64 @@ const App: React.FC = () => {
 
   // CNES isentos de conta bancária e extrato bancário obrigatório
   const CNES_ISENTO_CONTA_EXTRATO = ['2090236', '7066376', '2071568', '2079798'];
+
+  // ======== DYNAMIC TREE DATA FROM DB ========
+  const loadTreeDataFromDB = async () => {
+    try {
+      const [p, a, m, n] = await Promise.all([
+        supabase.from('programas_orcamentarios').select('id,nome,ordem').eq('ativo', true).order('ordem').order('nome'),
+        supabase.from('acoes_servicos_catalogo').select('programa_id,categoria,item,ordem').eq('ativo', true).order('ordem').order('item'),
+        supabase.from('metas_quantitativas_catalogo').select('categoria,item,ordem').eq('ativo', true).order('ordem'),
+        supabase.from('naturezas_despesa').select('codigo,descricao,ordem').eq('ativo', true).order('ordem').order('codigo'),
+      ]);
+      if (!p.error && p.data && p.data.length > 0) {
+        setDynamicProgramas(p.data.map((x: any) => x.nome));
+        if (!a.error && a.data && a.data.length > 0) {
+          const idToNome = new Map(p.data.map((x: any) => [x.id, x.nome]));
+          const grouped: Record<string, AcaoServico[]> = {};
+          for (const ac of a.data as any[]) {
+            const nomeProg = idToNome.get(ac.programa_id);
+            if (!nomeProg) continue;
+            if (!grouped[nomeProg]) grouped[nomeProg] = [];
+            let cat = grouped[nomeProg].find((c: AcaoServico) => c.categoria === ac.categoria);
+            if (!cat) { cat = { categoria: ac.categoria, itens: [] }; grouped[nomeProg].push(cat); }
+            cat.itens.push(ac.item);
+          }
+          setDynamicAcoes(grouped);
+        }
+      }
+      if (!m.error && m.data && m.data.length > 0) {
+        const grp: Record<string, string[]> = {};
+        for (const meta of m.data as any[]) {
+          if (!grp[meta.categoria]) grp[meta.categoria] = [];
+          grp[meta.categoria].push(meta.item);
+        }
+        setDynamicMetasQuant(grp);
+      }
+      if (!n.error && n.data && n.data.length > 0) {
+        setDynamicNaturezas((n.data as any[]).map(x => ({ codigo: x.codigo, descricao: x.descricao })));
+      }
+      // Load per-program naturezas
+      const pn = await supabase
+        .from('programa_naturezas_catalogo')
+        .select('programa_id,codigo,descricao,ordem')
+        .eq('ativo', true)
+        .order('ordem');
+      if (!pn.error && pn.data && pn.data.length > 0 && p.data && p.data.length > 0) {
+        const idToNome = new Map((p.data as any[]).map((x: any) => [x.id, x.nome]));
+        const grpNat: Record<string, NaturezaDespesa[]> = {};
+        for (const pnRow of pn.data as any[]) {
+          const nomeProg = idToNome.get(pnRow.programa_id);
+          if (!nomeProg) continue;
+          if (!grpNat[nomeProg]) grpNat[nomeProg] = [];
+          grpNat[nomeProg].push({ codigo: pnRow.codigo, descricao: pnRow.descricao });
+        }
+        setDynamicProgramaNaturezas(grpNat);
+      }
+    } catch {
+      // silently keep constants as fallback
+    }
+  };
 
   // ======== RBAC - CONTROLE DE ACESSO ========
   const isAdmin = (): boolean => {
@@ -826,6 +895,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && planosList.length === 0 && !isLoadingPlanos) {
       loadPlanos();
+    }
+  }, [isAuthenticated]);
+
+  // Carrega listas dinâmicas do banco de dados (programas, metas, naturezas)
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadTreeDataFromDB();
     }
   }, [isAuthenticated]);
 
@@ -3464,21 +3540,21 @@ const App: React.FC = () => {
   );
 
   const availableAcoes = useMemo(() => 
-    ACOES_SERVICOS_POR_PROGRAMA[formData.emenda.programa] || [], 
-    [formData.emenda.programa]
+    dynamicAcoes[formData.emenda.programa] || [], 
+    [formData.emenda.programa, dynamicAcoes]
   );
 
   // Metas Quantitativas - Only available for "EMENDA INDIVIDUAL - CUSTEIO MAC - 2E90"
   const availableMetasQuantitativas = useMemo(() => {
     if (formData.emenda.programa === "EMENDA INDIVIDUAL - CUSTEIO MAC - 2E90") {
-      return Object.entries(METAS_QUANTITATIVAS_OPTIONS).map(([categoria, itens]) => ({
+      return Object.entries(dynamicMetasQuant).map(([categoria, itens]) => ({
         categoria,
         itens
       }));
     }
     // Para outros programas, usar as ações de serviços disponíveis
-    return ACOES_SERVICOS_POR_PROGRAMA[formData.emenda.programa] || [];
-  }, [formData.emenda.programa]);
+    return dynamicAcoes[formData.emenda.programa] || [];
+  }, [formData.emenda.programa, dynamicAcoes, dynamicMetasQuant]);
 
   const updateFormData = (section: keyof FormState, value: any) => {
     if (section === 'beneficiario' && value?.cnes) {
@@ -3993,7 +4069,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                     <tbody>
                       {formData.naturezasDespesa.map((despesa, i) => (
                         <tr key={i} className="border-b border-gray-300 hover:bg-gray-50 print:hover:bg-white">
-                          <td className="border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">{despesa.codigo} - {NATUREZAS_DESPESA.find(n => n.codigo === despesa.codigo)?.descricao}</td>
+                          <td className="border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">{despesa.codigo} - {dynamicNaturezas.find(n => n.codigo === despesa.codigo)?.descricao}</td>
                           <td className="border border-gray-300 px-3 py-2 text-right text-xs font-mono font-bold">R$ {despesa.valor}</td>
                         </tr>
                       ))}
@@ -4194,8 +4270,13 @@ Secretaria de Estado da Saúde de São Paulo`;
                     <p className="text-xs text-gray-400 uppercase">{currentUser?.role}</p>
                   </div>
                   {currentUser?.role === 'admin' && (
-                    <button onClick={() => setShowUserManagement(true)} className="p-2 text-gray-300 hover:text-red-400 transition-colors">
+                    <button onClick={() => setShowUserManagement(true)} className="p-2 text-gray-300 hover:text-red-400 transition-colors" title="Gerenciar Usuários">
                       <Users className="w-5 h-5" />
+                    </button>
+                  )}
+                  {currentUser?.role === 'admin' && (
+                    <button onClick={() => setShowAdminTreeEditor(true)} className="p-2 text-gray-300 hover:text-blue-400 transition-colors" title="Configurar Listas (Programas, Metas, Naturezas)">
+                      <Settings2 className="w-5 h-5" />
                     </button>
                   )}
                   <button onClick={handleLogout} className="p-2 text-gray-300 hover:text-red-400 transition-colors">
@@ -4442,7 +4523,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                   {naturezas.map((n: any, i: number) => {
-                                    const nat = NATUREZAS_DESPESA.find((nd: any) => nd.codigo === n.codigo);
+                                    const nat = dynamicNaturezas.find((nd: any) => nd.codigo === n.codigo);
                                     const pct = valorTotal > 0 ? ((parseFloat(n.valor) || 0) / valorTotal * 100) : 0;
                                     return (
                                       <tr key={i} className="hover:bg-gray-50">
@@ -4510,6 +4591,15 @@ Secretaria de Estado da Saúde de São Paulo`;
           )}
 
           {/* MODAL GERENCIAMENTO DE USUÁRIOS */}
+          {/* MODAL CONFIGURAÇÃO DE LISTAS (Admin Tree Editor) */}
+          {showAdminTreeEditor && currentUser?.role === 'admin' && (
+            <AdminTreeEditor
+              supabaseClient={supabase}
+              onClose={() => setShowAdminTreeEditor(false)}
+              onDataChanged={loadTreeDataFromDB}
+            />
+          )}
+
           {showUserManagement && currentUser?.role === 'admin' && (
             <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
               <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl animate-slideUp flex flex-col max-h-[95vh] overflow-hidden">
@@ -5987,10 +6077,10 @@ Secretaria de Estado da Saúde de São Paulo`;
               const avgValor = dashPlanos.length > 0 ? totalValor / dashPlanos.length : 0;
               const planosComJustifAlterada = dashPlanos.filter(p => p.justificativa_alterada_em);
               const planosEditados = dashPlanos.filter(p => p.edit_count > 0);
-              const planosMac = dashPlanos.filter(p => p.programa === PROGRAMAS[0]);
+              const planosMac = dashPlanos.filter(p => p.programa === dynamicProgramas[0]);
 
               // Agrupar por programa com valor
-              const programaStats = PROGRAMAS.map(prog => {
+              const programaStats = dynamicProgramas.map(prog => {
                 const pts = dashPlanos.filter(p => p.programa === prog);
                 return { programa: prog, count: pts.length, valor: pts.reduce((s, p) => s + (parseFloat(p.valor_total) || 0), 0) };
               }).filter(ps => ps.count > 0).sort((a, b) => b.valor - a.valor);
@@ -6054,7 +6144,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                           className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 bg-gray-50 font-semibold text-gray-700"
                         >
                           <option value="">Todos os programas</option>
-                          {PROGRAMAS.map(p => <option key={p} value={p}>{p.length > 60 ? p.slice(0, 60) + '...' : p}</option>)}
+                          {dynamicProgramas.map(p => <option key={p} value={p}>{p.length > 60 ? p.slice(0, 60) + '...' : p}</option>)}
                         </select>
                       </div>
                       <div>
@@ -6433,7 +6523,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                       label="Programa Orçamentário"
                       value={formData.emenda.programa}
                       onChange={(e) => updateFormData('emenda', { ...formData.emenda, programa: e.target.value })}
-                      options={PROGRAMAS.map(p => ({ value: p, label: p }))}
+                      options={dynamicProgramas.map(p => ({ value: p, label: p }))}
                       required
                     />
                     <InputField
@@ -7045,7 +7135,20 @@ Secretaria de Estado da Saúde de São Paulo`;
                             label="Natureza de Despesa"
                             value={currentNatureza.codigo}
                             onChange={(e) => setCurrentNatureza({ ...currentNatureza, codigo: e.target.value })}
-                            options={NATUREZAS_DESPESA.map(o => ({ value: o.codigo, label: `${o.codigo} - ${o.descricao}` }))}
+                            options={(() => {
+                              const prog = formData.emenda.programa;
+                              // 1º: usar dados do banco (por programa)
+                              if (dynamicProgramaNaturezas[prog]?.length) {
+                                return dynamicProgramaNaturezas[prog];
+                              }
+                              // 2º: aplicar filtro padrão do constants se programa conhecido
+                              const allowedCodigos = NATUREZAS_POR_PROGRAMA[prog];
+                              if (allowedCodigos?.length) {
+                                return dynamicNaturezas.filter(n => allowedCodigos.includes(n.codigo));
+                              }
+                              // 3º: fallback total
+                              return dynamicNaturezas;
+                            })().map(o => ({ value: o.codigo, label: `${o.codigo} - ${o.descricao}` }))}
                             hideBottomMargin={true}
                           />
                         </div>

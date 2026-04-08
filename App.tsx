@@ -443,8 +443,12 @@ const App: React.FC = () => {
         .select('programa_id,codigo,descricao,ordem')
         .eq('ativo', true)
         .order('ordem');
-      if (!pn.error && pn.data && pn.data.length > 0 && p.data && p.data.length > 0) {
-        const idToNome = new Map((p.data as any[]).map((x: any) => [x.id, x.nome]));
+      if (!pn.error && pn.data && pn.data.length > 0) {
+        // Use programs data from the already-fetched p, or re-fetch if unavailable
+        const progData = (p.data && p.data.length > 0)
+          ? (p.data as any[])
+          : ((await supabase.from('programas_orcamentarios').select('id,nome').eq('ativo', true)).data ?? []);
+        const idToNome = new Map(progData.map((x: any) => [x.id, x.nome]));
         const grpNat: Record<string, NaturezaDespesa[]> = {};
         for (const pnRow of pn.data as any[]) {
           const nomeProg = idToNome.get(pnRow.programa_id);

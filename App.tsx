@@ -235,6 +235,8 @@ const App: React.FC = () => {
   const [dynamicNaturezas, setDynamicNaturezas] = useState<NaturezaDespesa[]>(NATUREZAS_DESPESA);
   // Per-program naturezas: keyed by program name. Empty = show all naturezas.
   const [dynamicProgramaNaturezas, setDynamicProgramaNaturezas] = useState<Record<string, NaturezaDespesa[]>>({});
+  // True after the first successful query to programa_naturezas_catalogo — constants fallback is suppressed after this.
+  const [treeDataLoaded, setTreeDataLoaded] = useState(false);
   const [usersList, setUsersList] = useState<any[]>([]);
   const [inactiveUsersList, setInactiveUsersList] = useState<any[]>([]);
   const [showInactiveUsers, setShowInactiveUsers] = useState(false);
@@ -443,20 +445,24 @@ const App: React.FC = () => {
         .select('programa_id,codigo,descricao,ordem')
         .eq('ativo', true)
         .order('ordem');
-      if (!pn.error && pn.data && pn.data.length > 0) {
-        // Use programs data from the already-fetched p, or re-fetch if unavailable
-        const progData = (p.data && p.data.length > 0)
-          ? (p.data as any[])
-          : ((await supabase.from('programas_orcamentarios').select('id,nome').eq('ativo', true)).data ?? []);
-        const idToNome = new Map(progData.map((x: any) => [x.id, x.nome]));
-        const grpNat: Record<string, NaturezaDespesa[]> = {};
-        for (const pnRow of pn.data as any[]) {
-          const nomeProg = idToNome.get(pnRow.programa_id);
-          if (!nomeProg) continue;
-          if (!grpNat[nomeProg]) grpNat[nomeProg] = [];
-          grpNat[nomeProg].push({ codigo: pnRow.codigo, descricao: pnRow.descricao });
+      if (!pn.error) {
+        if (pn.data && pn.data.length > 0) {
+          // Use programs data from the already-fetched p, or re-fetch if unavailable
+          const progData = (p.data && p.data.length > 0)
+            ? (p.data as any[])
+            : ((await supabase.from('programas_orcamentarios').select('id,nome').eq('ativo', true)).data ?? []);
+          const idToNome = new Map(progData.map((x: any) => [x.id, x.nome]));
+          const grpNat: Record<string, NaturezaDespesa[]> = {};
+          for (const pnRow of pn.data as any[]) {
+            const nomeProg = idToNome.get(pnRow.programa_id);
+            if (!nomeProg) continue;
+            if (!grpNat[nomeProg]) grpNat[nomeProg] = [];
+            grpNat[nomeProg].push({ codigo: pnRow.codigo, descricao: pnRow.descricao });
+          }
+          setDynamicProgramaNaturezas(grpNat);
         }
-        setDynamicProgramaNaturezas(grpNat);
+        // Mark DB as successfully queried — constants fallback will be suppressed
+        setTreeDataLoaded(true);
       }
     } catch {
       // silently keep constants as fallback
@@ -7192,10 +7198,12 @@ Secretaria de Estado da Saúde de São Paulo`;
                               if (dynamicProgramaNaturezas[prog]?.length) {
                                 return dynamicProgramaNaturezas[prog];
                               }
-                              // 2º: aplicar filtro padrão do constants se programa conhecido
-                              const allowedCodigos = NATUREZAS_POR_PROGRAMA[prog];
-                              if (allowedCodigos?.length) {
-                                return dynamicNaturezas.filter(n => allowedCodigos.includes(n.codigo));
+                              // 2º: constants como fallback SOMENTE antes do banco ser consultado
+                              if (!treeDataLoaded) {
+                                const allowedCodigos = NATUREZAS_POR_PROGRAMA[prog];
+                                if (allowedCodigos?.length) {
+                                  return dynamicNaturezas.filter(n => allowedCodigos.includes(n.codigo));
+                                }
                               }
                               // 3º: fallback total
                               return dynamicNaturezas;

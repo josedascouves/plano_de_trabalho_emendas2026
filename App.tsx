@@ -69,6 +69,8 @@ import {
   DIRETRIZES, 
   PROGRAMAS,
   ACOES_SERVICOS_POR_PROGRAMA,
+  PROGRAMA_EMENDA_COLETIVA_10352_CUSTEIO,
+  GRUPOS_ACAO_EMENDA_COLETIVA_10352_CUSTEIO,
   METAS_QUALITATIVAS_OPTIONS,
   METAS_QUANTITATIVAS_OPTIONS,
   NATUREZAS_DESPESA,
@@ -3596,8 +3598,20 @@ const App: React.FC = () => {
     [selectedDiretriz, formData.planejamento.objetivoId]
   );
 
+  const getAcoesForPrograma = (programa: string) => {
+    const acoes = dynamicAcoes[programa] || [];
+
+    if (programa !== PROGRAMA_EMENDA_COLETIVA_10352_CUSTEIO) {
+      return acoes;
+    }
+
+    return GRUPOS_ACAO_EMENDA_COLETIVA_10352_CUSTEIO
+      .map(categoria => acoes.find(acao => acao.categoria === categoria))
+      .filter((acao): acao is AcaoServico => Boolean(acao));
+  };
+
   const availableAcoes = useMemo(() => 
-    dynamicAcoes[formData.emenda.programa] || [], 
+    getAcoesForPrograma(formData.emenda.programa), 
     [formData.emenda.programa, dynamicAcoes]
   );
 
@@ -3610,7 +3624,7 @@ const App: React.FC = () => {
       }));
     }
     // Para outros programas, usar as ações de serviços disponíveis
-    return dynamicAcoes[formData.emenda.programa] || [];
+    return getAcoesForPrograma(formData.emenda.programa);
   }, [formData.emenda.programa, dynamicAcoes, dynamicMetasQuant]);
 
   const updateFormData = (section: keyof FormState, value: any) => {

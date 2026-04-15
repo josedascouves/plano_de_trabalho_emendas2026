@@ -441,6 +441,19 @@ export const PROGRAMAS = [
   "PARCELA SUPLEMENTAR - PORTARIA 10.169 - PROGRAMA AGORA TEM ESPECIALISTA",
 ];
 
+export const PROGRAMA_EMENDA_COLETIVA_10352_CUSTEIO = "EMENDA COLETIVA - PORTARIA 10.352 - CUSTEIO DE SERVIÇOS DA ATENÇÃO ESPECIALIZADA À SAÚDE";
+
+export const GRUPOS_ACAO_EMENDA_COLETIVA_10352_CUSTEIO = [
+  'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE',
+  'PESSOA COM DEFICIÊNCIA',
+  'POLÍTICA NACIONAL DE PREVENÇÃO E CONTROLE DO CÂNCER',
+  'PROGRAMA AGORA TEM ESPECIALISTA - COMPONENTE AMBULATORIAL',
+  'PROGRAMA AGORA TEM ESPECIALISTA - COMPONENTE CIRÚRGICO',
+  'REDE ALYNE',
+  'SAÚDE MENTAL',
+  'URGÊNCIA E EMERGÊNCIA'
+];
+
 export const ACOES_SERVICOS_POR_PROGRAMA: Record<string, AcaoServico[]> = {
   "EMENDA INDIVIDUAL - CUSTEIO MAC - 2E90": [
     {
@@ -623,21 +636,6 @@ export const ACOES_SERVICOS_POR_PROGRAMA: Record<string, AcaoServico[]> = {
     }
   ],
   "EMENDA COLETIVA - PORTARIA 10.352 - CUSTEIO DE SERVIÇOS DA ATENÇÃO ESPECIALIZADA À SAÚDE": [
-    {
-      categoria: 'METAS QUALITATIVAS',
-      itens: [
-        'Adequação de Ambiência',
-        'Adoção de Políticas de Humanização',
-        'Aperfeiçoamento de Práticas',
-        'Condições de Funcionamento das Unidades',
-        'Correto Funcionamento das Comissões Hospitalares',
-        'Implantação de Protocolos',
-        'Média de Permanência',
-        'Satisfação do Usuário',
-        'Taxa de Ocupação',
-        'Tempo Médio de Realização de Procedimentos'
-      ]
-    },
     {
       categoria: 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE',
       itens: [

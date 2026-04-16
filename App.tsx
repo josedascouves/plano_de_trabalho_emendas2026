@@ -3677,19 +3677,19 @@ const App: React.FC = () => {
     }
 
     // Validação de limite antes de adicionar nova meta
-    const recursoValue = parseFloat(formData.emenda.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+    const recursoValue = parseCurrency(formData.emenda.valor);
     const isPortaria10169 = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.169');
     const isPortaria10352Custeio = formData.emenda.programa && formData.emenda.programa.includes('EMENDA COLETIVA - PORTARIA 10.352 - CUSTEIO');
     const isGrupoVI = currentSelection.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE');
     const isOutrasAcoesMAC = currentSelection.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE';
     
-    let totalMetas = formData.acoesServicos.reduce((sum, acao) => sum + (parseFloat((acao.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0), 0);
+    let totalMetas = formData.acoesServicos.reduce((sum, acao) => sum + parseCurrency(acao.valor || '0'), 0);
     let totalGrupoVI = formData.acoesServicos
       .filter(acao => acao.categoria && acao.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE'))
-      .reduce((sum, acao) => sum + (parseFloat((acao.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0), 0);
+      .reduce((sum, acao) => sum + parseCurrency(acao.valor || '0'), 0);
     let totalOutrasAcoes = formData.acoesServicos
       .filter(acao => acao.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE')
-      .reduce((sum, acao) => sum + (parseFloat((acao.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0), 0);
+      .reduce((sum, acao) => sum + parseCurrency(acao.valor || '0'), 0);
 
     // Validação para Portaria 10.352 - OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE: máximo 70%
     if (isPortaria10352Custeio && isOutrasAcoesMAC) {

@@ -2646,8 +2646,8 @@ const App: React.FC = () => {
         }
       }
 
-      // VALIDAÇÃO: Limitar a 70% do valor do recurso para Portaria 10.352 CUSTEIO, OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE
-      const isPortaria10352Custeio = formData.emenda.programa && formData.emenda.programa === PROGRAMA_EMENDA_COLETIVA_10352_CUSTEIO;
+      // VALIDAÇÃO: Limitar a 70% do valor do recurso para Portaria 10.352 (qualquer variação), OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE
+      const isPortaria10352Custeio = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.352');
       const hasOutrasAcoes = formData.acoesServicos.some(acao => acao.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE');
       if (isPortaria10352Custeio && hasOutrasAcoes) {
         const totalOutrasAcoes = formData.acoesServicos

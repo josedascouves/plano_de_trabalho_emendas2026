@@ -2628,11 +2628,10 @@ const App: React.FC = () => {
       const totalMetasQuantitativas = formData.acoesServicos.reduce((sum, acao) => sum + parseCurrency(acao.valor), 0);
       const totalDespesas = formData.naturezasDespesa.reduce((sum, despesa) => sum + parseCurrency(despesa.valor), 0);
 
-      // NOVA REGRA: Limitar a 50% do valor do recurso para Portaria 10.169, Grupo de Ação VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE
+      // VALIDAÇÃO: Limitar a 50% do valor do recurso para Portaria 10.169, Grupo de Ação VI
       const isPortaria10169 = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.169');
       const hasGrupoAcaoVI = formData.acoesServicos.some(acao => acao.categoria && acao.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE'));
       if (isPortaria10169 && hasGrupoAcaoVI) {
-        // Somar apenas os valores das ações do Grupo VI
         const totalGrupoVI = formData.acoesServicos
           .filter(acao => acao.categoria && acao.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE'))
           .reduce((sum, acao) => sum + parseCurrency(acao.valor), 0);
@@ -2641,6 +2640,24 @@ const App: React.FC = () => {
         if (totalGrupoVI > limiteGrupoVI) {
           const diferenca = (totalGrupoVI - limiteGrupoVI).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
           alert(`⚠️ ERRO DE VALIDAÇÃO!\n\nPara ações do Grupo VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE, o valor total não pode ultrapassar 50% do valor do recurso (R$ ${limiteGrupoVI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).\n\nO valor informado foi R$ ${totalGrupoVI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, excedendo o limite em R$ ${diferenca}.\n\nAjuste os valores antes de salvar.`);
+          setIsSending(false);
+          isSavingRef.current = false;
+          return null;
+        }
+      }
+
+      // VALIDAÇÃO: Limitar a 70% do valor do recurso para Portaria 10.352 CUSTEIO, OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE
+      const isPortaria10352Custeio = formData.emenda.programa && formData.emenda.programa === PROGRAMA_EMENDA_COLETIVA_10352_CUSTEIO;
+      const hasOutrasAcoes = formData.acoesServicos.some(acao => acao.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE');
+      if (isPortaria10352Custeio && hasOutrasAcoes) {
+        const totalOutrasAcoes = formData.acoesServicos
+          .filter(acao => acao.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE')
+          .reduce((sum, acao) => sum + parseCurrency(acao.valor), 0);
+        const valorRecurso = parseCurrency(formData.emenda.valor);
+        const limiteOutrasAcoes = valorRecurso * 0.7;
+        if (totalOutrasAcoes > limiteOutrasAcoes) {
+          const diferenca = (totalOutrasAcoes - limiteOutrasAcoes).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          alert(`⚠️ ERRO DE VALIDAÇÃO!\n\nPara ações de OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE, o valor total não pode ultrapassar 70% do valor do recurso (R$ ${limiteOutrasAcoes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).\n\nO valor informado foi R$ ${totalOutrasAcoes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, excedendo o limite em R$ ${diferenca}.\n\nAjuste os valores antes de salvar.`);
           setIsSending(false);
           isSavingRef.current = false;
           return null;
@@ -3662,14 +3679,27 @@ const App: React.FC = () => {
     // Validação de limite antes de adicionar nova meta
     const recursoValue = parseFloat(formData.emenda.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
     const isPortaria10169 = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.169');
+    const isPortaria10352Custeio = formData.emenda.programa && formData.emenda.programa.includes('EMENDA COLETIVA - PORTARIA 10.352 - CUSTEIO');
     const isGrupoVI = currentSelection.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE');
+    const isOutrasAcoesMAC = currentSelection.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE';
+    
     let totalMetas = formData.acoesServicos.reduce((sum, acao) => sum + (parseFloat((acao.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0), 0);
     let totalGrupoVI = formData.acoesServicos
       .filter(acao => acao.categoria && acao.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE'))
       .reduce((sum, acao) => sum + (parseFloat((acao.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0), 0);
+    let totalOutrasAcoes = formData.acoesServicos
+      .filter(acao => acao.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE')
+      .reduce((sum, acao) => sum + (parseFloat((acao.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0), 0);
 
-    // Se for adicionar mais uma do Grupo VI, já soma +0 (pois valor inicial é vazio)
-    if (isPortaria10169 && isGrupoVI) {
+    // Validação para Portaria 10.352 - OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE: máximo 70%
+    if (isPortaria10352Custeio && isOutrasAcoesMAC) {
+      if (totalOutrasAcoes >= recursoValue * 0.7) {
+        alert('Você já atingiu o limite de 70% do valor do recurso para OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE. Não é possível adicionar mais metas deste grupo.');
+        return;
+      }
+    }
+    // Se for adicionar mais uma do Grupo VI (Portaria 10.169), já soma +0 (pois valor inicial é vazio)
+    else if (isPortaria10169 && isGrupoVI) {
       if ((totalGrupoVI) >= recursoValue * 0.5) {
         alert('Você já atingiu o limite de 50% do valor do recurso para o Grupo VI. Não é possível adicionar mais metas deste grupo.');
         return;

@@ -2646,8 +2646,8 @@ const App: React.FC = () => {
         }
       }
 
-      // VALIDAÇÃO: Limitar a 70% do valor do recurso para Portaria 10.352 (qualquer variação), OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE
-      const isPortaria10352Custeio = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.352');
+      // VALIDAÇÃO: Limitar a 70% do valor do recurso para Portaria 10.352 CUSTEIO, OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE
+      const isPortaria10352Custeio = formData.emenda.programa === PROGRAMA_EMENDA_COLETIVA_10352_CUSTEIO;
       const hasOutrasAcoes = formData.acoesServicos.some(acao => acao.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE');
       if (isPortaria10352Custeio && hasOutrasAcoes) {
         const totalOutrasAcoes = formData.acoesServicos
@@ -3679,7 +3679,7 @@ const App: React.FC = () => {
     // Validação de limite antes de adicionar nova meta
     const recursoValue = parseCurrency(formData.emenda.valor);
     const isPortaria10169 = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.169');
-    const isPortaria10352Custeio = formData.emenda.programa && formData.emenda.programa.includes('EMENDA COLETIVA - PORTARIA 10.352 - CUSTEIO');
+    const isPortaria10352Custeio = formData.emenda.programa === PROGRAMA_EMENDA_COLETIVA_10352_CUSTEIO;
     const isGrupoVI = currentSelection.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE');
     const isOutrasAcoesMAC = currentSelection.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE';
     
@@ -7025,34 +7025,49 @@ Secretaria de Estado da Saúde de São Paulo`;
                                 type="text"
                                 value={acao.valor}
                                 onChange={(e) => {
-                                  const recursoValue = parseFloat(formData.emenda.valor.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+                                  const recursoValue = parseCurrency(formData.emenda.valor);
                                   const isPortaria10169 = formData.emenda.programa && formData.emenda.programa.includes('PORTARIA 10.169');
+                                  const isPortaria10352Custeio = formData.emenda.programa === PROGRAMA_EMENDA_COLETIVA_10352_CUSTEIO;
                                   const isGrupoVI = acao.categoria && acao.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE');
+                                  const isOutrasAcoesMAC = acao.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE';
+                                  const newValorDigitado = parseCurrency(maskCurrency(e.target.value));
                                   // Calcula o novo total considerando o valor editado
                                   const totalMetas = formData.acoesServicos.reduce((sum, item, i) => {
-                                    if (i === idx) return sum + parseFloat(e.target.value.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
-                                    const value = parseFloat((item.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
-                                    return sum + value;
+                                    if (i === idx) return sum + newValorDigitado;
+                                    return sum + parseCurrency(item.valor || '0');
                                   }, 0);
                                   const totalGrupoVI = formData.acoesServicos.reduce((sum, item, i) => {
                                     if (item.categoria && item.categoria.includes('VI - CUSTEIO DE OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE')) {
-                                      if (i === idx) {
-                                        return sum + (parseFloat(e.target.value.replace(/[^\d,-]/g, '').replace(',', '.')) || 0);
-                                      }
-                                      return sum + (parseFloat((item.valor || '').replace(/[^\d,-]/g, '').replace(',', '.')) || 0);
+                                      if (i === idx) return sum + newValorDigitado;
+                                      return sum + parseCurrency(item.valor || '0');
                                     }
                                     return sum;
                                   }, 0);
+                                  const totalOutrasAcoes = formData.acoesServicos.reduce((sum, item, i) => {
+                                    if (item.categoria === 'OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE') {
+                                      if (i === idx) return sum + newValorDigitado;
+                                      return sum + parseCurrency(item.valor || '0');
+                                    }
+                                    return sum;
+                                  }, 0);
+                                  // Validação Portaria 10.352 CUSTEIO + OUTRAS AÇÕES: máximo 70%
+                                  if (isPortaria10352Custeio && isOutrasAcoesMAC) {
+                                    if (totalOutrasAcoes > recursoValue * 0.7) {
+                                      alert(`⚠️ Atenção!\n\nPara OUTRAS AÇÕES DA MÉDIA E ALTA COMPLEXIDADE na Portaria 10.352, o valor total não pode ultrapassar 70% do valor do recurso (R$ ${(recursoValue * 0.7).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+                                      return;
+                                    }
+                                  }
+                                  // Validação Portaria 10.169 + Grupo VI: máximo 50%
                                   if (isPortaria10169 && isGrupoVI) {
                                     if (totalGrupoVI > recursoValue * 0.5) {
                                       alert(`⚠️ Atenção!\n\nPara ações do Grupo VI, o valor total não pode ultrapassar 50% do valor do recurso (R$ ${(recursoValue * 0.5).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
                                       return;
                                     }
-                                  } else {
-                                    if (totalMetas > recursoValue) {
-                                      alert(`⚠️ Atenção!\n\nO valor total das Metas Quantitativas não pode ultrapassar o Valor do Recurso (R$ ${recursoValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
-                                      return;
-                                    }
+                                  }
+                                  // Validação geral: não ultrapassar valor do recurso
+                                  if (totalMetas > recursoValue) {
+                                    alert(`⚠️ Atenção!\n\nO valor total das Metas Quantitativas não pode ultrapassar o Valor do Recurso (R$ ${recursoValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+                                    return;
                                   }
                                   const newAcoes = [...formData.acoesServicos];
                                   newAcoes[idx].valor = maskCurrency(e.target.value);

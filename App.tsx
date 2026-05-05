@@ -2341,6 +2341,85 @@ const App: React.FC = () => {
         })
       );
 
+      const toNumber = (value: any) => {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+          const normalized = value.replace(/\./g, '').replace(',', '.').trim();
+          return parseFloat(normalized) || 0;
+        }
+        return 0;
+      };
+
+      const formatDate = (value: string | null | undefined) => {
+        if (!value) return '';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('pt-BR');
+      };
+
+      const getDiretrizObjetivoMetas = (plano: any) => {
+        const diretriz = DIRETRIZES.find(d => d.id === plano.diretriz_id);
+        const objetivo = diretriz?.objetivos?.find(o => o.id === plano.objetivo_id);
+        const metasIds = Array.isArray(plano.metas_ids) ? plano.metas_ids : [];
+        const metasSelecionadas = (objetivo?.metas || [])
+          .filter((m: any) => metasIds.includes(m.id))
+          .map((m: any) => m.descricao);
+
+        return {
+          diretrizTexto: diretriz ? `${diretriz.numero}. ${diretriz.titulo}` : (plano.diretriz_id || ''),
+          objetivoTexto: objetivo ? objetivo.titulo : (plano.objetivo_id || ''),
+          metasTexto: metasSelecionadas.join(' | ')
+        };
+      };
+
+      const relatorioRows = fullPlanos.map(p => {
+        const planejamento = getDiretrizObjetivoMetas(p);
+        const acoes = p.acoes || [];
+        const metasQual = p.metas || [];
+        const naturezas = p.naturezas || [];
+
+        const totalMetasQuantitativas = acoes.reduce((sum: number, a: any) => sum + toNumber(a.valor), 0);
+        const totalExecucaoFinanceira = naturezas.reduce((sum: number, n: any) => sum + toNumber(n.valor), 0);
+
+        const gruposAcao = Array.from(new Set(acoes.map((a: any) => a.categoria).filter(Boolean))).join(' | ');
+        const acoesEspecificas = acoes.map((a: any) => a.item).filter(Boolean).join(' | ');
+        const metasQuantitativasDetalhes = acoes
+          .map((a: any) => `${a.categoria || ''} > ${a.item || ''} > ${a.meta || ''} (R$ ${toNumber(a.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`)
+          .join(' || ');
+
+        const indicadoresQualitativos = metasQual
+          .map((m: any) => `${m.meta_descricao || m.meta || ''}: ${m.indicador || m.valor || ''}`)
+          .join(' | ');
+
+        const execucaoFinanceira = naturezas
+          .map((n: any) => `${n.codigo || ''} - ${n.descricao || ''}: R$ ${toNumber(n.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+          .join(' | ');
+
+        return {
+          ID: p.id,
+          Parlamentar: p.parlamentar,
+          'Nº Emenda': p.numero_emenda,
+          Programa: p.programa,
+          Beneficiario: p.beneficiario_nome,
+          CNPJ: p.beneficiario_cnpj,
+          CNES: p.cnes || '',
+          'Alinhamento Estratégico - Diretriz': planejamento.diretrizTexto,
+          'Alinhamento Estratégico - Objetivo': planejamento.objetivoTexto,
+          'Alinhamento Estratégico - Metas': planejamento.metasTexto,
+          'Metas Quantitativas - Grupo de Ação': gruposAcao,
+          'Metas Quantitativas - Ação Específica': acoesEspecificas,
+          'Metas Quantitativas - Defina as ações de serviço e metas quantitativas': metasQuantitativasDetalhes,
+          'Indicadores Qualitativos (Opcional)': indicadoresQualitativos,
+          'Execução Financeira - Conta Bancária': p.conta_bancaria || '',
+          'Execução Financeira - Extrato URL': p.extrato_url || '',
+          'Execução Financeira - Naturezas de Despesa': execucaoFinanceira,
+          'Valor do Recurso (R$)': toNumber(p.valor_total),
+          'Total Metas Quantitativas (R$)': totalMetasQuantitativas,
+          'Total Execução Financeira (R$)': totalExecucaoFinanceira,
+          'Criado em': formatDate(p.created_at),
+          'Atualizado em': formatDate(p.updated_at)
+        };
+      });
+
       const planosRows = fullPlanos.map(p => ({
         id: p.id,
         parlamentar: p.parlamentar,
@@ -2350,14 +2429,16 @@ const App: React.FC = () => {
         beneficiario_nome: p.beneficiario_nome,
         cnes: p.cnes || '',
         beneficiario_cnpj: p.beneficiario_cnpj,
+        diretriz_id: p.diretriz_id || '',
+        objetivo_id: p.objetivo_id || '',
+        metas_ids: JSON.stringify(p.metas_ids || []),
         justificativa: p.justificativa || '',
+        conta_bancaria: p.conta_bancaria || '',
+        extrato_url: p.extrato_url || '',
+        extrato_filename: p.extrato_filename || '',
         created_by: p.created_by || '',
         created_by_name: p.created_by_name || '',
         created_by_email: p.created_by_email || '',
-        conta_bancaria_banco: p.conta_bancaria_banco || '',
-        conta_bancaria_agencia: p.conta_bancaria_agencia || '',
-        conta_bancaria_numero: p.conta_bancaria_numero || '',
-        conta_bancaria_tipo: p.conta_bancaria_tipo || '',
         justificativa_alterada_em: p.justificativa_alterada_em || '',
         validado: p.validado || false,
         validado_em: p.validado_em || '',
@@ -2369,10 +2450,10 @@ const App: React.FC = () => {
         (p.acoes || []).map((a: any) => ({
           plano_id: p.id,
           plano_numero_emenda: p.numero_emenda,
-          categoria: a.categoria || '',
-          item: a.item || '',
-          valor: a.valor || '',
-          metas_quantitativas: JSON.stringify(a.metas_quantitativas || [])
+          grupo_acao: a.categoria || '',
+          acao_especifica: a.item || '',
+          meta_quantitativa: a.meta || '',
+          valor: a.valor || ''
         }))
       );
 
@@ -2380,9 +2461,8 @@ const App: React.FC = () => {
         (p.metas || []).map((m: any) => ({
           plano_id: p.id,
           plano_numero_emenda: p.numero_emenda,
-          indicador: m.indicador || '',
-          meta: m.meta || '',
-          valor: m.valor || ''
+          indicador_qualitativo: m.meta_descricao || m.meta || '',
+          referencia: m.indicador || m.valor || ''
         }))
       );
 
@@ -2397,6 +2477,7 @@ const App: React.FC = () => {
       );
 
       const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(relatorioRows), 'Relatorio Completo');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(planosRows), 'Planos');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(acoesRows), 'Acoes Servicos');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(metasRows), 'Metas Qualitativas');

@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   ClipboardCheck, 
   User as UserIcon, 
@@ -2302,8 +2303,8 @@ const App: React.FC = () => {
     }
   };
 
-  // EXPORTA PLANOS PARA CSV COM TODOS OS DADOS
-  const exportToCSV = async () => {
+  // EXPORTA RELATORIO COMPLETO PARA XLSX (com multiplas abas)
+  const exportToXLSX = async () => {
     if (planosList.length === 0) {
       alert('Nenhum plano para exportar');
       return;
@@ -2340,50 +2341,72 @@ const App: React.FC = () => {
         })
       );
 
-      // Criar CSV com todos os dados
-      const headers = [
-        'ID',
-        'Parlamentar',
-        'Nº Emenda',
-        'Valor Total',
-        'Programa',
-        'Beneficiário',
-        'CNES',
-        'CNPJ',
-        'Justificativa',
-        'Metas Quantitativas (JSON)',
-        'Indicadores Qualitativos (JSON)',
-        'Naturezas de Despesa (JSON)',
-        'Data Criação',
-        'Data Atualização'
-      ];
+      const planosRows = fullPlanos.map(p => ({
+        id: p.id,
+        parlamentar: p.parlamentar,
+        numero_emenda: p.numero_emenda,
+        valor_total: p.valor_total || '0,00',
+        programa: p.programa,
+        beneficiario_nome: p.beneficiario_nome,
+        cnes: p.cnes || '',
+        beneficiario_cnpj: p.beneficiario_cnpj,
+        justificativa: p.justificativa || '',
+        created_by: p.created_by || '',
+        created_by_name: p.created_by_name || '',
+        created_by_email: p.created_by_email || '',
+        conta_bancaria_banco: p.conta_bancaria_banco || '',
+        conta_bancaria_agencia: p.conta_bancaria_agencia || '',
+        conta_bancaria_numero: p.conta_bancaria_numero || '',
+        conta_bancaria_tipo: p.conta_bancaria_tipo || '',
+        justificativa_alterada_em: p.justificativa_alterada_em || '',
+        validado: p.validado || false,
+        validado_em: p.validado_em || '',
+        created_at: p.created_at || '',
+        updated_at: p.updated_at || ''
+      }));
 
-      const rows = fullPlanos.map(p => [
-        p.id,
-        p.parlamentar,
-        p.numero_emenda,
-        p.valor_total || '0,00',
-        p.programa,
-        p.beneficiario_nome,
-        p.cnes || '',
-        p.beneficiario_cnpj,
-        p.justificativa?.replace(/"/g, '""') || '',
-        JSON.stringify(p.acoes || []),
-        JSON.stringify(p.metas || []),
-        JSON.stringify(p.naturezas || []),
-        new Date(p.created_at).toLocaleDateString('pt-BR'),
-        p.updated_at ? new Date(p.updated_at).toLocaleDateString('pt-BR') : '—'
-      ]);
+      const acoesRows = fullPlanos.flatMap(p =>
+        (p.acoes || []).map((a: any) => ({
+          plano_id: p.id,
+          plano_numero_emenda: p.numero_emenda,
+          categoria: a.categoria || '',
+          item: a.item || '',
+          valor: a.valor || '',
+          metas_quantitativas: JSON.stringify(a.metas_quantitativas || [])
+        }))
+      );
 
-      const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `planos-trabalho-completo-${new Date().toISOString().split('T')[0]}.csv`;
-      link.click();
-      alert('✅ CSV com todos os dados exportado com sucesso!');
+      const metasRows = fullPlanos.flatMap(p =>
+        (p.metas || []).map((m: any) => ({
+          plano_id: p.id,
+          plano_numero_emenda: p.numero_emenda,
+          indicador: m.indicador || '',
+          meta: m.meta || '',
+          valor: m.valor || ''
+        }))
+      );
+
+      const naturezasRows = fullPlanos.flatMap(p =>
+        (p.naturezas || []).map((n: any) => ({
+          plano_id: p.id,
+          plano_numero_emenda: p.numero_emenda,
+          codigo: n.codigo || '',
+          descricao: n.descricao || '',
+          valor: n.valor || ''
+        }))
+      );
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(planosRows), 'Planos');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(acoesRows), 'Acoes Servicos');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(metasRows), 'Metas Qualitativas');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(naturezasRows), 'Naturezas Despesa');
+
+      const dataRef = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, `relatorio-meus-planos-${dataRef}.xlsx`);
+      alert('✅ Relatório XLSX completo exportado com sucesso!');
     } catch (error: any) {
-      alert(`Erro ao exportar CSV: ${error.message}`);
+      alert(`Erro ao exportar relatório XLSX: ${error.message}`);
     }
   };
 
@@ -5743,10 +5766,10 @@ Secretaria de Estado da Saúde de São Paulo`;
                 </div>
                 {isAdmin() && (
                   <button 
-                    onClick={exportToCSV}
+                    onClick={exportToXLSX}
                     className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-green-700 shadow-lg transition-all"
                   >
-                    <Download className="w-4 h-4" /> Exportar CSV
+                    <Download className="w-4 h-4" /> Relatório XLSX
                   </button>
                 )}
               </div>

@@ -2303,7 +2303,7 @@ const App: React.FC = () => {
     }
   };
 
-  // EXPORTA RELATORIO COMPLETO PARA XLSX (com multiplas abas)
+  // EXPORTA RELATORIO PROFISSIONAL PARA XLSX (normalizado, um registro por linha)
   const exportToXLSX = async () => {
     if (planosList.length === 0) {
       alert('Nenhum plano para exportar');
@@ -2314,13 +2314,13 @@ const App: React.FC = () => {
       // Buscar dados completos de cada plano
       const fullPlanos = await Promise.all(
         planosList.map(async (p) => {
-          // Buscar metas quantitativas
+          // Buscar metas quantitativas (ações/serviços)
           const { data: acoes } = await supabase
             .from('acoes_servicos')
             .select('*')
             .eq('plano_id', p.id);
           
-          // Buscar metas qualitativas
+          // Buscar metas qualitativas (indicadores)
           const { data: metas } = await supabase
             .from('metas_qualitativas')
             .select('*')
@@ -2350,10 +2350,15 @@ const App: React.FC = () => {
         return 0;
       };
 
+      const formatCurrency = (value: any) => {
+        const num = toNumber(value);
+        return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      };
+
       const formatDate = (value: string | null | undefined) => {
         if (!value) return '';
         const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('pt-BR');
+        return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('pt-BR');
       };
 
       const getDiretrizObjetivoMetas = (plano: any) => {
@@ -2365,127 +2370,119 @@ const App: React.FC = () => {
           .map((m: any) => m.descricao);
 
         return {
-          diretrizTexto: diretriz ? `${diretriz.numero}. ${diretriz.titulo}` : (plano.diretriz_id || ''),
-          objetivoTexto: objetivo ? objetivo.titulo : (plano.objetivo_id || ''),
+          diretrizNumero: diretriz?.numero || '',
+          diretrizTexto: diretriz?.titulo || '',
+          objetivoTexto: objetivo?.titulo || '',
           metasTexto: metasSelecionadas.join(' | ')
         };
       };
 
-      const relatorioRows = fullPlanos.map(p => {
+      // ========== SHEET 1: PLANOS ==========
+      const planosRows = fullPlanos.map(p => {
         const planejamento = getDiretrizObjetivoMetas(p);
-        const acoes = p.acoes || [];
-        const metasQual = p.metas || [];
-        const naturezas = p.naturezas || [];
-
-        const totalMetasQuantitativas = acoes.reduce((sum: number, a: any) => sum + toNumber(a.valor), 0);
-        const totalExecucaoFinanceira = naturezas.reduce((sum: number, n: any) => sum + toNumber(n.valor), 0);
-
-        const gruposAcao = Array.from(new Set(acoes.map((a: any) => a.categoria).filter(Boolean))).join(' | ');
-        const acoesEspecificas = acoes.map((a: any) => a.item).filter(Boolean).join(' | ');
-        const metasQuantitativasDetalhes = acoes
-          .map((a: any) => `${a.categoria || ''} > ${a.item || ''} > ${a.meta || ''} (R$ ${toNumber(a.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`)
-          .join(' || ');
-
-        const indicadoresQualitativos = metasQual
-          .map((m: any) => `${m.meta_descricao || m.meta || ''}: ${m.indicador || m.valor || ''}`)
-          .join(' | ');
-
-        const execucaoFinanceira = naturezas
-          .map((n: any) => `${n.codigo || ''} - ${n.descricao || ''}: R$ ${toNumber(n.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-          .join(' | ');
+        const totalAcoes = (p.acoes || []).reduce((sum: number, a: any) => sum + toNumber(a.valor), 0);
+        const totalNaturezas = (p.naturezas || []).reduce((sum: number, n: any) => sum + toNumber(n.valor), 0);
 
         return {
-          ID: p.id,
-          Parlamentar: p.parlamentar,
+          'ID do Plano': p.id,
           'Nº Emenda': p.numero_emenda,
-          Programa: p.programa,
-          Beneficiario: p.beneficiario_nome,
-          CNPJ: p.beneficiario_cnpj,
-          CNES: p.cnes || '',
-          'Alinhamento Estratégico - Diretriz': planejamento.diretrizTexto,
-          'Alinhamento Estratégico - Objetivo': planejamento.objetivoTexto,
-          'Alinhamento Estratégico - Metas': planejamento.metasTexto,
-          'Metas Quantitativas - Grupo de Ação': gruposAcao,
-          'Metas Quantitativas - Ação Específica': acoesEspecificas,
-          'Metas Quantitativas - Defina as ações de serviço e metas quantitativas': metasQuantitativasDetalhes,
-          'Indicadores Qualitativos (Opcional)': indicadoresQualitativos,
-          'Execução Financeira - Conta Bancária': p.conta_bancaria || '',
-          'Execução Financeira - Extrato URL': p.extrato_url || '',
-          'Execução Financeira - Naturezas de Despesa': execucaoFinanceira,
-          'Valor do Recurso (R$)': toNumber(p.valor_total),
-          'Total Metas Quantitativas (R$)': totalMetasQuantitativas,
-          'Total Execução Financeira (R$)': totalExecucaoFinanceira,
+          'Parlamentar': p.parlamentar,
+          'Programa': p.programa,
+          'Beneficiário (Nome)': p.beneficiario_nome,
+          'Beneficiário (CNPJ)': p.beneficiario_cnpj,
+          'CNES': p.cnes || '',
+          'Valor Total (R$)': formatCurrency(p.valor_total),
+          'Diretriz Nº': planejamento.diretrizNumero,
+          'Diretriz': planejamento.diretrizTexto,
+          'Objetivo': planejamento.objetivoTexto,
+          'Metas Selecionadas': planejamento.metasTexto,
+          'Total Metas Quantitativas (R$)': formatCurrency(totalAcoes),
+          'Total Execução Financeira (R$)': formatCurrency(totalNaturezas),
+          'Conta Bancária': p.conta_bancaria || '',
           'Criado em': formatDate(p.created_at),
           'Atualizado em': formatDate(p.updated_at)
         };
       });
 
-      const planosRows = fullPlanos.map(p => ({
-        id: p.id,
-        parlamentar: p.parlamentar,
-        numero_emenda: p.numero_emenda,
-        valor_total: p.valor_total || '0,00',
-        programa: p.programa,
-        beneficiario_nome: p.beneficiario_nome,
-        cnes: p.cnes || '',
-        beneficiario_cnpj: p.beneficiario_cnpj,
-        diretriz_id: p.diretriz_id || '',
-        objetivo_id: p.objetivo_id || '',
-        metas_ids: JSON.stringify(p.metas_ids || []),
-        justificativa: p.justificativa || '',
-        conta_bancaria: p.conta_bancaria || '',
-        extrato_url: p.extrato_url || '',
-        extrato_filename: p.extrato_filename || '',
-        created_by: p.created_by || '',
-        created_by_name: p.created_by_name || '',
-        created_by_email: p.created_by_email || '',
-        justificativa_alterada_em: p.justificativa_alterada_em || '',
-        validado: p.validado || false,
-        validado_em: p.validado_em || '',
-        created_at: p.created_at || '',
-        updated_at: p.updated_at || ''
-      }));
-
-      const acoesRows = fullPlanos.flatMap(p =>
+      // ========== SHEET 2: METAS QUANTITATIVAS ==========
+      // Uma linha por ação/serviço com dados do plano pai
+      const metasQuantitativasRows = fullPlanos.flatMap(p =>
         (p.acoes || []).map((a: any) => ({
-          plano_id: p.id,
-          plano_numero_emenda: p.numero_emenda,
-          grupo_acao: a.categoria || '',
-          acao_especifica: a.item || '',
-          meta_quantitativa: a.meta || '',
-          valor: a.valor || ''
+          'ID do Plano': p.id,
+          'Nº Emenda': p.numero_emenda,
+          'Parlamentar': p.parlamentar,
+          'Programa': p.programa,
+          'Beneficiário': p.beneficiario_nome,
+          'Grupo de Ação': a.categoria || '',
+          'Ação Específica': a.item || '',
+          'Meta Quantitativa': a.meta || '',
+          'Valor (R$)': formatCurrency(a.valor),
+          'Criado em': formatDate(a.created_at),
+          'Atualizado em': formatDate(a.updated_at)
         }))
       );
 
-      const metasRows = fullPlanos.flatMap(p =>
+      // ========== SHEET 3: INDICADORES QUALITATIVOS ==========
+      // Uma linha por indicador com dados do plano pai
+      const indicadoresRows = fullPlanos.flatMap(p =>
         (p.metas || []).map((m: any) => ({
-          plano_id: p.id,
-          plano_numero_emenda: p.numero_emenda,
-          indicador_qualitativo: m.meta_descricao || m.meta || '',
-          referencia: m.indicador || m.valor || ''
+          'ID do Plano': p.id,
+          'Nº Emenda': p.numero_emenda,
+          'Parlamentar': p.parlamentar,
+          'Programa': p.programa,
+          'Beneficiário': p.beneficiario_nome,
+          'Descrição da Meta': m.meta_descricao || m.meta || '',
+          'Indicador/Referência': m.indicador || m.valor || '',
+          'Criado em': formatDate(m.created_at),
+          'Atualizado em': formatDate(m.updated_at)
         }))
       );
 
-      const naturezasRows = fullPlanos.flatMap(p =>
+      // ========== SHEET 4: EXECUÇÃO FINANCEIRA ==========
+      // Uma linha por natureza/despesa com dados do plano pai
+      const execucaoFinanceiraRows = fullPlanos.flatMap(p =>
         (p.naturezas || []).map((n: any) => ({
-          plano_id: p.id,
-          plano_numero_emenda: p.numero_emenda,
-          codigo: n.codigo || '',
-          descricao: n.descricao || '',
-          valor: n.valor || ''
+          'ID do Plano': p.id,
+          'Nº Emenda': p.numero_emenda,
+          'Parlamentar': p.parlamentar,
+          'Programa': p.programa,
+          'Beneficiário': p.beneficiario_nome,
+          'Código da Natureza': n.codigo || '',
+          'Descrição da Natureza': n.descricao || '',
+          'Valor (R$)': formatCurrency(n.valor),
+          'Banco': p.banco || '',
+          'Agência': p.agencia || '',
+          'Conta': p.conta_bancaria || '',
+          'Criado em': formatDate(n.created_at),
+          'Atualizado em': formatDate(n.updated_at)
         }))
       );
 
+      // ========== CRIAR WORKBOOK ==========
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(relatorioRows), 'Relatorio Completo');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(planosRows), 'Planos');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(acoesRows), 'Acoes Servicos');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(metasRows), 'Metas Qualitativas');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(naturezasRows), 'Naturezas Despesa');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(metasQuantitativasRows), 'Metas Quantitativas');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(indicadoresRows), 'Indicadores Qualitativos');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(execucaoFinanceiraRows), 'Execução Financeira');
+
+      // Ajustar largura das colunas
+      const setColWidth = (ws: any) => {
+        const cols: any[] = [];
+        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          cols.push({ wch: 20 });
+        }
+        ws['!cols'] = cols;
+      };
+
+      setColWidth(wb.Sheets['Planos']);
+      setColWidth(wb.Sheets['Metas Quantitativas']);
+      setColWidth(wb.Sheets['Indicadores Qualitativos']);
+      setColWidth(wb.Sheets['Execução Financeira']);
 
       const dataRef = new Date().toISOString().split('T')[0];
       XLSX.writeFile(wb, `relatorio-meus-planos-${dataRef}.xlsx`);
-      alert('✅ Relatório XLSX completo exportado com sucesso!');
+      alert('✅ Relatório XLSX profissional exportado com sucesso!\n\nAgora você pode criar tabelas dinâmicas no Excel com os dados normalizados.');
     } catch (error: any) {
       alert(`Erro ao exportar relatório XLSX: ${error.message}`);
     }

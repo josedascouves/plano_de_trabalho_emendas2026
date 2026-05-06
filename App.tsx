@@ -2377,6 +2377,37 @@ const App: React.FC = () => {
         };
       };
 
+      const detalhamentoAcoesRows = fullPlanos.flatMap(p => {
+        const planejamento = getDiretrizObjetivoMetas(p);
+        const acoes = (p.acoes || []).length > 0 ? p.acoes : [null];
+        const totalAcoes = (p.acoes || []).reduce((sum: number, a: any) => sum + toNumber(a.valor), 0);
+        const totalNaturezas = (p.naturezas || []).reduce((sum: number, n: any) => sum + toNumber(n.valor), 0);
+
+        return acoes.map((a: any) => ({
+          'ID do Plano': p.id,
+          'Nº Emenda': p.numero_emenda,
+          'Parlamentar': p.parlamentar,
+          'Programa': p.programa,
+          'Beneficiário (Nome)': p.beneficiario_nome,
+          'Beneficiário (CNPJ)': p.beneficiario_cnpj,
+          'CNES': p.cnes || '',
+          'Valor Total do Plano (R$)': toNumber(p.valor_total),
+          'Diretriz Nº': planejamento.diretrizNumero,
+          'Diretriz': planejamento.diretrizTexto,
+          'Objetivo': planejamento.objetivoTexto,
+          'Metas Selecionadas': planejamento.metasTexto,
+          'Grupo de Ação': a?.categoria || '',
+          'Ação Específica': a?.item || '',
+          'Meta Quantitativa': a?.meta || '',
+          'Valor da Ação (R$)': toNumber(a?.valor),
+          'Total Metas Quantitativas do Plano (R$)': totalAcoes,
+          'Total Execução Financeira do Plano (R$)': totalNaturezas,
+          'Conta Bancária': p.conta_bancaria || '',
+          'Criado em': formatDate(p.created_at),
+          'Atualizado em': formatDate(p.updated_at)
+        }));
+      });
+
       // ========== SHEET 1: PLANOS ==========
       const planosRows = fullPlanos.map(p => {
         const planejamento = getDiretrizObjetivoMetas(p);
@@ -2391,13 +2422,13 @@ const App: React.FC = () => {
           'Beneficiário (Nome)': p.beneficiario_nome,
           'Beneficiário (CNPJ)': p.beneficiario_cnpj,
           'CNES': p.cnes || '',
-          'Valor Total (R$)': formatCurrency(p.valor_total),
+          'Valor Total (R$)': toNumber(p.valor_total),
           'Diretriz Nº': planejamento.diretrizNumero,
           'Diretriz': planejamento.diretrizTexto,
           'Objetivo': planejamento.objetivoTexto,
           'Metas Selecionadas': planejamento.metasTexto,
-          'Total Metas Quantitativas (R$)': formatCurrency(totalAcoes),
-          'Total Execução Financeira (R$)': formatCurrency(totalNaturezas),
+          'Total Metas Quantitativas (R$)': totalAcoes,
+          'Total Execução Financeira (R$)': totalNaturezas,
           'Conta Bancária': p.conta_bancaria || '',
           'Criado em': formatDate(p.created_at),
           'Atualizado em': formatDate(p.updated_at)
@@ -2416,7 +2447,7 @@ const App: React.FC = () => {
           'Grupo de Ação': a.categoria || '',
           'Ação Específica': a.item || '',
           'Meta Quantitativa': a.meta || '',
-          'Valor (R$)': formatCurrency(a.valor),
+          'Valor (R$)': toNumber(a.valor),
           'Criado em': formatDate(a.created_at),
           'Atualizado em': formatDate(a.updated_at)
         }))
@@ -2449,7 +2480,7 @@ const App: React.FC = () => {
           'Beneficiário': p.beneficiario_nome,
           'Código da Natureza': n.codigo || '',
           'Descrição da Natureza': n.descricao || '',
-          'Valor (R$)': formatCurrency(n.valor),
+          'Valor (R$)': toNumber(n.valor),
           'Banco': p.banco || '',
           'Agência': p.agencia || '',
           'Conta': p.conta_bancaria || '',
@@ -2460,6 +2491,7 @@ const App: React.FC = () => {
 
       // ========== CRIAR WORKBOOK ==========
       const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalhamentoAcoesRows), 'Relatorio Detalhado');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(planosRows), 'Planos');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(metasQuantitativasRows), 'Metas Quantitativas');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(indicadoresRows), 'Indicadores Qualitativos');
@@ -2475,6 +2507,7 @@ const App: React.FC = () => {
         ws['!cols'] = cols;
       };
 
+      setColWidth(wb.Sheets['Relatorio Detalhado']);
       setColWidth(wb.Sheets['Planos']);
       setColWidth(wb.Sheets['Metas Quantitativas']);
       setColWidth(wb.Sheets['Indicadores Qualitativos']);

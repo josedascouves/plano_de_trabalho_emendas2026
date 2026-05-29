@@ -1,0 +1,562 @@
+[
+  {
+    "deputado": "Abilio Brunini",
+    "senador": "ALAN RICK",
+    "cnes": "5656079",
+    "entidade": "AMBULATORIO DE DEFICIENCIA MENTAL GUARULHOS",
+    "cnpj": "62.220.637/0005-74"
+  },
+  {
+    "deputado": "Acácio Favacho",
+    "senador": "ALESSANDRO VIEIRA",
+    "cnes": "2093111",
+    "entidade": "APAE DE REGISTRO",
+    "cnpj": "44.304.095/0001-02"
+  },
+  {
+    "deputado": "Adail Filho",
+    "senador": "ANA PAULA LOBATO",
+    "cnes": "5010438",
+    "entidade": "APAE TUPA",
+    "cnpj": "44.571.222/0001-30"
+  },
+  {
+    "deputado": "Adilson Barroso",
+    "senador": "ANGELO CORONEL",
+    "cnes": "2083159",
+    "entidade": "BEZERRA DE MENEZES RIO CLARO",
+    "cnpj": "56.390.123/0001-30"
+  },
+  {
+    "deputado": "Adolfo Viana",
+    "senador": "ASTRONAUTA MARCOS PONTES",
+    "cnes": "2081482",
+    "entidade": "BOLDRINI CAMPINAS",
+    "cnpj": "50.046.887/0001-27"
+  },
+  {
+    "deputado": "Adriana Ventura",
+    "senador": "BETO FARO",
+    "cnes": "2082454",
+    "entidade": "CASA DA CRIANCA DE TUPA",
+    "cnpj": "72.557.689/0001-60"
+  },
+  {
+    "deputado": "Adriano do Baldy",
+    "senador": "CAMILO SANTANA",
+    "cnes": "2688522",
+    "entidade": "CASA DE DAVID SAO PAULO",
+    "cnpj": "61.957.627/0001-20"
+  },
+  {
+    "deputado": "Aécio Neves",
+    "senador": "CARLOS FÁVARO",
+    "cnes": "5033543",
+    "entidade": "CASA TRANSITORIA ANDRE LUIZ",
+    "cnpj": "45.284.353/0001-07"
+  },
+  {
+    "deputado": "Afonso Florence",
+    "senador": "CARLOS PORTINHO",
+    "cnes": "2082276",
+    "entidade": "CASAS ANDRE LUIZ GUARULHOS",
+    "cnpj": "62.220.637/0003-02"
+  },
+  {
+    "deputado": "Afonso Hamm",
+    "senador": "CARLOS VIANA",
+    "cnes": "2745356",
+    "entidade": "CLINICA ANDRE LUIZ",
+    "cnpj": "48.209.704/0001-03"
+  },
+  {
+    "deputado": "Afonso Motta",
+    "senador": "CHICO RODRIGUES",
+    "cnes": "2088932",
+    "entidade": "COLSAN SAO PAULO",
+    "cnpj": "61.047.007/0001-53"
+  },
+  {
+    "deputado": "Aguinaldo Ribeiro",
+    "senador": "CID GOMES",
+    "cnes": "2076039",
+    "entidade": "FUNCRAF ITAPETININGA",
+    "cnpj": "50.844.794/0003-00"
+  },
+  {
+    "deputado": "Airton Faleiro",
+    "senador": "CIRO NOGUEIRA",
+    "cnes": "2812703",
+    "entidade": "FUNDACAO FACULDADE DE MEDICINA HCFMUSP INST DE PSIQUIATRIA SP",
+    "cnpj": "56.577.059/0003-63"
+  },
+  {
+    "deputado": "AJ Albuquerque",
+    "senador": "CLEITINHO",
+    "cnes": "7400926",
+    "entidade": "FUNDACAO HOSPITAL REGIONAL DO CANCER",
+    "cnpj": "11.636.872/0001-67"
+  },
+  {
+    "deputado": "Alberto Fraga",
+    "senador": "CONFUCIO MOURA",
+    "cnes": "2090236",
+    "entidade": "FUNDACAO PIO XII BARRETOS",
+    "cnpj": "49.150.352/0001-12"
+  },
+  {
+    "deputado": "Alberto Mourão",
+    "senador": "DAMARES ALVES",
+    "cnes": "2078015",
+    "entidade": "HC DA FMUSP HOSPITAL DAS CLINICAS SAO PAULO",
+    "cnpj": "56.577.059/0001-00"
+  },
+  {
+    "deputado": "Albuquerque",
+    "senador": "DANIELLA RIBEIRO",
+    "cnes": "2071568",
+    "entidade": "HC DA FMUSP INSTITUTO DO CORACAO INCOR SAO PAULO",
+    "cnpj": "50.644.053/0001-13"
+  },
+  {
+    "deputado": "Alceu Moreira",
+    "senador": "DAVI ALCOLUMBRE",
+    "cnes": "2047438",
+    "entidade": "HEMOCENTRO DE RIBEIRAO PRETO",
+    "cnpj": "60.255.791/0001-22"
+  },
+  {
+    "deputado": "Alencar Santana",
+    "senador": "DR. HIRAN",
+    "cnes": "2095882",
+    "entidade": "HEMOCENTRO REGIONAL COLSAN",
+    "cnpj": "61.047.007/0002-34"
+  },
+  {
+    "deputado": "Alex Manente",
+    "senador": "DRA. EUDOCIA",
+    "cnes": "2093537",
+    "entidade": "HEMOCENTRO SAO JOSE DO RIO PRETO",
+    "cnpj": "60.003.761/0002-00"
+  },
+  {
+    "deputado": "Alex Santana",
+    "senador": "EDUARDO BRAGA",
+    "cnes": "2089335",
+    "entidade": "HOSP ESCOLA EMILIO CARLOS CATANDUVA",
+    "cnpj": "47.074.851/0009-08"
+  },
+  {
+    "deputado": "Alexandre Guimarães",
+    "senador": "EDUARDO GIRÃO",
+    "cnes": "2077477",
+    "entidade": "HOSP STA MARCELINA SAO PAULO",
+    "cnpj": "60.742.616/0001-60"
+  },
+  {
+    "deputado": "Alexandre Leite",
+    "senador": "EDUARDO GOMES",
+    "cnes": "2083086",
+    "entidade": "HOSPITAL AMARAL CARVALHO JAU",
+    "cnpj": "50.753.755/0001-35"
+  },
+  {
+    "deputado": "Alexandre Lindenmeyer",
+    "senador": "EFRAIM FILHO",
+    "cnes": "2090961",
+    "entidade": "HOSPITAL CARLOS FERNANDO MALZONI MATAO",
+    "cnpj": "52.314.861/0001-48"
+  },
+  {
+    "deputado": "Alexandre Padilha",
+    "senador": "ELIZIANE GAMA",
+    "cnes": "2748223",
+    "entidade": "HOSPITAL DAS CLINICAS DA FACULDADE DE MEDICINA DE BOTUCATU",
+    "cnpj": "46.230.439/0001-01"
+  },
+  {
+    "deputado": "Alfredinho",
+    "senador": "ESPERIDIÃO AMIN",
+    "cnes": "2082187",
+    "entidade": "HOSPITAL DAS CLINICAS FAEPA RIBEIRAO PRETO",
+    "cnpj": "57.722.118/0001-40"
+  },
+  {
+    "deputado": "Alfredo Gaspar",
+    "senador": "FABIANO CONTARATO",
+    "cnes": "2025507",
+    "entidade": "HOSPITAL DAS CLINICAS HCFAMEMA",
+    "cnpj": "09.161.265/0001-46"
+  },
+  {
+    "deputado": "Alice Portugal",
+    "senador": "FERNANDO DUEIRE",
+    "cnes": "7066376",
+    "entidade": "HOSPITAL DE AMOR JALES",
+    "cnpj": "49.150.352/0008-99"
+  },
+  {
+    "deputado": "Aliel Machado",
+    "senador": "FLÁVIO ARNS",
+    "cnes": "2077396",
+    "entidade": "HOSPITAL DE BASE DE SAO JOSE DO RIO PRETO",
+    "cnpj": "60.003.761/0001-29"
+  },
+  {
+    "deputado": "Aline Gurgel",
+    "senador": "FLÁVIO BOLSONARO",
+    "cnes": "2092220",
+    "entidade": "HOSPITAL DE CANCER DE RIBEIRAO PRETO",
+    "cnpj": "02.681.523/0001-76"
+  },
+  {
+    "deputado": "Allan Garcês",
+    "senador": "GIORDANO",
+    "cnes": "2080982",
+    "entidade": "HOSPITAL DE CLEMENTINA",
+    "cnpj": "44.441.079/0001-61"
+  },
+  {
+    "deputado": "Altineu Côrtes",
+    "senador": "HAMILTON MOURÃO",
+    "cnes": "2081873",
+    "entidade": "HOSPITAL E MATERNIDADE DE RANCHARIA",
+    "cnpj": "55.686.786/0001-34"
+  },
+  {
+    "deputado": "Aluisio Mendes",
+    "senador": "HERMES KLANN",
+    "cnes": "5869412",
+    "entidade": "HOSPITAL GACC VALE DO PARAIBA",
+    "cnpj": "01.146.603/0001-69"
+  },
+  {
+    "deputado": "Amália Barros",
+    "senador": "HUMBERTO COSTA",
+    "cnes": "3753433",
+    "entidade": "HOSPITAL LEONOR MENDES DE BARROS",
+    "cnpj": "60.975.737/0057-06"
+  },
+  {
+    "deputado": "Amanda Gentil",
+    "senador": "IRAJÁ",
+    "cnes": "2081466",
+    "entidade": "HOSPITAL NOSSA SENHORA DA DIVINA PROVIDENCIA",
+    "cnpj": "53.221.255/0002-21"
+  },
+  {
+    "deputado": "Amaro Neto",
+    "senador": "IVETE DA SILVEIRA",
+    "cnes": "2078813",
+    "entidade": "HOSPITAL OFTALMOLOGICO DE SOROCABA",
+    "cnpj": "50.795.566/0002-06"
+  },
+  {
+    "deputado": "Amom Mandel",
+    "senador": "IZALCI LUCAS",
+    "cnes": "2089327",
+    "entidade": "HOSPITAL PADRE ALBINO CATANDUVA",
+    "cnpj": "47.074.851/0008-19"
+  },
+  {
+    "deputado": "Ana Paula Leão",
+    "senador": "JADER BARBALHO",
+    "cnes": "2058782",
+    "entidade": "HOSPITAL PSIQUIATRICO ESPIRITA BEZERRA DE MENEZES P PRUDENT",
+    "cnpj": "44.868.644/0001-71"
+  },
+  {
+    "deputado": "Ana Paula Lima",
+    "senador": "JAIME BAGATTOLI",
+    "cnes": "2078511",
+    "entidade": "HOSPITAL REGIONAL DE ILHA SOLTEIRA",
+    "cnpj": "53.221.255/0034-09"
+  },
+  {
+    "deputado": "Ana Pimentel",
+    "senador": "JAQUES WAGNER",
+    "cnes": "3126838",
+    "entidade": "HOSPITAL REGIONAL DO VALE DO PARAIBA",
+    "cnpj": "60.975.737/0072-45"
+  },
+  {
+    "deputado": "André Abdon",
+    "senador": "JAYME CAMPOS",
+    "cnes": "2082667",
+    "entidade": "HOSPITAL SAO BOM JESUS",
+    "cnpj": "52.879.905/0001-87"
+  },
+  {
+    "deputado": "André Fernandes",
+    "senador": "JORGE KAJURU",
+    "cnes": "2093502",
+    "entidade": "HOSPITAL SAO DOMINGOS NA PROV DE DEUS NHANDEARA",
+    "cnpj": "53.221.255/0015-46"
+  },
+  {
+    "deputado": "André Ferreira",
+    "senador": "JUSSARA LIMA",
+    "cnes": "2079593",
+    "entidade": "HOSPITAL SAO JOAO REGISTRO",
+    "cnpj": "55.856.710/0001-00"
+  },
+  {
+    "deputado": "André Figueiredo",
+    "senador": "LAÉRCIO OLIVEIRA",
+    "cnes": "2080281",
+    "entidade": "HOSPITAL SAO JOSE DE HERCULANDIA",
+    "cnpj": "72.551.799/0001-15"
+  },
+  {
+    "deputado": "André Fufuca",
+    "senador": "LEILA BARROS",
+    "cnes": "2077485",
+    "entidade": "HOSPITAL SAO PAULO HOSPITAL DE ENSINO DA UNIFESP",
+    "cnpj": "61.699.567/0001-92"
+  },
+  {
+    "deputado": "André Janones",
+    "senador": "LUCAS BARRETO",
+    "cnes": "2790653",
+    "entidade": "HOSPITAL TEREZA PERLATTI JAU",
+    "cnpj": "50.756.600/0001-52"
+  },
+  {
+    "deputado": "Andreia Siqueira",
+    "senador": "LUIS CARLOS HEINZE",
+    "cnes": "2704900",
+    "entidade": "HOSPITAL UNIVERSITARIO SAO FRANCISCO NA PROV DE DEUS",
+    "cnpj": "53.221.255/0051-00"
+  },
+  {
+    "deputado": "Antônia Lúcia",
+    "senador": "MAGNO MALTA",
+    "cnes": "2093405",
+    "entidade": "INAMEX NHANDEARA",
+    "cnpj": "59.852.277/0001-95"
+  },
+  {
+    "deputado": "Antonio Andrade",
+    "senador": "MARA GABRILLI",
+    "cnes": "2085143",
+    "entidade": "INSTITUTO AMERICO BAIRRAL DE PSIQUIATRIA",
+    "cnpj": "49.914.773/0001-72"
+  },
+  {
+    "deputado": "Antonio Brito",
+    "senador": "MARCELO CASTRO",
+    "cnes": "2084384",
+    "entidade": "INSTITUTO BEZERRA DE MENEZES ESPIRITO SANTO DO PINHAL",
+    "cnpj": "54.228.366/0002-22"
+  },
+  {
+    "deputado": "Antonio Carlos Rodrigues",
+    "senador": "MARCIO BITTAR",
+    "cnes": "2088495",
+    "entidade": "INSTITUTO DANTE PAZZANESE DE CARDIOLOGIA IDPC SAO PAULO",
+    "cnpj": "53.725.560/0001-70"
+  },
+  {
+    "deputado": "Antônio Doido",
+    "senador": "MARCOS DO VAL",
+    "cnes": "2080125",
+    "entidade": "INSTITUTO DO CANCER ARNALDO VIEIRA DE CARVALHO",
+    "cnpj": "60.945.854/0001-72"
+  },
+  {
+    "deputado": "Any Ortiz",
+    "senador": "MARCOS ROGÉRIO",
+    "cnes": "2790963",
+    "entidade": "LAR DOM BOSCO NA PROVIDENCIA DE DEUS PIRAJUI",
+    "cnpj": "53.221.255/0004-93"
+  },
+  {
+    "deputado": "Arlindo Chinaglia",
+    "senador": "NELSINHO TRAD FILHO",
+    "cnes": "2079208",
+    "entidade": "LAR ESPIRITA MARIA DE NAZARE MOJI MIRIM",
+    "cnpj": "52.780.673/0003-77"
+  },
+  {
+    "deputado": "Arnaldo Jardim",
+    "senador": "OMAR AZIZ",
+    "cnes": "2790998",
+    "entidade": "LAR IRMA DULCE NA PROVIDENCIA DE DEUS PIRAJUI",
+    "cnpj": "53.221.255/0012-01"
+  },
+  {
+    "deputado": "Arthur Lira",
+    "senador": "ORIOVISTO GUIMARÃES",
+    "cnes": "2093510",
+    "entidade": "LAR MADRE PAULINA NA PROV DE DEUS SANTA FE DO SUL",
+    "cnpj": "53.221.255/0020-03"
+  },
+  {
+    "deputado": "Arthur Oliveira Maia",
+    "senador": "OTTO ALENCAR",
+    "cnes": "2037041",
+    "entidade": "LAR SAGRADO CORACAO DE JESUS NA PROV DE DEUS JACI",
+    "cnpj": "53.221.255/0008-17"
+  },
+  {
+    "deputado": "Átila Lins",
+    "senador": "PAULO PAIM",
+    "cnes": "2085747",
+    "entidade": "LAR SAO FRANCISCO DE ASSIS NA PROV DE DEUS JACI",
+    "cnpj": "53.221.255/0001-40"
+  },
+  {
+    "deputado": "Átila Lira",
+    "senador": "PLÍNIO VALÉRIO",
+    "cnes": "2077175",
+    "entidade": "LAR SAO VICENTE DE PAULA NA PROV DE DEUS ESTRELA DOESTE",
+    "cnpj": "53.221.255/0016-27"
+  },
+  {
+    "deputado": "Augusto Coutinho",
+    "senador": "PROFESSORA DORINHA SEABRA",
+    "cnes": "2042711",
+    "entidade": "LUMEN ET FIDES",
+    "cnpj": "53.302.675/0001-51"
+  },
+  {
+    "deputado": "Augusto Puppio",
+    "senador": "RANDOLFE RODRIGUES",
+    "cnes": "2083051",
+    "entidade": "SANTA CASA DE APARECIDA",
+    "cnpj": "43.667.179/0001-48"
+  },
+  {
+    "deputado": "Aureo Ribeiro",
+    "senador": "RENAN CALHEIROS",
+    "cnes": "2078775",
+    "entidade": "SANTA CASA DE ARACATUBA HOSPITAL SAGRADO CORACAO DE JESUS",
+    "cnpj": "43.751.502/0001-67"
+  },
+  {
+    "deputado": "Bacelar",
+    "senador": "RENAN FILHO",
+    "cnes": "2080222",
+    "entidade": "SANTA CASA DE CACONDE",
+    "cnpj": "45.915.675/0001-07"
+  },
+  {
+    "deputado": "Baleia Rossi",
+    "senador": "ROBERTA ACIOLY",
+    "cnes": "2082071",
+    "entidade": "SANTA CASA DE CARDOSO",
+    "cnpj": "56.363.807/0001-43"
+  },
+  {
+    "deputado": "Bandeira de Mello",
+    "senador": "RODRIGO PACHECO",
+    "cnes": "2082438",
+    "entidade": "SANTA CASA DE CHAVANTES",
+    "cnpj": "73.027.690/0001-46"
+  },
+  {
+    "deputado": "Bebeto",
+    "senador": "ROGÉRIO CARVALHO",
+    "cnes": "2093324",
+    "entidade": "SANTA CASA DE FERNANDOPOLIS",
+    "cnpj": "47.844.287/0001-08"
+  },
+  {
+    "deputado": "Benedita da Silva",
+    "senador": "ROGERIO MARINHO",
+    "cnes": "2705982",
+    "entidade": "SANTA CASA DE FRANCA",
+    "cnpj": "47.969.134/0001-89"
+  },
+  {
+    "deputado": "Benes Leocádio",
+    "senador": "ROMÁRIO",
+    "cnes": "2080095",
+    "entidade": "SANTA CASA DE JOSE BONIFACIO",
+    "cnpj": "50.857.960/0001-40"
+  },
+  {
+    "deputado": "Beto Pereira",
+    "senador": "SERGIO MORO",
+    "cnes": "2745402",
+    "entidade": "SANTA CASA DE MISERICORDIA DE FLORIDA PAULISTA",
+    "cnpj": "47.929.187/0001-76"
+  },
+  {
+    "deputado": "Beto Preto",
+    "senador": "SÉRGIO PETECÃO",
+    "cnes": "2079895",
+    "entidade": "SANTA CASA DE MISERICORDIA DE JALES",
+    "cnpj": "50.565.936/0001-38"
+  },
+  {
+    "deputado": "Beto Richa",
+    "senador": "SORAYA THRONICKE",
+    "cnes": "2082659",
+    "entidade": "SANTA CASA DE NOVA GRANADA",
+    "cnpj": "53.150.298/0001-82"
+  },
+  {
+    "deputado": "Bia Kicis",
+    "senador": "STYVENSON VALENTIM",
+    "cnes": "2080044",
+    "entidade": "SANTA CASA DE SAO JOAQUIM DA BARRA",
+    "cnpj": "59.849.182/0001-12"
+  },
+  {
+    "deputado": "Bibo Nunes",
+    "senador": "TERESA LEITÃO",
+    "cnes": "2748029",
+    "entidade": "SANTA CASA DE SAO JOSE CAMPOS",
+    "cnpj": "45.186.053/0001-87"
+  },
+  {
+    "deputado": "Bohn Gass",
+    "senador": "TEREZA CRISTINA",
+    "cnes": "2688689",
+    "entidade": "SANTA CASA DE SAO PAULO HOSPITAL CENTRAL SAO PAULO",
+    "cnpj": "62.779.145/0001-90"
+  },
+  {
+    "deputado": "Bosco Costa",
+    "senador": "VANDERLAN CARDOSO",
+    "cnes": "2079356",
+    "entidade": "SANTA CASA DE TANABI",
+    "cnpj": "72.079.114/0001-80"
+  },
+  {
+    "deputado": "Bruno Farias",
+    "senador": "VENEZIANO VITAL DO RÊGO",
+    "cnes": "2080664",
+    "entidade": "SANTA CASA DE TUPA",
+    "cnpj": "72.547.623/0001-90"
+  },
+  {
+    "deputado": "Bruno Ganem",
+    "senador": "WELLINGTON FAGUNDES",
+    "cnes": "2081377",
+    "entidade": "SANTA CASA DE VOTUPORANGA",
+    "cnpj": "72.957.814/0001-20"
+  },
+  {
+    "deputado": "Cabo Gilberto Silva",
+    "senador": "WEVERTON",
+    "cnes": "2080532",
+    "entidade": "SANTA CASA HOSP DR ARISTOTELES OLIVEIRA MARTINS PRES PRUDENT",
+    "cnpj": "55.344.337/0001-08"
+  },
+  {
+    "deputado": "Caio Vianna",
+    "senador": "WILDER MORAIS",
+    "cnes": "52124",
+    "entidade": "SECRETARIA DE ESTADO DA SAUDE SES SAO PAULO",
+    "cnpj": "46.374.500/0001-94"
+  },
+  {
+    "deputado": "Camila Jara",
+    "senador": "ZENAIDE MAIA",
+    "cnes": "2084252",
+    "entidade": "SOBRAPAR CAMPINAS",
+    "cnpj": "50.101.286/0001-70"
+  }
+]

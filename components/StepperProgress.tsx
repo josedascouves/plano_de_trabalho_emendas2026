@@ -1,14 +1,5 @@
 import React, { useMemo } from 'react';
-import { 
-  FileText,
-  Building2,
-  Target,
-  CheckCircle2,
-  BarChart3,
-  DollarSign,
-  FileCheck,
-  Check
-} from 'lucide-react';
+import { Check } from 'lucide-react';
 
 interface StepperProgressProps {
   steps: Array<{ id: string; label: string; title?: string }>;
@@ -18,8 +9,8 @@ interface StepperProgressProps {
 }
 
 /**
- * StepperProgress - ELEGANTE COM ÍCONES
- * Design moderno com ícones, labels descritivos e animações suaves
+ * StepperProgress — design compacto (≤ 90px)
+ * Inspirado em Azure Portal / Power BI Service / Microsoft Fluent
  */
 export const StepperProgress: React.FC<StepperProgressProps> = ({
   steps,
@@ -32,103 +23,92 @@ export const StepperProgress: React.FC<StepperProgressProps> = ({
     [steps, activeStep]
   );
 
-  const progressPercent = useMemo(
-    () => ((activeStepIndex + 1) / steps.length) * 100,
-    [activeStepIndex, steps.length]
-  );
-
-  // Ícones para cada etapa
-  const stepIcons = [
-    FileText,
-    Building2,
-    Target,
-    CheckCircle2,
-    BarChart3,
-    DollarSign,
-    FileCheck
-  ];
+  const activeStepData = steps[activeStepIndex];
 
   return (
-    <div className="sticky top-24 z-30 bg-white border-b-2 border-gray-100 shadow-sm">
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '1.5rem 2rem' }}>
-        {/* Barra de progresso superior */}
-        <div className="mb-4 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-red-600 to-red-500 transition-all duration-500 rounded-full"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
+    <div
+      className="sticky z-30 bg-[#F3F4F6] border-b border-[#E5E7EB]"
+      style={{ top: 72, fontFamily: "Inter, 'Segoe UI', sans-serif" }}
+    >
+      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-2.5">
+        <div className="bg-white rounded-xl border border-[#E5E7EB] px-4 sm:px-5 py-3 flex items-center gap-4">
 
-        {/* Stepper com ícones e labels */}
-        <div className="flex items-center justify-between gap-2">
-          {steps.map((step, index) => {
-            const isActive = activeStep === step.id;
-            const isCompleted = completedSteps.includes(step.id) || index < activeStepIndex;
-            const IconComponent = stepIcons[index] || FileText;
+          {/* ── Esquerda: número da etapa + label ativo ── */}
+          <div className="flex-shrink-0">
+            <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider leading-none mb-1">
+              Etapa {activeStepIndex + 1} de {steps.length}
+            </p>
+            <p
+              className="text-[14px] font-semibold text-gray-900 leading-tight whitespace-nowrap"
+              title={activeStepData?.title}
+            >
+              {activeStepData?.label || ''}
+            </p>
+          </div>
 
-            return (
-              <button
-                key={step.id}
-                onClick={() => onStepClick?.(step.id)}
-                className={`flex flex-col items-center gap-2 px-2 py-2 rounded-lg transition-all duration-200 flex-1 ${
-                  isActive
-                    ? 'bg-red-50'
-                    : isCompleted
-                      ? 'bg-green-50'
-                      : 'hover:bg-gray-50'
-                }`}
-                title={step.title}
-                disabled={!onStepClick}
-              >
-                {/* Círculo com ícone */}
-                <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 flex-shrink-0 ${
-                    isCompleted
-                      ? 'bg-green-500 text-white'
-                      : isActive
-                        ? 'bg-red-600 text-white ring-4 ring-red-200'
-                        : 'bg-gray-200 text-gray-600'
-                  }`}
-                >
-                  {isCompleted ? (
-                    <Check className="w-5 h-5" strokeWidth={3} />
-                  ) : (
-                    <IconComponent className="w-5 h-5" />
+          {/* ── Divisor vertical ── */}
+          <div className="hidden sm:block w-px h-8 bg-gray-200 flex-shrink-0" />
+
+          {/* ── Centro: bolinha + linha de progresso ── */}
+          <div className="flex-1 flex items-center min-w-0">
+            {steps.map((step, index) => {
+              const isActive = step.id === activeStep;
+              const isCompleted = completedSteps.includes(step.id) || index < activeStepIndex;
+
+              return (
+                <React.Fragment key={step.id}>
+                  {/* Bolinha */}
+                  <button
+                    onClick={() => onStepClick?.(step.id)}
+                    disabled={!onStepClick}
+                    title={`${index + 1}. ${step.label}${step.title ? ` — ${step.title}` : ''}`}
+                    aria-label={`Etapa ${index + 1}: ${step.label}`}
+                    className={[
+                      'flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center',
+                      'text-[11px] font-bold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
+                      onStepClick ? 'cursor-pointer' : 'cursor-default',
+                      isCompleted
+                        ? 'bg-[#16A34A] text-white shadow-sm'
+                        : isActive
+                          ? 'bg-[#E53935] text-white shadow-md ring-4 ring-[#E53935]/20'
+                          : 'bg-[#D1D5DB] text-gray-600',
+                    ].join(' ')}
+                  >
+                    {isCompleted
+                      ? <Check size={13} strokeWidth={3} />
+                      : <span>{index + 1}</span>}
+                  </button>
+
+                  {/* Linha conectora entre bolinhas */}
+                  {index < steps.length - 1 && (
+                    <div
+                      className="flex-1 mx-1 rounded-full overflow-hidden min-w-[6px]"
+                      style={{ height: 4, backgroundColor: '#D1D5DB' }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: isCompleted ? '100%' : '0%',
+                          backgroundColor: '#16A34A',
+                        }}
+                      />
+                    </div>
                   )}
-                </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
 
-                {/* Label descritivo */}
-                <div className="text-center min-w-0">
-                  <p className={`text-xs font-bold uppercase tracking-widest transition-colors ${
-                    isActive
-                      ? 'text-red-600'
-                      : isCompleted
-                        ? 'text-green-600'
-                        : 'text-gray-500'
-                  }`}>
-                    {step.label}
-                  </p>
-                  <p className={`text-[10px] transition-colors truncate ${
-                    isActive
-                      ? 'text-gray-700 font-medium'
-                      : 'text-gray-400'
-                  }`}>
-                    {step.title ? step.title.split(' ')[0] : ''}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+          {/* ── Direita: contador de concluídas ── */}
+          <div className="hidden sm:flex flex-col items-end flex-shrink-0">
+            <p className="text-[13px] font-bold text-[#16A34A] leading-none">
+              {completedSteps.length}/{steps.length}
+            </p>
+            <p className="text-[10px] text-gray-400 leading-none mt-0.5 uppercase tracking-wider">
+              concluídas
+            </p>
+          </div>
 
-        {/* Estatísticas de progresso */}
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500 font-medium">
-            Etapa {activeStepIndex + 1} de {steps.length}
-          </span>
-          <span className="text-xs text-green-600 font-medium">
-            {completedSteps.length} concluído(s)
-          </span>
         </div>
       </div>
     </div>

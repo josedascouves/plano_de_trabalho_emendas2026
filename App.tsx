@@ -63,7 +63,10 @@ import {
   CheckSquare,
   XCircle,
   Bell,
-  Globe
+  Globe,
+  Pencil,
+  Ban,
+  Menu
 } from 'lucide-react';
 import { FormState, User, AcaoServico, NaturezaDespesa } from './types';
 import { 
@@ -216,6 +219,96 @@ function MenuHamburguerUserActions({ user, onEdit, onChangeRole, onToggleActive,
   );
 }
 
+type PlanilhaBaseRow = {
+  deputado: string;
+  senador: string;
+  cnes: string;
+  entidade: string;
+  cnpj: string;
+};
+
+type EmendaDisponibilizadaForm = {
+  cnes: string;
+  entidade: string;
+  cnpj: string;
+  parlamentar: string;
+  tipoParlamentar: 'deputado' | 'senador' | '';
+  valor: string;
+  programa: string;
+  numeroEmenda: string;
+};
+
+// ─── ComboboxField: input livre + sugestões abrindo abaixo ─────────────────
+interface ComboboxOption { label: string; value: string; }
+interface ComboboxFieldProps {
+  label: string;
+  value: string;
+  options: ComboboxOption[];
+  placeholder?: string;
+  onChange: (text: string) => void;
+  onSelect: (value: string) => void;
+}
+const ComboboxField: React.FC<ComboboxFieldProps> = ({ label, value, options, placeholder, onChange, onSelect }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(value);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = query.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase())).slice(0, 300)
+    : options.slice(0, 300);
+
+  return (
+    <div className="space-y-2" ref={containerRef}>
+      <label className="text-sm font-bold text-gray-900">{label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          className="w-full px-4 py-3 rounded-xl border border-blue-300 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+          placeholder={placeholder}
+          value={query}
+          autoComplete="off"
+          onChange={(e) => {
+            setQuery(e.target.value);
+            onChange(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+        />
+        {open && filtered.length > 0 && (
+          <ul className="absolute z-[200] left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+            {filtered.map((opt) => (
+              <li
+                key={opt.value}
+                className="px-4 py-2.5 text-sm cursor-pointer hover:bg-blue-50 text-gray-800 border-b border-gray-100 last:border-0"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setQuery(opt.label);
+                  onChange(opt.value);
+                  onSelect(opt.value);
+                  setOpen(false);
+                }}
+              >
+                {opt.label}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+};
+// ────────────────────────────────────────────────────────────────────────────
+
 const App: React.FC = () => {
   // Authentication & Session State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -230,6 +323,8 @@ const App: React.FC = () => {
   // Admin & User Management
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showAdminTreeEditor, setShowAdminTreeEditor] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showDisponibilizarEmendaModal, setShowDisponibilizarEmendaModal] = useState(false);
 
   // Dynamic lists loaded from DB (fall back to constants when DB is empty)
   const [dynamicProgramas, setDynamicProgramas] = useState<string[]>(PROGRAMAS);
@@ -254,6 +349,31 @@ const App: React.FC = () => {
   const [csvUploading, setCsvUploading] = useState(false);
   const [csvResults, setCsvResults] = useState<any>(null);
   const [selectedCnes, setSelectedCnes] = useState<string>('');
+  const [sheetBaseRows, setSheetBaseRows] = useState<PlanilhaBaseRow[]>([]);
+  const [selectedOfertaEmendaId, setSelectedOfertaEmendaId] = useState<string | null>(null);
+  const [emendasDisponiveisUsuario, setEmendasDisponiveisUsuario] = useState<any[]>([]);
+  const [emendasDisponibilizadasAdmin, setEmendasDisponibilizadasAdmin] = useState<any[]>([]);
+  const [isSavingDisponibilizacao, setIsSavingDisponibilizacao] = useState(false);
+  const [isLoadingEmendasDisponiveis, setIsLoadingEmendasDisponiveis] = useState(false);
+  const [showEditEmendaModal, setShowEditEmendaModal] = useState(false);
+  const [editingEmenda, setEditingEmenda] = useState<any>(null);
+  const [editingEmendaForm, setEditingEmendaForm] = useState<EmendaDisponibilizadaForm>({
+    cnes: '', entidade: '', cnpj: '', parlamentar: '', tipoParlamentar: '', valor: '', programa: '', numeroEmenda: ''
+  });
+  const [isSavingEditEmenda, setIsSavingEditEmenda] = useState(false);
+  const [filtroStatusEmendas, setFiltroStatusEmendas] = useState<'todas' | 'disponibilizada' | 'utilizada' | 'cancelada'>('todas');
+  const [emendaNotifCount, setEmendaNotifCount] = useState(0);
+  const [newEmendaDisponibilizada, setNewEmendaDisponibilizada] = useState<EmendaDisponibilizadaForm>({
+    cnes: '',
+    entidade: '',
+    cnpj: '',
+    parlamentar: '',
+    tipoParlamentar: '',
+    valor: '',
+    programa: '',
+    numeroEmenda: ''
+  });
+  const [emendaBannerDismissed, setEmendaBannerDismissed] = useState(false);
 
   // Plan List & Edit Management
   const [planosList, setPlanosList] = useState<any[]>([]);
@@ -328,6 +448,158 @@ const App: React.FC = () => {
 
   // Lista de CNES do usuário atual
   const userCnesList = useMemo(() => parseCnesList(currentUser?.cnes), [currentUser?.cnes]);
+
+  const emendasDisponiveisFiltradas = useMemo(() => {
+    if (!selectedCnes) return emendasDisponiveisUsuario;
+    return emendasDisponiveisUsuario.filter((item: any) => String(item.cnes || '') === selectedCnes);
+  }, [emendasDisponiveisUsuario, selectedCnes]);
+
+  const sheetRowsForSelectedCnes = useMemo(() => {
+    if (!newEmendaDisponibilizada.cnes) return [];
+    return sheetBaseRows.filter(row => row.cnes === newEmendaDisponibilizada.cnes);
+  }, [sheetBaseRows, newEmendaDisponibilizada.cnes]);
+
+  const parlamentaresOptionsForSelectedCnes = useMemo(() => {
+    const options: Array<{ label: string; value: string; tipo: 'deputado' | 'senador' }> = [];
+    const seen = new Set<string>();
+
+    for (const row of sheetRowsForSelectedCnes) {
+      if (row.deputado && !seen.has(`deputado:${row.deputado}`)) {
+        options.push({ label: `Deputado: ${row.deputado}`, value: row.deputado, tipo: 'deputado' });
+        seen.add(`deputado:${row.deputado}`);
+      }
+      if (row.senador && !seen.has(`senador:${row.senador}`)) {
+        options.push({ label: `Senador: ${row.senador}`, value: row.senador, tipo: 'senador' });
+        seen.add(`senador:${row.senador}`);
+      }
+    }
+
+    return options;
+  }, [sheetRowsForSelectedCnes]);
+
+  const entidadesOptionsForSelectedCnes = useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ label: string; value: string }> = [];
+    for (const row of sheetRowsForSelectedCnes) {
+      const value = row.entidade || '';
+      if (value && !seen.has(value)) {
+        options.push({ label: value, value });
+        seen.add(value);
+      }
+    }
+    return options;
+  }, [sheetRowsForSelectedCnes]);
+
+  const cnpjsOptionsForSelectedCnes = useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ label: string; value: string }> = [];
+    for (const row of sheetRowsForSelectedCnes) {
+      const value = row.cnpj || '';
+      if (value && !seen.has(value)) {
+        options.push({ label: value, value });
+        seen.add(value);
+      }
+    }
+    return options;
+  }, [sheetRowsForSelectedCnes]);
+
+  const loadSheetBaseRows = async () => {
+    try {
+      const response = await fetch('/data/deputados_planoTrabalho.json', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Não foi possível carregar a base de Deputado/Senador por CNES.');
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setSheetBaseRows(
+          data
+            .map((row: any) => ({
+              deputado: String(row.deputado || '').trim(),
+              senador: String(row.senador || '').trim(),
+              cnes: String(row.cnes || '').trim(),
+              entidade: String(row.entidade || '').trim(),
+              cnpj: String(row.cnpj || '').trim()
+            }))
+            .filter((row: PlanilhaBaseRow) => row.cnes)
+        );
+      }
+    } catch (error) {
+      console.warn('⚠️ Falha ao carregar base da planilha local:', error);
+      setSheetBaseRows([]);
+    }
+  };
+
+  const loadEmendasDisponibilizadasAdmin = async () => {
+    if (currentUser?.role !== 'admin') return;
+    try {
+      const { data, error } = await supabase
+        .from('emendas_disponibilizadas')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      setEmendasDisponibilizadasAdmin(data || []);
+    } catch (error) {
+      console.warn('⚠️ Não foi possível carregar emendas disponibilizadas (admin):', error);
+      setEmendasDisponibilizadasAdmin([]);
+    }
+  };
+
+  const loadEmendasDisponiveisUsuario = async () => {
+    if (!currentUser || currentUser.role !== 'user') return;
+    const cnesList = parseCnesList(currentUser.cnes);
+    if (cnesList.length === 0) {
+      setEmendasDisponiveisUsuario([]);
+      return;
+    }
+
+    setIsLoadingEmendasDisponiveis(true);
+    try {
+      const { data, error } = await supabase
+        .from('emendas_disponibilizadas')
+        .select('*')
+        .eq('status', 'disponibilizada')
+        .in('cnes', cnesList)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setEmendasDisponiveisUsuario(data || []);
+    } catch (error) {
+      console.warn('⚠️ Não foi possível carregar emendas disponíveis para o usuário:', error);
+      setEmendasDisponiveisUsuario([]);
+    } finally {
+      setIsLoadingEmendasDisponiveis(false);
+    }
+  };
+
+  const aplicarEmendaDisponibilizadaNoFormulario = (oferta: any) => {
+    if (!oferta) return;
+
+    const valorMasked = maskCurrency(String(Math.round(parseFloat(String(oferta.valor || 0)) * 100)));
+    const cnes = String(oferta.cnes || '').trim();
+
+    if (cnes) {
+      setSelectedCnes(cnes);
+    }
+
+    setSelectedOfertaEmendaId(oferta.id);
+    setEmendaBannerDismissed(true);
+
+    updateFormData('emenda', {
+      ...formData.emenda,
+      parlamentar: String(oferta.parlamentar || ''),
+      numero: String(oferta.numero_emenda || ''),
+      valor: valorMasked,
+      valorExtenso: '',
+      programa: String(oferta.programa || '')
+    });
+
+    updateFormData('beneficiario', {
+      ...formData.beneficiario,
+      nome: String(oferta.entidade || ''),
+      cnes,
+      cnpj: String(oferta.cnpj || '')
+    });
+  };
 
   // Função para obter formData inicial
   const getInitialFormData = (): FormState => {
@@ -473,14 +745,7 @@ const App: React.FC = () => {
   };
 
   // ======== RBAC - CONTROLE DE ACESSO ========
-  const isAdmin = (): boolean => {
-    const adminStatus = currentUser?.role === 'admin';
-    console.log('🔐 isAdmin() check:', {
-      currentUser: currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role } : null,
-      isAdmin: adminStatus
-    });
-    return adminStatus;
-  };
+  const isAdmin = (): boolean => currentUser?.role === 'admin';
   
   const canEditPlan = (planCreatedBy: string, planValidado?: boolean): boolean => {
     if (!currentUser) return false;
@@ -918,6 +1183,62 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated]);
 
+  // Carrega base da planilha local para preenchimentos assistidos
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadSheetBaseRows();
+    }
+  }, [isAuthenticated]);
+
+  // Carregar disponibilizações para admin quando abrir modal de disponibilização
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'admin' && showDisponibilizarEmendaModal) {
+      loadEmendasDisponibilizadasAdmin();
+      // Marca como visto ao abrir o painel
+      localStorage.setItem('lastSeenEmendasAt', new Date().toISOString());
+      setEmendaNotifCount(0);
+    }
+  }, [isAuthenticated, currentUser?.role, showDisponibilizarEmendaModal]);
+
+  // Carregar emendas disponíveis para usuário comum
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'user' && currentView === 'new') {
+      loadEmendasDisponiveisUsuario();
+    }
+  }, [isAuthenticated, currentUser?.role, currentView, currentUser?.cnes]);
+
+  // Atualizar badge de notificação quando a lista admin muda
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    const lastSeenAt = localStorage.getItem('lastSeenEmendasAt');
+    const count = emendasDisponibilizadasAdmin.filter((e: any) => {
+      if (e.status !== 'utilizada') return false;
+      if (!lastSeenAt) return true;
+      return e.utilizada_em && new Date(e.utilizada_em) > new Date(lastSeenAt);
+    }).length;
+    setEmendaNotifCount(count);
+  }, [emendasDisponibilizadasAdmin, currentUser?.role]);
+
+  // Auto-preencher entidade e CNPJ ao escolher CNES no formulário de disponibilização
+  useEffect(() => {
+    if (!newEmendaDisponibilizada.cnes) return;
+    const first = sheetRowsForSelectedCnes[0];
+    if (!first) return;
+
+    if (
+      newEmendaDisponibilizada.entidade === (first.entidade || '') &&
+      newEmendaDisponibilizada.cnpj === (first.cnpj || '')
+    ) {
+      return;
+    }
+
+    setNewEmendaDisponibilizada(prev => ({
+      ...prev,
+      entidade: first.entidade || prev.entidade,
+      cnpj: first.cnpj || prev.cnpj
+    }));
+  }, [newEmendaDisponibilizada.cnes, sheetRowsForSelectedCnes]);
+
   // Auto-fill form when user logs in or form is initialized
   useEffect(() => {
     if (isAuthenticated && currentUser?.email && formData.beneficiario.email !== currentUser.email) {
@@ -970,6 +1291,16 @@ const App: React.FC = () => {
       updateFormData('beneficiario', { ...formData.beneficiario, cnes: firstCnes });
     }
   }, [formData.beneficiario.cnes]);
+
+  useEffect(() => {
+    if (currentUser?.role !== 'user' || currentView !== 'new') return;
+    if (selectedOfertaEmendaId) return;
+    if (emendasDisponiveisFiltradas.length === 0) return;
+    const formJaTemDadosDeEmenda = Boolean(formData.emenda.parlamentar || formData.emenda.valor || formData.emenda.programa || formData.beneficiario.nome || formData.beneficiario.cnpj);
+    if (formJaTemDadosDeEmenda) return;
+
+    aplicarEmendaDisponibilizadaNoFormulario(emendasDisponiveisFiltradas[0]);
+  }, [currentUser?.role, currentView, selectedOfertaEmendaId, emendasDisponiveisFiltradas]);
 
   // Track form changes - melhorado para detectar mudanças reais
   useEffect(() => {
@@ -1094,6 +1425,7 @@ const App: React.FC = () => {
     await supabase.auth.signOut();
     setIsAuthenticated(false);
     setCurrentUser(null);
+    setSelectedOfertaEmendaId(null);
     setActiveSection('info-emenda');
     setSentSuccess(false);
   };
@@ -1779,6 +2111,147 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDisponibilizarEmenda = async () => {
+    try {
+      if (!newEmendaDisponibilizada.cnes || !newEmendaDisponibilizada.entidade || !newEmendaDisponibilizada.cnpj || !newEmendaDisponibilizada.parlamentar || !newEmendaDisponibilizada.valor || !newEmendaDisponibilizada.programa) {
+        alert('Preencha todos os campos da disponibilização de emenda.');
+        return;
+      }
+
+      const valorNumerico = parseCurrency(newEmendaDisponibilizada.valor);
+      if (valorNumerico <= 0) {
+        alert('Informe um valor válido para a emenda.');
+        return;
+      }
+
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+      if (!userId) throw new Error('Sessão expirada. Faça login novamente.');
+
+      setIsSavingDisponibilizacao(true);
+
+      const { error } = await supabase
+        .from('emendas_disponibilizadas')
+        .insert([
+          {
+            cnes: newEmendaDisponibilizada.cnes,
+            entidade: newEmendaDisponibilizada.entidade,
+            cnpj: newEmendaDisponibilizada.cnpj,
+            parlamentar: newEmendaDisponibilizada.parlamentar,
+            tipo_parlamentar: newEmendaDisponibilizada.tipoParlamentar || null,
+            valor: valorNumerico,
+            programa: newEmendaDisponibilizada.programa,
+            numero_emenda: newEmendaDisponibilizada.numeroEmenda || null,
+            status: 'disponibilizada',
+            disponibilizada_por: userId
+          }
+        ]);
+
+      if (error) throw error;
+
+      alert('✅ Emenda disponibilizada com sucesso para a entidade/CNES selecionados.');
+
+      setNewEmendaDisponibilizada({
+        cnes: '',
+        entidade: '',
+        cnpj: '',
+        parlamentar: '',
+        tipoParlamentar: '',
+        valor: '',
+        programa: '',
+        numeroEmenda: ''
+      });
+
+      await loadEmendasDisponibilizadasAdmin();
+      if (currentUser?.role === 'user') {
+        await loadEmendasDisponiveisUsuario();
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao disponibilizar emenda:', error);
+      alert(`❌ Erro ao disponibilizar emenda: ${error.message}`);
+    } finally {
+      setIsSavingDisponibilizacao(false);
+    }
+  };
+
+  const openEditEmendaModal = (emenda: any) => {
+    setEditingEmenda(emenda);
+    setEditingEmendaForm({
+      cnes: emenda.cnes || '',
+      entidade: emenda.entidade || '',
+      cnpj: emenda.cnpj || '',
+      parlamentar: emenda.parlamentar || '',
+      tipoParlamentar: (emenda.tipo_parlamentar as 'deputado' | 'senador') || '',
+      valor: maskCurrency(String(emenda.valor || '')),
+      programa: emenda.programa || '',
+      numeroEmenda: emenda.numero_emenda || ''
+    });
+    setShowEditEmendaModal(true);
+  };
+
+  const handleSaveEditEmenda = async () => {
+    if (!editingEmenda) return;
+    const valorNumerico = parseCurrency(editingEmendaForm.valor);
+    if (!editingEmendaForm.cnes || !editingEmendaForm.entidade || !editingEmendaForm.cnpj || !editingEmendaForm.parlamentar || valorNumerico <= 0 || !editingEmendaForm.programa) {
+      alert('Preencha todos os campos obrigatórios.');
+      return;
+    }
+    setIsSavingEditEmenda(true);
+    try {
+      const { error } = await supabase
+        .from('emendas_disponibilizadas')
+        .update({
+          cnes: editingEmendaForm.cnes,
+          entidade: editingEmendaForm.entidade,
+          cnpj: editingEmendaForm.cnpj,
+          parlamentar: editingEmendaForm.parlamentar,
+          tipo_parlamentar: editingEmendaForm.tipoParlamentar || null,
+          valor: valorNumerico,
+          programa: editingEmendaForm.programa,
+          numero_emenda: editingEmendaForm.numeroEmenda || null
+        })
+        .eq('id', editingEmenda.id);
+      if (error) throw error;
+      setShowEditEmendaModal(false);
+      setEditingEmenda(null);
+      await loadEmendasDisponibilizadasAdmin();
+    } catch (error: any) {
+      alert(`❌ Erro ao salvar edição: ${error.message}`);
+    } finally {
+      setIsSavingEditEmenda(false);
+    }
+  };
+
+  const handleCancelEmenda = async (id: string) => {
+    if (!confirm('Cancelar esta emenda disponibilizada? O usuário não poderá mais utilizá-la.')) return;
+    try {
+      const { error } = await supabase
+        .from('emendas_disponibilizadas')
+        .update({ status: 'cancelada' })
+        .eq('id', id);
+      if (error) throw error;
+      await loadEmendasDisponibilizadasAdmin();
+    } catch (error: any) {
+      alert(`❌ Erro ao cancelar emenda: ${error.message}`);
+    }
+  };
+
+  const formatElapsedTime = (dateStr: string): string => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `há ${days} dia${days > 1 ? 's' : ''}`;
+    if (hours > 0) return `há ${hours}h`;
+    if (minutes > 0) return `há ${minutes}min`;
+    return 'agora mesmo';
+  };
+
+  const formatCurrencyDisplay = (value: any) => {
+    const n = Number(value || 0);
+    return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   // CARREGA LISTA DE PLANOS DO SUPABASE
   const loadPlanos = async () => {
     setIsLoadingPlanos(true);
@@ -1927,6 +2400,7 @@ const App: React.FC = () => {
     // Isso garante que não há dados antigos misturados
     console.log('🗑️ Limpando formData anterior...');
     setFormData(getInitialFormData());
+    setSelectedOfertaEmendaId(null);
     setCurrentSelection({ categoria: '', item: '', metas: [''] });
     setCurrentMetaQualitativa({ meta: '', valor: '' });
     setCurrentNatureza({ codigo: '', valor: '' });
@@ -2135,6 +2609,10 @@ const App: React.FC = () => {
       setCurrentNatureza({ codigo: '', valor: '' });
       
       setPlanoSalvoId(planoId);
+      setSelectedOfertaEmendaId(plano.oferta_emenda_id || null);
+      if (plano.cnes) {
+        setSelectedCnes(String(plano.cnes));
+      }
       const savedCopy = JSON.parse(JSON.stringify(loadedFormData));
       setLastSavedFormData(savedCopy);
       setFormHasChanges(false);
@@ -2151,6 +2629,7 @@ const App: React.FC = () => {
       setEditingPlanId(null);
       setFormData(getInitialFormData());
       setPlanoSalvoId(null);
+      setSelectedOfertaEmendaId(null);
       // Resetar refs em caso de erro
       loadingPlanIdRef.current = null;
       planLoadCompletedRef.current.clear();
@@ -2602,6 +3081,7 @@ const App: React.FC = () => {
             responsavel_assinatura: formData.responsavelAssinatura,
             created_by_name: currentUser?.name || null,
             created_by_email: currentUser?.username || user.email || null,
+            oferta_emenda_id: selectedOfertaEmendaId,
             updated_at: new Date().toISOString()
           })
           .eq('id', planoSalvoId);
@@ -2665,7 +3145,8 @@ const App: React.FC = () => {
             pdf_url: null,
             created_by: user.id,
             created_by_name: currentUser?.name || null,
-            created_by_email: currentUser?.username || user.email || null
+            created_by_email: currentUser?.username || user.email || null,
+            oferta_emenda_id: selectedOfertaEmendaId
           }])
           .select()
           .single();
@@ -2732,6 +3213,41 @@ const App: React.FC = () => {
   //
   //   return () => clearTimeout(timer);
   // }, [formData, isAuthenticated, currentView]);
+
+  // Helper: marca emenda como utilizada via RPC (SECURITY DEFINER) com fallback para update direto
+  const marcarEmendaUtilizada = async (emendaId: string, planoId: string): Promise<boolean> => {
+    // Tentativa 1: RPC com SECURITY DEFINER (ignora RLS)
+    const { data: rpcOk, error: rpcErr } = await supabase.rpc('mark_emenda_utilizada', {
+      p_emenda_id: emendaId,
+      p_plano_id: planoId
+    });
+    if (!rpcErr) {
+      if (rpcOk) {
+        console.log('✅ Emenda marcada via RPC:', emendaId);
+        return true;
+      }
+      console.warn('⚠️ RPC mark_emenda_utilizada retornou false para emenda:', emendaId);
+      return false;
+    }
+
+    // Tentativa 2: fallback para update direto (caso o RPC ainda não exista no banco)
+    console.warn('⚠️ RPC indisponível, tentando update direto:', rpcErr.message);
+    const { error: updErr } = await supabase
+      .from('emendas_disponibilizadas')
+      .update({
+        status: 'utilizada',
+        plano_id: planoId,
+        utilizada_em: new Date().toISOString()
+      })
+      .eq('id', emendaId);
+
+    if (updErr) {
+      console.error('❌ Falha no update direto da emenda:', updErr.message);
+      return false;
+    }
+    console.log('✅ Emenda marcada via update direto:', emendaId);
+    return true;
+  };
 
   const handleFinalSend = async () => {
     // Proteção MÁXIMA contra duplo clique/envio (usando useRef em vez de useState)
@@ -2807,13 +3323,21 @@ const App: React.FC = () => {
       }
 
       // VALIDAÇÃO 3: Se já tem plano salvo E não há mudanças = não fazer nada
+      // (mas ainda marcar emenda como utilizada se pendente)
       if (planoSalvoId && lastSavedFormData) {
         const currentJson = JSON.stringify(formData);
         const savedJson = JSON.stringify(lastSavedFormData);
         if (currentJson === savedJson) {
+          // Mesmo sem mudanças no formulário, marcar emenda como utilizada se ainda pendente
+          if (selectedOfertaEmendaId) {
+            const emendaIdUsada = selectedOfertaEmendaId;
+            await marcarEmendaUtilizada(emendaIdUsada, planoSalvoId);
+            setSelectedOfertaEmendaId(null);
+            setEmendasDisponiveisUsuario(prev => prev.filter(e => e.id !== emendaIdUsada));
+          }
           alert('⚠️ Nenhuma mudança detectada!\n\nO plano não foi alterado desde o último salvamento.');
           setIsSending(false);
-          isSavingRef.current = false; // ← Reset ref when no changes
+          isSavingRef.current = false;
           return planoSalvoId;
         }
       }
@@ -2861,7 +3385,8 @@ const App: React.FC = () => {
             last_edited_at: new Date().toISOString(),
             last_edited_by: user.id,
             created_by_name: currentUser?.name || null,
-            created_by_email: currentUser?.username || user.email || null
+            created_by_email: currentUser?.username || user.email || null,
+            oferta_emenda_id: selectedOfertaEmendaId
           })
           .eq('id', planoSalvoId);
 
@@ -2951,6 +3476,12 @@ const App: React.FC = () => {
         } else {
           console.log("✅ Dados relacionados substituídos via RPC:", rpcResult);
         }
+        if (selectedOfertaEmendaId) {
+          const emendaIdUsada = selectedOfertaEmendaId;
+          await marcarEmendaUtilizada(emendaIdUsada, planoSalvoId);
+          setSelectedOfertaEmendaId(null);
+          setEmendasDisponiveisUsuario(prev => prev.filter(e => e.id !== emendaIdUsada));
+        }
         
         setLastSavedFormData(JSON.parse(JSON.stringify(formData)));
         setFormHasChanges(false);
@@ -2986,7 +3517,8 @@ const App: React.FC = () => {
           pdf_url: null,
           created_by: user.id,
           created_by_name: currentUser?.name || null,
-          created_by_email: currentUser?.username || user.email || null
+          created_by_email: currentUser?.username || user.email || null,
+          oferta_emenda_id: selectedOfertaEmendaId
         }])
         .select()
         .single();
@@ -3072,6 +3604,12 @@ const App: React.FC = () => {
 
       setPlanoSalvoId(plano.id);
       
+      if (selectedOfertaEmendaId) {
+        const emendaIdUsada = selectedOfertaEmendaId;
+        await marcarEmendaUtilizada(emendaIdUsada, plano.id);
+        setSelectedOfertaEmendaId(null);
+        setEmendasDisponiveisUsuario(prev => prev.filter(e => e.id !== emendaIdUsada));
+      }
 
       
       // Atualizar lastSavedFormData após salvar com sucesso
@@ -3645,6 +4183,7 @@ const App: React.FC = () => {
     setFormData(getInitialFormData());
     setLastSavedFormData(null);
     setPlanoSalvoId(null);
+    setSelectedOfertaEmendaId(null);
     setFormHasChanges(false);
     setCurrentSelection({ categoria: '', item: '', metas: [''] });
     setCurrentMetaQualitativa({ meta: '', valor: '' });
@@ -3963,6 +4502,7 @@ Secretaria de Estado da Saúde de São Paulo`;
     setFormData(getInitialFormData());
     setLastSavedFormData(null);
     setPlanoSalvoId(null);
+    setSelectedOfertaEmendaId(null);
     setFormHasChanges(false);
     
     // Limpar inputs temporários TAMBÉM
@@ -4391,17 +4931,6 @@ Secretaria de Estado da Saúde de São Paulo`;
           <button 
             onClick={() => {
               setShowDocument(false);
-              alert('📝 Carregando novo plano com todos os campos vazios...');
-              setTimeout(() => {
-                setCurrentView('new');
-                setActiveSection('info-emenda');
-                setSentSuccess(false);
-                setEditingPlanId(null);
-                setPlanoSalvoId(null);
-                setFormData(getInitialFormData());
-                setLastSavedFormData(null);
-                setFormHasChanges(false);
-              }, 500);
             }}
             className="px-6 py-3 bg-white border-2 border-gray-400 text-gray-900 font-bold text-sm uppercase tracking-widest rounded hover:bg-gray-50 hover:border-gray-600 transition-colors"
           >
@@ -4422,73 +4951,94 @@ Secretaria de Estado da Saúde de São Paulo`;
   return (
     <div className="min-h-screen bg-gray-50">
 
-      <header className="bg-gray-900 sticky top-0 z-50 border-b-4 border-red-600">
-        <div className="w-full px-6 py-6">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            {/* Logo + Título à esquerda */}
-            <div className="flex items-center gap-4">
-              <img 
-                src="/img/logo_branco.png" 
-                alt="SES-SP" 
-                className="h-20 w-auto" 
+      <header className="bg-[#08162D] sticky top-0 z-50 border-b-2 border-[#D92B2B]" style={{ fontFamily: "Inter, 'Segoe UI', sans-serif" }}>
+        {/* Barra principal — altura fixa 72px */}
+        <div className="h-[72px] flex items-center px-4 lg:px-8">
+          <div className="w-full flex items-center justify-between gap-4">
+
+            {/* ── Bloco Esquerdo: Logo + Identidade ── */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <img
+                src="/img/logo_branco.png"
+                alt="SES-SP"
+                className="h-12 w-auto"
               />
-              <div>
-                <h1 className="text-3xl font-black text-white">Plano de Trabalho</h1>
-                <p className="text-sm text-gray-300">SES - Secretaria de Estado da Saúde</p>
+              <div className="hidden sm:block border-l border-white/20 pl-3">
+                <p className="text-[15px] font-black text-white whitespace-nowrap leading-tight tracking-tight">Plano de Trabalho</p>
+                <p className="text-[11px] text-[#B8C1D1] whitespace-nowrap leading-tight">SES · Secretaria de Estado da Saúde</p>
               </div>
             </div>
-          
-            {/* Menu à direita */}
-            <div className="flex items-center gap-6">
-              {isAuthenticated && (
-                <div className="hidden lg:flex items-center gap-6">
-                  <button 
-                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaAlteradaEm(null); }}
-                    className={`text-sm font-bold uppercase tracking-wide transition-colors ${
-                      currentView === 'new' 
-                        ? 'text-red-400 border-b-2 border-red-500' 
-                        : 'text-gray-300 hover:text-white'
+
+            {/* ── Bloco Centro: Nav Desktop ── */}
+            {isAuthenticated && (
+              <nav className="hidden lg:flex items-center gap-1 flex-1 justify-center">
+                <button
+                  onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setSelectedOfertaEmendaId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaAlteradaEm(null); setMobileMenuOpen(false); }}
+                  className={`relative px-4 py-2 rounded-lg text-[13px] font-semibold tracking-wide transition-all duration-150 ${
+                    currentView === 'new'
+                      ? 'text-white bg-white/10'
+                      : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'
+                  }`}
+                >
+                  {currentView === 'new' && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-[#D92B2B] rounded-full" />}
+                  Novo Plano
+                </button>
+                {currentUser?.role === 'admin' && (
+                  <button
+                    onClick={() => { setShowDisponibilizarEmendaModal(true); setMobileMenuOpen(false); }}
+                    className="relative px-4 py-2 rounded-lg text-[13px] font-semibold tracking-wide text-[#B8C1D1] hover:text-white hover:bg-white/8 transition-all duration-150"
+                    title="Disponibilizar Emenda para Beneficiário"
+                  >
+                    Disponibilizar Emenda
+                    {emendaNotifCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[10px] font-black rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow">
+                        {emendaNotifCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => { setCurrentView('list'); setMobileMenuOpen(false); }}
+                  className={`relative px-4 py-2 rounded-lg text-[13px] font-semibold tracking-wide transition-all duration-150 ${
+                    currentView === 'list'
+                      ? 'text-white bg-white/10'
+                      : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'
+                  }`}
+                >
+                  {currentView === 'list' && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-[#D92B2B] rounded-full" />}
+                  Meus Planos
+                </button>
+                {(isAdmin() || currentUser?.role === 'intermediate') && (
+                  <button
+                    onClick={() => { setCurrentView('dashboard'); setMobileMenuOpen(false); }}
+                    className={`relative px-4 py-2 rounded-lg text-[13px] font-semibold tracking-wide transition-all duration-150 ${
+                      currentView === 'dashboard'
+                        ? 'text-white bg-white/10'
+                        : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'
                     }`}
                   >
-                    Novo Plano
+                    {currentView === 'dashboard' && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-[#D92B2B] rounded-full" />}
+                    Dashboard
                   </button>
-                  <button 
-                    onClick={() => setCurrentView('list')}
-                    className={`text-sm font-bold uppercase tracking-wide transition-colors ${
-                      currentView === 'list' 
-                        ? 'text-red-400 border-b-2 border-red-500' 
-                        : 'text-gray-300 hover:text-white'
-                    }`}
-                  >
-                    Meus Planos
-                  </button>
-                  {(isAdmin() || currentUser?.role === 'intermediate') && (
-                    <button 
-                      onClick={() => setCurrentView('dashboard')}
-                      className={`text-sm font-bold uppercase tracking-wide transition-colors ${
-                        currentView === 'dashboard' 
-                          ? 'text-red-400 border-b-2 border-red-500' 
-                          : 'text-gray-300 hover:text-white'
-                      }`}
-                    >
-                      Dashboard
-                    </button>
-                  )}
-                </div>
-              )}
+                )}
+              </nav>
+            )}
+
+            {/* ── Bloco Direito: User + Ações ── */}
+            <div className="flex items-center gap-1 flex-shrink-0">
               {isAuthenticated && (
-                <div className="flex items-center gap-4 border-l border-gray-600 pl-6">
-                  {/* Seletor de CNES para usuários com múltiplos CNES */}
+                <>
+                  {/* Seletor CNES múltiplo */}
                   {currentUser?.role === 'user' && (currentUser?.cnes || '').includes(',') && (
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-gray-400" />
+                    <div className="hidden md:flex items-center gap-2 mr-2">
+                      <Building2 className="w-3.5 h-3.5 text-[#B8C1D1]" />
                       <select
                         value={selectedCnes || parseCnesList(currentUser?.cnes)[0]}
                         onChange={(e) => {
                           setSelectedCnes(e.target.value);
                           updateFormData('beneficiario', { ...formData.beneficiario, cnes: e.target.value });
                         }}
-                        className="bg-gray-700 text-white text-xs rounded-lg border border-gray-600 px-2 py-1.5 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        className="bg-white/10 text-white text-xs rounded-lg border border-white/20 px-2 py-1.5 focus:ring-2 focus:ring-[#D92B2B] focus:border-[#D92B2B]"
                         title="Selecione o CNES ativo"
                       >
                         {parseCnesList(currentUser?.cnes).map(cnes => (
@@ -4498,30 +5048,120 @@ Secretaria de Estado da Saúde de São Paulo`;
                     </div>
                   )}
                   {currentUser?.role === 'user' && !(currentUser?.cnes || '').includes(',') && currentUser?.cnes && (
-                    <span className="text-xs text-gray-400 hidden sm:block">CNES: {currentUser.cnes}</span>
+                    <span className="text-[11px] text-[#B8C1D1] hidden md:block mr-1">CNES {currentUser.cnes}</span>
                   )}
-                  <div className="text-right text-sm hidden sm:block">
-                    <p className="text-white font-bold">{currentUser?.name}</p>
-                    <p className="text-xs text-gray-400 uppercase">{currentUser?.role}</p>
+
+                  {/* Separador */}
+                  <div className="hidden sm:block w-px h-8 bg-white/15 mx-2" />
+
+                  {/* Avatar + Nome */}
+                  <div className="hidden sm:flex items-center gap-2.5 mr-1">
+                    <div className="w-8 h-8 rounded-full bg-[#D92B2B] flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-xs font-black leading-none">
+                        {(currentUser?.name || 'U').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="leading-tight">
+                      <p className="text-[13px] font-semibold text-white leading-none">{currentUser?.name}</p>
+                      <p className="text-[10px] text-[#B8C1D1] uppercase tracking-wider leading-none mt-0.5">
+                        {currentUser?.role === 'admin' ? 'Administrador' : currentUser?.role === 'intermediate' ? 'Intermediário' : 'Usuário'}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Separador */}
+                  <div className="hidden sm:block w-px h-8 bg-white/15 mx-1" />
+
+                  {/* Ação: Gerenciar Usuários */}
                   {currentUser?.role === 'admin' && (
-                    <button onClick={() => setShowUserManagement(true)} className="p-2 text-gray-300 hover:text-red-400 transition-colors" title="Gerenciar Usuários">
-                      <Users className="w-5 h-5" />
+                    <button
+                      onClick={() => setShowUserManagement(true)}
+                      className="w-10 h-10 flex items-center justify-center rounded-lg text-[#B8C1D1] hover:text-white hover:bg-white/10 transition-all duration-150"
+                      title="Gerenciar Usuários"
+                      aria-label="Gerenciar Usuários"
+                    >
+                      <Users className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
                     </button>
                   )}
+
+                  {/* Ação: Configurações */}
                   {currentUser?.role === 'admin' && (
-                    <button onClick={() => setShowAdminTreeEditor(true)} className="p-2 text-gray-300 hover:text-blue-400 transition-colors" title="Configurar Listas (Programas, Metas, Naturezas)">
-                      <Settings2 className="w-5 h-5" />
+                    <button
+                      onClick={() => setShowAdminTreeEditor(true)}
+                      className="w-10 h-10 flex items-center justify-center rounded-lg text-[#B8C1D1] hover:text-white hover:bg-white/10 transition-all duration-150"
+                      title="Configurar Listas (Programas, Metas, Naturezas)"
+                      aria-label="Configurações"
+                    >
+                      <Settings2 className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
                     </button>
                   )}
-                  <button onClick={handleLogout} className="p-2 text-gray-300 hover:text-red-400 transition-colors">
-                    <LogOut className="w-5 h-5" />
+
+                  {/* Ação: Sair */}
+                  <button
+                    onClick={handleLogout}
+                    className="w-10 h-10 flex items-center justify-center rounded-lg text-[#B8C1D1] hover:text-[#D92B2B] hover:bg-white/10 transition-all duration-150"
+                    title="Sair"
+                    aria-label="Sair da conta"
+                  >
+                    <LogOut className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
                   </button>
-                </div>
+
+                  {/* Hambúrguer (mobile/tablet) */}
+                  <button
+                    onClick={() => setMobileMenuOpen(v => !v)}
+                    className="lg:hidden w-10 h-10 flex items-center justify-center rounded-lg text-[#B8C1D1] hover:text-white hover:bg-white/10 transition-all duration-150 ml-1"
+                    aria-label="Menu"
+                  >
+                    {mobileMenuOpen ? <X style={{ width: 20, height: 20 }} /> : <Menu style={{ width: 20, height: 20 }} />}
+                  </button>
+                </>
               )}
             </div>
           </div>
         </div>
+
+        {/* ── Menu mobile/tablet — slide down ── */}
+        {isAuthenticated && mobileMenuOpen && (
+          <div className="lg:hidden bg-[#0c1e3e] border-t border-white/10 px-4 pb-4 pt-3 flex flex-col gap-1">
+            <button
+              onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setSelectedOfertaEmendaId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaAlteradaEm(null); setMobileMenuOpen(false); }}
+              className={`text-left px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-colors ${currentView === 'new' ? 'bg-white/10 text-white' : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'}`}
+            >Novo Plano</button>
+            {currentUser?.role === 'admin' && (
+              <button
+                onClick={() => { setShowDisponibilizarEmendaModal(true); setMobileMenuOpen(false); }}
+                className="text-left px-4 py-2.5 rounded-lg text-[13px] font-semibold text-[#B8C1D1] hover:text-white hover:bg-white/8 transition-colors flex items-center gap-2"
+              >
+                Disponibilizar Emenda
+                {emendaNotifCount > 0 && (
+                  <span className="bg-green-500 text-white text-[10px] font-black rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">{emendaNotifCount}</span>
+                )}
+              </button>
+            )}
+            <button
+              onClick={() => { setCurrentView('list'); setMobileMenuOpen(false); }}
+              className={`text-left px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-colors ${currentView === 'list' ? 'bg-white/10 text-white' : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'}`}
+            >Meus Planos</button>
+            {(isAdmin() || currentUser?.role === 'intermediate') && (
+              <button
+                onClick={() => { setCurrentView('dashboard'); setMobileMenuOpen(false); }}
+                className={`text-left px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-colors ${currentView === 'dashboard' ? 'bg-white/10 text-white' : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'}`}
+              >Dashboard</button>
+            )}
+            {/* Info usuário mobile */}
+            <div className="mt-2 pt-3 border-t border-white/10 flex items-center gap-3 px-1">
+              <div className="w-8 h-8 rounded-full bg-[#D92B2B] flex items-center justify-center flex-shrink-0">
+                <span className="text-white text-xs font-black">{(currentUser?.name || 'U').charAt(0).toUpperCase()}</span>
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-white">{currentUser?.name}</p>
+                <p className="text-[10px] text-[#B8C1D1] uppercase tracking-wider">
+                  {currentUser?.role === 'admin' ? 'Administrador' : currentUser?.role === 'intermediate' ? 'Intermediário' : 'Usuário'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -4835,10 +5475,337 @@ Secretaria de Estado da Saúde de São Paulo`;
             />
           )}
 
+          {showDisponibilizarEmendaModal && currentUser?.role === 'admin' && (
+            <div className="fixed inset-0 z-[105] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl animate-slideUp flex flex-col max-h-[92vh] overflow-hidden">
+                <div className="bg-gradient-to-r from-blue-700 to-blue-600 px-8 py-6 border-b border-blue-800/40 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-black text-white">Disponibilizar Emenda para Beneficiário</h2>
+                    <p className="text-xs text-blue-100 mt-1">Admin define a emenda e o usuário recebe pré-preenchida ao entrar no sistema.</p>
+                  </div>
+                  <button onClick={() => setShowDisponibilizarEmendaModal(false)} className="p-2 rounded-lg hover:bg-blue-500/40 transition-colors" title="Fechar">
+                    <X className="w-6 h-6 text-white" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    {/* Número da Emenda */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-900">Número da Emenda*</label>
+                      <input
+                        type="text"
+                        className="w-full px-4 py-3 rounded-xl border border-blue-300 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                        placeholder="Ex: 20240001"
+                        value={newEmendaDisponibilizada.numeroEmenda}
+                        onChange={(e) => setNewEmendaDisponibilizada(prev => ({ ...prev, numeroEmenda: e.target.value }))}
+                      />
+                    </div>
+
+                    {/* Programa */}
+                    <Select
+                      label="Programa Orçamentário*"
+                      value={newEmendaDisponibilizada.programa}
+                      onChange={(e) => setNewEmendaDisponibilizada(prev => ({ ...prev, programa: e.target.value }))}
+                      options={dynamicProgramas.map(p => ({ value: p, label: p }))}
+                    />
+
+                    {/* CNES */}
+                    <ComboboxField
+                      label="CNES*"
+                      value={newEmendaDisponibilizada.cnes}
+                      placeholder="Digite ou selecione o CNES"
+                      options={[...new Set(sheetBaseRows.map(r => r.cnes))].map(c => ({ label: c, value: c }))}
+                      onChange={(text) => setNewEmendaDisponibilizada(prev => ({
+                        ...prev,
+                        cnes: text.replace(/\s/g, ''),
+                        entidade: '',
+                        cnpj: '',
+                        parlamentar: '',
+                        tipoParlamentar: ''
+                      }))}
+                      onSelect={(val) => setNewEmendaDisponibilizada(prev => ({
+                        ...prev,
+                        cnes: val,
+                        entidade: '',
+                        cnpj: '',
+                        parlamentar: '',
+                        tipoParlamentar: ''
+                      }))}
+                    />
+
+                    {/* Entidade */}
+                    <ComboboxField
+                      label="Entidade*"
+                      value={newEmendaDisponibilizada.entidade}
+                      placeholder="Digite ou selecione a entidade"
+                      options={entidadesOptionsForSelectedCnes.length > 0
+                        ? entidadesOptionsForSelectedCnes
+                        : [...new Set(sheetBaseRows.map(r => r.entidade).filter(Boolean))].map(e => ({ label: e, value: e }))}
+                      onChange={(text) => {
+                        const row = sheetRowsForSelectedCnes.find(r => r.entidade === text)
+                          || sheetBaseRows.find(r => r.entidade === text);
+                        setNewEmendaDisponibilizada(prev => ({
+                          ...prev,
+                          entidade: text,
+                          cnpj: row?.cnpj || prev.cnpj
+                        }));
+                      }}
+                      onSelect={(val) => {
+                        const row = sheetRowsForSelectedCnes.find(r => r.entidade === val)
+                          || sheetBaseRows.find(r => r.entidade === val);
+                        setNewEmendaDisponibilizada(prev => ({
+                          ...prev,
+                          entidade: val,
+                          cnpj: row?.cnpj || prev.cnpj
+                        }));
+                      }}
+                    />
+
+                    {/* CNPJ */}
+                    <ComboboxField
+                      label="CNPJ*"
+                      value={newEmendaDisponibilizada.cnpj}
+                      placeholder="Digite ou selecione o CNPJ"
+                      options={cnpjsOptionsForSelectedCnes.length > 0
+                        ? cnpjsOptionsForSelectedCnes
+                        : [...new Set(sheetBaseRows.map(r => r.cnpj).filter(Boolean))].map(c => ({ label: c, value: c }))}
+                      onChange={(text) => setNewEmendaDisponibilizada(prev => ({ ...prev, cnpj: maskCNPJ(text) }))}
+                      onSelect={(val) => setNewEmendaDisponibilizada(prev => ({ ...prev, cnpj: maskCNPJ(val) }))}
+                    />
+
+                    {/* Parlamentar */}
+                    <ComboboxField
+                      label="Parlamentar (Deputado ou Senador)*"
+                      value={newEmendaDisponibilizada.parlamentar}
+                      placeholder="Digite ou selecione o parlamentar"
+                      options={parlamentaresOptionsForSelectedCnes.length > 0
+                        ? parlamentaresOptionsForSelectedCnes.map(o => ({ label: o.label, value: `${o.tipo}:${o.value}` }))
+                        : [
+                            ...sheetBaseRows.filter(r => r.deputado).map(r => ({ label: `Dep.: ${r.deputado}`, value: `deputado:${r.deputado}` })),
+                            ...sheetBaseRows.filter(r => r.senador).map(r => ({ label: `Sen.: ${r.senador}`, value: `senador:${r.senador}` }))
+                          ].filter((o, i, arr) => arr.findIndex(x => x.value === o.value) === i)}
+                      onChange={(text) => {
+                        const matchedRow = sheetBaseRows.find(row => row.deputado === text || row.senador === text);
+                        const tipo = matchedRow?.deputado === text ? 'deputado' : matchedRow?.senador === text ? 'senador' : '';
+                        setNewEmendaDisponibilizada(prev => ({
+                          ...prev,
+                          parlamentar: text,
+                          tipoParlamentar: (tipo as 'deputado' | 'senador') || ''
+                        }));
+                      }}
+                      onSelect={(val) => {
+                        const colonIdx = val.indexOf(':');
+                        const tipo = val.slice(0, colonIdx) as 'deputado' | 'senador';
+                        const nome = val.slice(colonIdx + 1);
+                        setNewEmendaDisponibilizada(prev => ({
+                          ...prev,
+                          parlamentar: nome,
+                          tipoParlamentar: tipo
+                        }));
+                      }}
+                    />
+
+                    {/* Valor */}
+                    <InputField
+                      label="Valor da Emenda (R$)*"
+                      name="valor-disponibilizacao-modal"
+                      value={newEmendaDisponibilizada.valor}
+                      onChange={(e) => setNewEmendaDisponibilizada(prev => ({ ...prev, valor: maskCurrency(e.target.value) }))}
+                      placeholder="R$ 0,00"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDisponibilizarEmendaModal(false)}
+                      className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-bold text-sm uppercase tracking-wide"
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDisponibilizarEmenda}
+                      disabled={isSavingDisponibilizacao}
+                      className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm uppercase tracking-wide disabled:opacity-50"
+                    >
+                      {isSavingDisponibilizacao ? 'Salvando...' : 'Disponibilizar Emenda'}
+                    </button>
+                  </div>
+
+                  {/* Painel completo de emendas com filtros */}
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold uppercase text-gray-700 flex items-center gap-2">
+                      <Database className="w-3.5 h-3.5 text-blue-600" />
+                      Histórico de Emendas Disponibilizadas
+                    </p>
+                    {/* Resumo + filtros */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {(['todas', 'disponibilizada', 'utilizada', 'cancelada'] as const).map((f) => {
+                          const count = f === 'todas'
+                            ? emendasDisponibilizadasAdmin.length
+                            : emendasDisponibilizadasAdmin.filter((e: any) => e.status === f).length;
+                          return (
+                            <button
+                              key={f}
+                              onClick={() => setFiltroStatusEmendas(f)}
+                              className={`px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wide border transition-all ${filtroStatusEmendas === f
+                                ? f === 'disponibilizada' ? 'bg-blue-600 text-white border-blue-600'
+                                  : f === 'utilizada' ? 'bg-green-600 text-white border-green-600'
+                                  : f === 'cancelada' ? 'bg-red-500 text-white border-red-500'
+                                  : 'bg-gray-800 text-white border-gray-800'
+                                : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'}`}
+                            >
+                              {f === 'todas' ? 'Todas' : f === 'disponibilizada' ? 'Pendentes' : f === 'utilizada' ? 'Com Plano' : 'Canceladas'} ({count})
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={loadEmendasDisponibilizadasAdmin}
+                        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+                        title="Recarregar lista"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+                      </button>
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto space-y-2">
+                      {(() => {
+                        const filtered = filtroStatusEmendas === 'todas'
+                          ? emendasDisponibilizadasAdmin
+                          : emendasDisponibilizadasAdmin.filter((e: any) => e.status === filtroStatusEmendas);
+                        if (filtered.length === 0) return (
+                          <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3">Nenhum registro encontrado.</div>
+                        );
+                        return filtered.map((item: any) => (
+                          <div key={item.id} className={`border rounded-xl p-3 text-xs text-gray-700 ${item.status === 'utilizada' ? 'bg-green-50 border-green-200' : item.status === 'cancelada' ? 'bg-red-50 border-red-200 opacity-70' : 'bg-gray-50 border-gray-200'}`}>
+                            <div className="flex items-start justify-between gap-2 mb-1.5">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-gray-900 truncate">{item.entidade}</p>
+                                <p className="text-gray-500">CNES {item.cnes} • CNPJ {item.cnpj}</p>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${item.status === 'disponibilizada' ? 'bg-blue-100 text-blue-700' : item.status === 'utilizada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                  {item.status === 'disponibilizada' ? 'Pendente' : item.status === 'utilizada' ? 'Plano criado' : 'Cancelada'}
+                                </span>
+                                {item.status === 'disponibilizada' && (
+                                  <>
+                                    <button
+                                      onClick={() => openEditEmendaModal(item)}
+                                      className="p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-blue-50 hover:border-blue-400 text-gray-600 hover:text-blue-700 transition-all"
+                                      title="Editar emenda"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleCancelEmenda(item.id)}
+                                      className="p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-red-50 hover:border-red-400 text-gray-600 hover:text-red-700 transition-all"
+                                      title="Cancelar emenda"
+                                    >
+                                      <Ban className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-gray-600">
+                              {item.numero_emenda && <span>Emenda Nº <strong className="text-gray-800">{item.numero_emenda}</strong></span>}
+                              <span>{item.parlamentar}</span>
+                              <span>{item.programa}</span>
+                              <span className="font-bold text-teal-700">R$ {formatCurrencyDisplay(item.valor)}</span>
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-gray-400">
+                              <span>Disponibilizada {formatElapsedTime(item.created_at)}</span>
+                              {item.status === 'utilizada' && item.utilizada_em && (
+                                <span className="text-green-600 font-semibold">Plano cadastrado {formatElapsedTime(item.utilizada_em)}</span>
+                              )}
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+          {showEditEmendaModal && editingEmenda && currentUser?.role === 'admin' && (
+            <div className="fixed inset-0 z-[110] bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl animate-slideUp flex flex-col max-h-[90vh] overflow-hidden">
+                <div className="bg-gradient-to-r from-blue-800 to-blue-700 px-8 py-5 border-b border-blue-900/30 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-black text-white">Editar Emenda Disponibilizada</h2>
+                    <p className="text-xs text-blue-100 mt-0.5">Alterações afetam o pré-preenchimento do beneficiário.</p>
+                  </div>
+                  <button onClick={() => { setShowEditEmendaModal(false); setEditingEmenda(null); }} className="p-2 rounded-lg hover:bg-blue-600/40 transition-colors">
+                    <X className="w-5 h-5 text-white" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-7 space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-900">Número da Emenda</label>
+                      <input type="text" className="w-full px-4 py-3 rounded-xl border border-blue-300 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                        value={editingEmendaForm.numeroEmenda}
+                        onChange={(e) => setEditingEmendaForm(prev => ({ ...prev, numeroEmenda: e.target.value }))} />
+                    </div>
+                    <Select label="Programa Orçamentário*" value={editingEmendaForm.programa}
+                      onChange={(e) => setEditingEmendaForm(prev => ({ ...prev, programa: e.target.value }))}
+                      options={dynamicProgramas.map(p => ({ value: p, label: p }))} />
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-900">CNES*</label>
+                      <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-mono"
+                        value={editingEmendaForm.cnes}
+                        onChange={(e) => setEditingEmendaForm(prev => ({ ...prev, cnes: e.target.value.replace(/\D/g, '') }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-900">Entidade*</label>
+                      <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                        value={editingEmendaForm.entidade}
+                        onChange={(e) => setEditingEmendaForm(prev => ({ ...prev, entidade: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-900">CNPJ*</label>
+                      <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-mono"
+                        value={editingEmendaForm.cnpj}
+                        onChange={(e) => setEditingEmendaForm(prev => ({ ...prev, cnpj: maskCNPJ(e.target.value) }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-900">Parlamentar*</label>
+                      <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                        value={editingEmendaForm.parlamentar}
+                        onChange={(e) => setEditingEmendaForm(prev => ({ ...prev, parlamentar: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-900">Valor (R$)*</label>
+                      <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                        value={editingEmendaForm.valor}
+                        onChange={(e) => setEditingEmendaForm(prev => ({ ...prev, valor: maskCurrency(e.target.value) }))} />
+                    </div>
+                  </div>
+                </div>
+                <div className="border-t border-gray-100 px-7 py-4 flex justify-end gap-3">
+                  <button type="button" onClick={() => { setShowEditEmendaModal(false); setEditingEmenda(null); }}
+                    className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-bold text-sm">Cancelar</button>
+                  <button type="button" onClick={handleSaveEditEmenda} disabled={isSavingEditEmenda}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm disabled:opacity-50">
+                    {isSavingEditEmenda ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {showUserManagement && currentUser?.role === 'admin' && (
             <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
               <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl animate-slideUp flex flex-col max-h-[95vh] overflow-hidden">
-                
+
                 {/* HEADER FIXO */}
                 <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 px-8 py-6 border-b border-gray-700/50 flex items-center justify-between flex-shrink-0">
                   <div className="flex items-center gap-4">
@@ -6220,6 +7187,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                                           setFormData(getInitialFormData());
                                           setLastSavedFormData(null);
                                           setPlanoSalvoId(null);
+                                          setSelectedOfertaEmendaId(null);
                                           setFormHasChanges(false);
                                           setCurrentSelection({ categoria: '', item: '', metas: [''] });
                                           setCurrentMetaQualitativa({ meta: '', valor: '' });
@@ -6742,6 +7710,149 @@ Secretaria de Estado da Saúde de São Paulo`;
               
               <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2rem 2rem' }}>
                 <div className="space-y-8">
+                {/* ──── CARD COPILOT: Nova Emenda Disponível ──── */}
+                {currentUser?.role === 'user' && (
+                  isLoadingEmendasDisponiveis ? (
+                    <div className="flex items-center gap-3 text-sm text-gray-400 py-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Verificando emendas disponíveis...
+                    </div>
+                  ) : emendasDisponiveisFiltradas.length === 1 ? (() => {
+                    const oferta = emendasDisponiveisFiltradas[0];
+                    const isSel = selectedOfertaEmendaId === oferta.id;
+                    return (
+                      <div
+                        className="bg-white rounded-2xl border border-[#E5E7EB] p-6 max-w-[900px] mx-auto"
+                        style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontFamily: "Inter,'Segoe UI',sans-serif" }}
+                        id="emendas-disponiveis"
+                        role="region"
+                        aria-label="Nova Emenda Disponível"
+                      >
+                        {/* Cabeçalho do card */}
+                        <div className="flex items-start justify-between gap-4 mb-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                              <span className="text-xl leading-none">✨</span>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider leading-none mb-1">Nova Emenda Disponível</p>
+                              <p className="text-[17px] font-bold text-gray-900 leading-tight">{oferta.parlamentar}</p>
+                            </div>
+                          </div>
+                          {isSel && (
+                            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-full flex-shrink-0">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Selecionada
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Divisor */}
+                        <div className="h-px bg-[#F3F4F6] mb-5" />
+
+                        {/* Grid de informações */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4 mb-6">
+                          {oferta.tipo_parlamentar && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Tipo</p>
+                              <p className="text-[13px] font-semibold text-gray-900">{oferta.tipo_parlamentar}</p>
+                            </div>
+                          )}
+                          {oferta.numero_emenda && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Nº da Emenda</p>
+                              <p className="text-[13px] font-semibold text-gray-900">{oferta.numero_emenda}</p>
+                            </div>
+                          )}
+                          {oferta.programa && (
+                            <div className="col-span-2 sm:col-span-1">
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Programa</p>
+                              <p className="text-[13px] font-semibold text-gray-900 leading-snug">{oferta.programa}</p>
+                            </div>
+                          )}
+                          <div className="col-span-2">
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Entidade Beneficiada</p>
+                            <p className="text-[14px] font-bold text-gray-900">{oferta.entidade}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">CNES</p>
+                            <p className="text-[13px] font-mono font-semibold text-gray-900">{oferta.cnes}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">CNPJ</p>
+                            <p className="text-[13px] font-mono font-semibold text-gray-900">{oferta.cnpj}</p>
+                          </div>
+                        </div>
+
+                        {/* Rodapé: valor + botão */}
+                        <div className="flex items-center justify-between gap-4 flex-wrap pt-5 border-t border-[#F3F4F6]">
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Valor Disponível</p>
+                            <p className="text-2xl font-black text-gray-900">R$ {formatCurrencyDisplay(oferta.valor)}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => aplicarEmendaDisponibilizadaNoFormulario(oferta)}
+                            className={`h-12 px-6 rounded-xl text-[14px] font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+                              isSel
+                                ? 'bg-green-600 hover:bg-green-700 text-white focus-visible:ring-green-500'
+                                : 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white focus-visible:ring-blue-500'
+                            }`}
+                            aria-label={isSel ? 'Alterar seleção de emenda' : 'Gerar Plano de Trabalho automaticamente com esta emenda'}
+                          >
+                            {isSel ? '✓ Selecionada — Alterar' : 'Iniciar Plano de Trabalho →'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })() : emendasDisponiveisFiltradas.length > 1 ? (
+                    <div className="max-w-[900px] mx-auto space-y-3" id="emendas-disponiveis" style={{ fontFamily: "Inter,'Segoe UI',sans-serif" }}>
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                        <span aria-hidden="true">✨</span>
+                        {emendasDisponiveisFiltradas.length} emendas disponíveis para sua entidade
+                      </p>
+                      {emendasDisponiveisFiltradas.map((oferta: any) => {
+                        const isSel = selectedOfertaEmendaId === oferta.id;
+                        return (
+                          <div
+                            key={oferta.id}
+                            className={`bg-white rounded-xl border p-4 flex items-center justify-between gap-4 transition-all ${
+                              isSel ? 'border-green-400 ring-2 ring-green-400/20' : 'border-[#E5E7EB] hover:border-blue-300'
+                            }`}
+                            style={{ boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                {oferta.numero_emenda && (
+                                  <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">Nº {oferta.numero_emenda}</span>
+                                )}
+                                {oferta.tipo_parlamentar && (
+                                  <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">{oferta.tipo_parlamentar}</span>
+                                )}
+                              </div>
+                              <p className="text-[13px] font-bold text-gray-900 truncate">{oferta.parlamentar}</p>
+                              <p className="text-[12px] text-gray-500 truncate">{oferta.entidade} · CNES {oferta.cnes}</p>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <p className="text-[15px] font-black text-gray-900 hidden sm:block">R$ {formatCurrencyDisplay(oferta.valor)}</p>
+                              <button
+                                type="button"
+                                onClick={() => aplicarEmendaDisponibilizadaNoFormulario(oferta)}
+                                className={`h-9 px-4 rounded-lg text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
+                                  isSel
+                                    ? 'bg-green-600 text-white focus-visible:ring-green-500'
+                                    : 'bg-[#2563EB] text-white hover:bg-[#1D4ED8] focus-visible:ring-blue-500'
+                                }`}
+                                aria-label={`${isSel ? 'Selecionada' : 'Usar'}: emenda de ${oferta.parlamentar}`}
+                              >
+                                {isSel ? '✓ Selecionada' : 'Usar →'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null
+                )}
+
                 {/* SECTION 1: IDENTIFICAÇÃO DA EMENDA */}
                 <Section
                   id="info-emenda"
@@ -6760,6 +7871,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                       onChange={(e) => updateFormData('emenda', { ...formData.emenda, programa: e.target.value })}
                       options={dynamicProgramas.map(p => ({ value: p, label: p }))}
                       required
+                      disabled={!!selectedOfertaEmendaId && currentUser?.role === 'user'}
                     />
                     <InputField
                       label="Parlamentar Autor"
@@ -6768,6 +7880,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                       onChange={(e) => updateFormData('emenda', { ...formData.emenda, parlamentar: e.target.value })}
                       placeholder="Ex: Deputado Federal João Silva"
                       required
+                      readOnly={!!selectedOfertaEmendaId && currentUser?.role === 'user'}
                     />
                     <InputField
                       label="Nº da Emenda"
@@ -6776,6 +7889,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                       onChange={(e) => updateFormData('emenda', { ...formData.emenda, numero: e.target.value })}
                       placeholder="Ex: 12340001"
                       required
+                      readOnly={!!selectedOfertaEmendaId && currentUser?.role === 'user'}
                     />
                     <InputField
                       label="Valor do Recurso (R$)"
@@ -6786,6 +7900,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                       mask={(val: string) => maskCurrency(val)}
                       placeholder="R$ 0,00"
                       required
+                      readOnly={!!selectedOfertaEmendaId && currentUser?.role === 'user'}
                     />
                   </div>
                 </Section>
@@ -6809,6 +7924,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                       onChange={(e) => updateFormData('beneficiario', { ...formData.beneficiario, nome: e.target.value })}
                       placeholder="Exemplo: Hospital XYZ"
                       required
+                      readOnly={!!selectedOfertaEmendaId && currentUser?.role === 'user'}
                     />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                       <InputField
@@ -6819,6 +7935,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                         mask={(val: string) => maskCNPJ(val)}
                         placeholder="XX.XXX.XXX/XXXX-XX"
                         required
+                        readOnly={!!selectedOfertaEmendaId && currentUser?.role === 'user'}
                       />
                       {/* CNES - Dropdown para usuários com múltiplos CNES */}
                       {(() => {

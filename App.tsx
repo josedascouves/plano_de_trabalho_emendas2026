@@ -1200,12 +1200,19 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated, currentUser?.role, showDisponibilizarEmendaModal]);
 
-  // Carregar emendas disponíveis para usuário comum
+  // Carregar emendas disponíveis para usuário comum (em qualquer view)
   useEffect(() => {
-    if (isAuthenticated && currentUser?.role === 'user' && currentView === 'new') {
+    if (isAuthenticated && currentUser?.role === 'user') {
       loadEmendasDisponiveisUsuario();
     }
-  }, [isAuthenticated, currentUser?.role, currentView, currentUser?.cnes]);
+  }, [isAuthenticated, currentUser?.role, currentUser?.cnes]);
+
+  // Usuários comuns sempre começam na lista de planos (não no formulário vazio)
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'user' && !editingPlanId && !planoSalvoId) {
+      setCurrentView('list');
+    }
+  }, [isAuthenticated, currentUser?.role]);
 
   // Atualizar badge de notificação quando a lista admin muda
   useEffect(() => {
@@ -4972,17 +4979,19 @@ Secretaria de Estado da Saúde de São Paulo`;
             {/* ── Bloco Centro: Nav Desktop ── */}
             {isAuthenticated && (
               <nav className="hidden lg:flex items-center gap-1 flex-1 justify-center">
-                <button
-                  onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setSelectedOfertaEmendaId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaAlteradaEm(null); setMobileMenuOpen(false); }}
-                  className={`relative px-4 py-2 rounded-lg text-[13px] font-semibold tracking-wide transition-all duration-150 ${
-                    currentView === 'new'
-                      ? 'text-white bg-white/10'
-                      : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'
-                  }`}
-                >
-                  {currentView === 'new' && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-[#D92B2B] rounded-full" />}
-                  Novo Plano
-                </button>
+                {currentUser?.role !== 'user' && (
+                  <button
+                    onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setSelectedOfertaEmendaId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaAlteradaEm(null); setMobileMenuOpen(false); }}
+                    className={`relative px-4 py-2 rounded-lg text-[13px] font-semibold tracking-wide transition-all duration-150 ${
+                      currentView === 'new'
+                        ? 'text-white bg-white/10'
+                        : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'
+                    }`}
+                  >
+                    {currentView === 'new' && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-[#D92B2B] rounded-full" />}
+                    Novo Plano
+                  </button>
+                )}
                 {currentUser?.role === 'admin' && (
                   <button
                     onClick={() => { setShowDisponibilizarEmendaModal(true); setMobileMenuOpen(false); }}
@@ -5123,10 +5132,12 @@ Secretaria de Estado da Saúde de São Paulo`;
         {/* ── Menu mobile/tablet — slide down ── */}
         {isAuthenticated && mobileMenuOpen && (
           <div className="lg:hidden bg-[#0c1e3e] border-t border-white/10 px-4 pb-4 pt-3 flex flex-col gap-1">
-            <button
-              onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setSelectedOfertaEmendaId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaAlteradaEm(null); setMobileMenuOpen(false); }}
-              className={`text-left px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-colors ${currentView === 'new' ? 'bg-white/10 text-white' : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'}`}
-            >Novo Plano</button>
+            {currentUser?.role !== 'user' && (
+              <button
+                onClick={() => { setCurrentView('new'); setActiveSection('info-emenda'); setSentSuccess(false); setEditingPlanId(null); setPlanoSalvoId(null); setSelectedOfertaEmendaId(null); setFormData(getInitialFormData()); setLastSavedFormData(null); setFormHasChanges(false); setJustificativaAlteradaEm(null); setMobileMenuOpen(false); }}
+                className={`text-left px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-colors ${currentView === 'new' ? 'bg-white/10 text-white' : 'text-[#B8C1D1] hover:text-white hover:bg-white/8'}`}
+              >Novo Plano</button>
+            )}
             {currentUser?.role === 'admin' && (
               <button
                 onClick={() => { setShowDisponibilizarEmendaModal(true); setMobileMenuOpen(false); }}
@@ -6833,6 +6844,45 @@ Secretaria de Estado da Saúde de São Paulo`;
                 className="hidden"
                 onChange={(e) => { if (inlineExtratoUploadId) handleInlineExtratoUpload(inlineExtratoUploadId, e); }}
               />
+
+              {/* BANNER: Emenda(s) disponível(is) para usuário */}
+              {currentUser?.role === 'user' && emendasDisponiveisFiltradas.length > 0 && (
+                <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-5 flex items-center justify-between gap-4 shadow-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
+                      <span className="text-2xl leading-none">✨</span>
+                    </div>
+                    <div>
+                      <p className="font-black text-white text-base leading-tight">
+                        {emendasDisponiveisFiltradas.length === 1
+                          ? 'Você tem uma emenda disponível para cadastro'
+                          : `Você tem ${emendasDisponiveisFiltradas.length} emendas disponíveis para cadastro`}
+                      </p>
+                      <p className="text-blue-100 text-sm mt-0.5">
+                        {emendasDisponiveisFiltradas[0].parlamentar}
+                        {emendasDisponiveisFiltradas[0].valor ? ` · R$ ${formatCurrencyDisplay(emendasDisponiveisFiltradas[0].valor)}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setCurrentView('new');
+                      setActiveSection('info-emenda');
+                      setSentSuccess(false);
+                      setEditingPlanId(null);
+                      setPlanoSalvoId(null);
+                      setSelectedOfertaEmendaId(null);
+                      setFormData(getInitialFormData());
+                      setLastSavedFormData(null);
+                      setFormHasChanges(false);
+                      setJustificativaAlteradaEm(null);
+                    }}
+                    className="flex-shrink-0 px-5 py-2.5 bg-white text-blue-700 rounded-xl font-black text-sm hover:bg-blue-50 transition-colors shadow-sm"
+                  >
+                    Iniciar Plano →
+                  </button>
+                </div>
+              )}
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-base font-black text-gray-900 uppercase tracking-wider">Meus Planos de Trabalho</h2>
@@ -7692,6 +7742,26 @@ Secretaria de Estado da Saúde de São Paulo`;
           {/* VIEW: NOVO PLANO - ONE PAGE DESIGN */}
           {currentView === 'new' && (
             <>
+              {/* BLOQUEIO: usuário sem emenda disponível e não está editando */}
+              {currentUser?.role === 'user' && !editingPlanId && !planoSalvoId && emendasDisponiveisFiltradas.length === 0 && !isLoadingEmendasDisponiveis ? (
+                <div className="flex flex-col items-center justify-center py-24 px-4 text-center animate-fadeIn">
+                  <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center mb-6">
+                    <span className="text-4xl">📋</span>
+                  </div>
+                  <h3 className="text-xl font-black text-gray-800 mb-2">Nenhuma emenda disponível</h3>
+                  <p className="text-gray-500 text-sm max-w-sm mb-8">
+                    Ainda não há emendas parlamentares disponibilizadas para o seu cadastro.<br />
+                    Aguarde o administrador disponibilizar uma emenda para você.
+                  </p>
+                  <button
+                    onClick={() => setCurrentView('list')}
+                    className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors"
+                  >
+                    Ver Meus Planos
+                  </button>
+                </div>
+              ) : (
+              <>
               <StepperProgress 
                 steps={sections.map((s, i) => {
                   const shortLabels = ['Emenda', 'Beneficiário', 'Estratégia', 'Metas', 'Indicadores', 'Financeiro', 'Finalizar'];
@@ -8907,6 +8977,8 @@ Secretaria de Estado da Saúde de São Paulo`;
             </div>
             </>
           )}
+          </>
+        )}
         </div>
       </main>
 

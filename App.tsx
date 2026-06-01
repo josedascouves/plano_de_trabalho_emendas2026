@@ -6845,6 +6845,18 @@ Secretaria de Estado da Saúde de São Paulo`;
                 onChange={(e) => { if (inlineExtratoUploadId) handleInlineExtratoUpload(inlineExtratoUploadId, e); }}
               />
 
+              {/* AVISO INFORMATIVO FIXO para usuários */}
+              {currentUser?.role === 'user' && emendasDisponiveisFiltradas.length === 0 && !isLoadingEmendasDisponiveis && (
+                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
+                  <span className="text-lg leading-none mt-0.5">ℹ️</span>
+                  <p className="text-amber-800 text-sm leading-relaxed">
+                    <span className="font-black">Novos Planos de Trabalho</span> somente serão iniciados após a disponibilização de emenda pelo
+                    <span className="font-bold"> Grupo de Controle Financeiro — Emendas Federais</span>.
+                    Aguarde o contato da equipe.
+                  </p>
+                </div>
+              )}
+
               {/* BANNER: Emenda(s) disponível(is) para usuário */}
               {currentUser?.role === 'user' && emendasDisponiveisFiltradas.length > 0 && (
                 <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-5 flex items-center justify-between gap-4 shadow-lg">
@@ -7744,15 +7756,21 @@ Secretaria de Estado da Saúde de São Paulo`;
             <>
               {/* BLOQUEIO: usuário sem emenda disponível e não está editando */}
               {currentUser?.role === 'user' && !editingPlanId && !planoSalvoId && emendasDisponiveisFiltradas.length === 0 && !isLoadingEmendasDisponiveis ? (
-                <div className="flex flex-col items-center justify-center py-24 px-4 text-center animate-fadeIn">
-                  <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center mb-6">
-                    <span className="text-4xl">📋</span>
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center animate-fadeIn">
+                  <div className="w-20 h-20 rounded-2xl bg-blue-50 flex items-center justify-center mb-6">
+                    <span className="text-4xl">🏛️</span>
                   </div>
-                  <h3 className="text-xl font-black text-gray-800 mb-2">Nenhuma emenda disponível</h3>
-                  <p className="text-gray-500 text-sm max-w-sm mb-8">
-                    Ainda não há emendas parlamentares disponibilizadas para o seu cadastro.<br />
-                    Aguarde o administrador disponibilizar uma emenda para você.
-                  </p>
+                  <h3 className="text-xl font-black text-gray-800 mb-3">Aguardando disponibilização de emenda</h3>
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl px-6 py-5 max-w-md mb-8 text-left">
+                    <p className="text-amber-800 text-sm font-semibold mb-1">ℹ️ Informativo</p>
+                    <p className="text-amber-700 text-sm leading-relaxed">
+                      Novos Planos de Trabalho somente serão iniciados após a disponibilização de emenda pelo
+                      <span className="font-black"> Grupo de Controle Financeiro — Emendas Federais</span>.
+                    </p>
+                    <p className="text-amber-600 text-xs mt-2">
+                      Quando uma emenda for disponibilizada para o seu CNES, você receberá acesso automático ao formulário.
+                    </p>
+                  </div>
                   <button
                     onClick={() => setCurrentView('list')}
                     className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors"

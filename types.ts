@@ -74,6 +74,19 @@ export interface UserStats {
   disabled_users: number;
 }
 
+export interface JustificativaEstruturada {
+  /** 01 | O QUE SERÁ REALIZADO */
+  oQueSeraRealizado: string;
+  /** 02 | ONDE SERÁ EXECUTADO (CNES) */
+  ondeSeraExecutado: string;
+  /** 03 | POR QUE SERÁ REALIZADO (Justificativa) */
+  porQueSeraRealizado: string;
+  /** 04 | COM QUAIS RECURSOS (Custeio) */
+  comQuaisRecursos: string;
+  /** 05 | QUAL A META A SER ALCANÇADA (Meta) */
+  qualAMeta: string;
+}
+
 export interface FormState {
   emenda: {
     parlamentar: string;
@@ -111,6 +124,6 @@ export interface FormState {
     codigo: string;
     valor: string;
   }>;
-  justificativa: string;
+  justificativa: JustificativaEstruturada;
   responsavelAssinatura: string;
 }

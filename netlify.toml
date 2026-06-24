@@ -8,3 +8,17 @@
 [context.production]
   command = "npm run build"
   publish = "dist"
+
+# Sem cache para o HTML principal (garante sempre a versão mais recente)
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
+# Assets com hash no nome: cache longo (imutáveis)
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

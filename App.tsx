@@ -68,48 +68,16 @@ import {
   Ban,
   Menu
 } from 'lucide-react';
-import { FormState, User, AcaoServico, NaturezaDespesa, JustificativaEstruturada } from './types';
+import { FormState, User, AcaoServico, NaturezaDespesa } from './types';
 
-// ─── Helpers para justificativa estruturada (5 critérios SAES) ────────────────
-const JUSTIFICATIVA_INICIAL: JustificativaEstruturada = {
-  oQueSeraRealizado: '',
-  ondeSeraExecutado: '',
-  porQueSeraRealizado: '',
-  comQuaisRecursos: '',
-  qualAMeta: ''
-};
-
-const serializeJustificativa = (j: JustificativaEstruturada): string => JSON.stringify(j);
-
-const parseJustificativa = (raw: string | null | undefined): JustificativaEstruturada => {
-  if (!raw) return { ...JUSTIFICATIVA_INICIAL };
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === 'object' && parsed !== null && 'oQueSeraRealizado' in parsed) {
-      return {
-        oQueSeraRealizado: parsed.oQueSeraRealizado || '',
-        ondeSeraExecutado: parsed.ondeSeraExecutado || '',
-        porQueSeraRealizado: parsed.porQueSeraRealizado || '',
-        comQuaisRecursos: parsed.comQuaisRecursos || '',
-        qualAMeta: parsed.qualAMeta || ''
-      };
-    }
-  } catch {}
-  // Compatibilidade com textos antigos (formato plano): colocar no campo 03
-  return { ...JUSTIFICATIVA_INICIAL, porQueSeraRealizado: raw };
-};
-
-const getJustificativaTexto = (j: JustificativaEstruturada | string | null | undefined): string => {
-  if (!j) return '';
-  if (typeof j === 'string') return j;
-  const parts: string[] = [];
-  if (j.oQueSeraRealizado?.trim()) parts.push(`01 | O QUE SERÁ REALIZADO:\n${j.oQueSeraRealizado.trim()}`);
-  if (j.ondeSeraExecutado?.trim()) parts.push(`02 | ONDE SERÁ EXECUTADO (CNES):\n${j.ondeSeraExecutado.trim()}`);
-  if (j.porQueSeraRealizado?.trim()) parts.push(`03 | POR QUE SERÁ REALIZADO:\n${j.porQueSeraRealizado.trim()}`);
-  if (j.comQuaisRecursos?.trim()) parts.push(`04 | COM QUAIS RECURSOS (CUSTEIO):\n${j.comQuaisRecursos.trim()}`);
-  if (j.qualAMeta?.trim()) parts.push(`05 | QUAL A META A SER ALCANÇADA:\n${j.qualAMeta.trim()}`);
-  return parts.join('\n\n');
-};
+// ─── Critérios SAES — usados como guia visual na justificativa ────────────────
+const CRITERIOS_SAES = [
+  { num: '01', label: 'O QUE SERÁ REALIZADO', desc: 'Descrição clara e objetiva do objeto/ação a ser executada, especificando as atividades previstas.', color: 'bg-blue-600', badge: 'bg-blue-100 text-blue-800', border: 'border-blue-300' },
+  { num: '02', label: 'ONDE SERÁ EXECUTADO (CNES)', desc: 'Identificação completa do estabelecimento de saúde onde as atividades serão realizadas, por meio do CNES.', color: 'bg-green-600', badge: 'bg-green-100 text-green-800', border: 'border-green-300' },
+  { num: '03', label: 'POR QUE SERÁ REALIZADO (Justificativa)', desc: 'Justificativa técnica que fundamenta a necessidade da ação e sua relevância para a população e para o SUS.', color: 'bg-red-600', badge: 'bg-red-100 text-red-800', border: 'border-red-300' },
+  { num: '04', label: 'COM QUAIS RECURSOS (Custeio)', desc: 'Detalhamento dos recursos financeiros necessários, com justificativa dos itens de despesa e valores.', color: 'bg-amber-500', badge: 'bg-amber-100 text-amber-800', border: 'border-amber-300' },
+  { num: '05', label: 'QUAL A META A SER ALCANÇADA (Meta)', desc: 'Definição das metas quantitativas e/ou qualitativas, bem como os resultados esperados com a execução.', color: 'bg-purple-600', badge: 'bg-purple-100 text-purple-800', border: 'border-purple-300' },
+] as const;
 import { 
   DIRETRIZES, 
   PROGRAMAS,
@@ -477,7 +445,7 @@ const App: React.FC = () => {
     acoesServicos: [],
     metasQualitativas: [],
     naturezasDespesa: [],
-    justificativa: { ...JUSTIFICATIVA_INICIAL },
+    justificativa: '',
     responsavelAssinatura: ''
   });
 
@@ -661,7 +629,7 @@ const App: React.FC = () => {
       acoesServicos: [],
       metasQualitativas: [],
       naturezasDespesa: [],
-      justificativa: { ...JUSTIFICATIVA_INICIAL },
+      justificativa: '',
       responsavelAssinatura: ''
     };
   };
@@ -2431,15 +2399,8 @@ const App: React.FC = () => {
       'metas-qualitativas': formData.metasQualitativas.length > 0,
       // Seção 6: Execução Financeira - OPCIONAL (só completa se houver itens)
       'execucao-financeira': formData.naturezasDespesa.length > 0,
-      // Seção 7: Finalização - completa se todos os 5 critérios SAES e responsável preenchidos
-      'finalizacao': !!(
-        formData.justificativa.oQueSeraRealizado?.trim() &&
-        formData.justificativa.ondeSeraExecutado?.trim() &&
-        formData.justificativa.porQueSeraRealizado?.trim() &&
-        formData.justificativa.comQuaisRecursos?.trim() &&
-        formData.justificativa.qualAMeta?.trim() &&
-        formData.responsavelAssinatura?.trim()
-      )
+      // Seção 7: Finalização - completa se justificativa preenchida e responsável informado
+      'finalizacao': !!(formData.justificativa?.trim() && formData.responsavelAssinatura?.trim())
     }));
   }, [formData]);
 
@@ -2636,7 +2597,7 @@ const App: React.FC = () => {
             valor: (n.valor ? (Number(n.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '0,00')
           };
         }),
-        justificativa: parseJustificativa((plano.justificativa || '').trim()),
+        justificativa: (plano.justificativa || '').trim(),
         responsavelAssinatura: (plano.responsavel_assinatura || '').trim()
       };
       
@@ -3086,7 +3047,7 @@ const App: React.FC = () => {
         plano.programa === formData.emenda.programa &&
         plano.beneficiario_nome === formData.beneficiario.nome &&
         plano.beneficiario_cnpj === formData.beneficiario.cnpj &&
-        plano.justificativa === serializeJustificativa(formData.justificativa);
+        plano.justificativa === formData.justificativa;
 
       // Comparar quantidades de dados relacionados
       const acoesSame = plano.acoes_servicos?.length === formData.acoesServicos.length;
@@ -3132,7 +3093,7 @@ const App: React.FC = () => {
             conta_bancaria: formData.beneficiario.contaBancaria || null,
             extrato_url: formData.beneficiario.extratoUrl || null,
             extrato_filename: formData.beneficiario.extratoFilename || null,
-            justificativa: serializeJustificativa(formData.justificativa),
+            justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
             created_by_name: currentUser?.name || null,
             created_by_email: currentUser?.username || user.email || null,
@@ -3195,7 +3156,7 @@ const App: React.FC = () => {
             conta_bancaria: formData.beneficiario.contaBancaria || null,
             extrato_url: formData.beneficiario.extratoUrl || null,
             extrato_filename: formData.beneficiario.extratoFilename || null,
-            justificativa: serializeJustificativa(formData.justificativa),
+            justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
             pdf_url: null,
             created_by: user.id,
@@ -3411,7 +3372,7 @@ const App: React.FC = () => {
           .single();
         
         const newEditCount = (currentPlano?.edit_count || 0) + 1;
-        const justificativaMudou = (currentPlano?.justificativa || '') !== serializeJustificativa(formData.justificativa);
+        const justificativaMudou = (currentPlano?.justificativa || '') !== formData.justificativa;
         
         // Atualizar plano existente
         const valorTotalUpdate = parseCurrency(formData.emenda.valor);
@@ -3430,7 +3391,7 @@ const App: React.FC = () => {
             conta_bancaria: formData.beneficiario.contaBancaria || null,
             extrato_url: formData.beneficiario.extratoUrl || null,
             extrato_filename: formData.beneficiario.extratoFilename || null,
-            justificativa: serializeJustificativa(formData.justificativa),
+            justificativa: formData.justificativa,
             responsavel_assinatura: formData.responsavelAssinatura,
             diretriz_id: formData.planejamento.diretrizId || null,
             objetivo_id: formData.planejamento.objetivoId || null,
@@ -3564,7 +3525,7 @@ const App: React.FC = () => {
           conta_bancaria: formData.beneficiario.contaBancaria || null,
           extrato_url: formData.beneficiario.extratoUrl || null,
           extrato_filename: formData.beneficiario.extratoFilename || null,
-          justificativa: serializeJustificativa(formData.justificativa),
+          justificativa: formData.justificativa,
           responsavel_assinatura: formData.responsavelAssinatura,
           diretriz_id: formData.planejamento.diretrizId || null,
           objetivo_id: formData.planejamento.objetivoId || null,
@@ -3745,17 +3706,9 @@ const App: React.FC = () => {
       });
     }
 
-    // JUSTIFICATIVA TÉCNICA — 5 critérios SAES obrigatórios
-    if (!formData.justificativa.oQueSeraRealizado?.trim())
-      missingFields.push('Justificativa — 01. O QUE SERÁ REALIZADO');
-    if (!formData.justificativa.ondeSeraExecutado?.trim())
-      missingFields.push('Justificativa — 02. ONDE SERÁ EXECUTADO (CNES)');
-    if (!formData.justificativa.porQueSeraRealizado?.trim())
-      missingFields.push('Justificativa — 03. POR QUE SERÁ REALIZADO (Justificativa)');
-    if (!formData.justificativa.comQuaisRecursos?.trim())
-      missingFields.push('Justificativa — 04. COM QUAIS RECURSOS (Custeio)');
-    if (!formData.justificativa.qualAMeta?.trim())
-      missingFields.push('Justificativa — 05. QUAL A META A SER ALCANÇADA (Meta)');
+    // JUSTIFICATIVA TÉCNICA - obrigatório
+    if (!formData.justificativa?.trim())
+      missingFields.push('Justificativa Técnica (Seção 7)');
 
     // RESPONSÁVEL PELA ASSINATURA - obrigatório
     if (!formData.responsavelAssinatura?.trim()) missingFields.push('Responsável pela Assinatura');
@@ -4843,20 +4796,13 @@ Secretaria de Estado da Saúde de São Paulo`;
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Justificativa Técnica</h2>
               </div>
               <div className="border-t border-gray-300 pt-4 pl-11">
-                <p className="text-xs text-gray-600 mb-4">Análise SAES — 5 Critérios de Avaliação do Plano de Trabalho</p>
-                <div className="space-y-3">
-                  {([
-                    { num: '01', label: 'O QUE SERÁ REALIZADO', value: formData.justificativa.oQueSeraRealizado, border: 'border-blue-600', badge: 'bg-blue-100 text-blue-800' },
-                    { num: '02', label: 'ONDE SERÁ EXECUTADO (CNES)', value: formData.justificativa.ondeSeraExecutado, border: 'border-green-600', badge: 'bg-green-100 text-green-800' },
-                    { num: '03', label: 'POR QUE SERÁ REALIZADO (Justificativa)', value: formData.justificativa.porQueSeraRealizado, border: 'border-red-700', badge: 'bg-red-100 text-red-800' },
-                    { num: '04', label: 'COM QUAIS RECURSOS (Custeio)', value: formData.justificativa.comQuaisRecursos, border: 'border-amber-600', badge: 'bg-amber-100 text-amber-800' },
-                    { num: '05', label: 'QUAL A META A SER ALCANÇADA (Meta)', value: formData.justificativa.qualAMeta, border: 'border-purple-600', badge: 'bg-purple-100 text-purple-800' },
-                  ] as const).map(({ num, label, value, border, badge }) => (
-                    <div key={num} className={`border-l-4 ${border} bg-gray-50 print:bg-white pl-4 pr-3 py-3`}>
-                      <p className={`inline-block text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded mb-1 ${badge}`}>{num} | {label}</p>
-                      <p className="text-xs leading-relaxed text-gray-900 text-justify whitespace-pre-wrap break-words">{value || '—'}</p>
-                    </div>
+                <p className="text-xs text-gray-500 mb-3 flex flex-wrap gap-x-3 gap-y-1">
+                  {CRITERIOS_SAES.map(({ num, label, badge }) => (
+                    <span key={num} className={`inline-block text-[9px] font-black px-1.5 py-0.5 rounded ${badge}`}>{num} | {label}</span>
                   ))}
+                </p>
+                <div className="border-l-4 border-red-700 bg-gray-50 print:bg-white pl-4 pr-3 py-3 text-xs leading-relaxed text-gray-900 text-justify whitespace-pre-wrap break-words">
+                  {formData.justificativa || '—'}
                 </div>
                 {justificativaAlteradaEm && (
                   <p className="mt-2 text-[10px] text-gray-400 italic text-right">
@@ -5507,28 +5453,11 @@ Secretaria de Estado da Saúde de São Paulo`;
                             )}
                           </div>
                           <div className="p-5 space-y-4">
-                            {(() => {
-                              const justData = parseJustificativa(plano.justificativa);
-                              const criterios = [
-                                { num: '01', label: 'O QUE SERÁ REALIZADO', value: justData.oQueSeraRealizado, color: 'border-blue-500', badge: 'bg-blue-100 text-blue-800' },
-                                { num: '02', label: 'ONDE SERÁ EXECUTADO (CNES)', value: justData.ondeSeraExecutado, color: 'border-green-500', badge: 'bg-green-100 text-green-800' },
-                                { num: '03', label: 'POR QUE SERÁ REALIZADO', value: justData.porQueSeraRealizado, color: 'border-red-500', badge: 'bg-red-100 text-red-800' },
-                                { num: '04', label: 'COM QUAIS RECURSOS (CUSTEIO)', value: justData.comQuaisRecursos, color: 'border-amber-500', badge: 'bg-amber-100 text-amber-800' },
-                                { num: '05', label: 'QUAL A META A SER ALCANÇADA', value: justData.qualAMeta, color: 'border-purple-500', badge: 'bg-purple-100 text-purple-800' },
-                              ];
-                              return (
-                                <div className="space-y-2">
-                                  {criterios.map(({ num, label, value, color, badge }) => (
-                                    <div key={num} className={`border-l-4 ${color} pl-3 pr-2 py-2 bg-gray-50 rounded-r-lg`}>
-                                      <span className={`inline-block text-[9px] font-black px-1.5 py-0.5 rounded mb-1 ${badge}`}>{num} | {label}</span>
-                                      <p className="text-xs text-gray-800 whitespace-pre-wrap break-words leading-relaxed">{value || <span className="text-gray-400 italic">Não preenchido</span>}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            })()}
+                            <div className="border-l-4 border-red-600 bg-gray-50 pl-4 pr-3 py-3 text-sm leading-relaxed text-gray-900 whitespace-pre-wrap break-words rounded-r-lg max-h-64 overflow-y-auto">
+                              {plano.justificativa || '—'}
+                            </div>
                             <div className="flex items-center justify-between text-xs text-gray-500">
-                              <span>{getJustificativaTexto(parseJustificativa(plano.justificativa)).length.toLocaleString('pt-BR')} caracteres totais</span>
+                              <span>{(plano.justificativa || '').length.toLocaleString('pt-BR')} caracteres</span>
                               <span>Responsável: <strong className="text-gray-700">{plano.responsavel_assinatura || '—'}</strong></span>
                             </div>
                           </div>
@@ -8871,152 +8800,46 @@ Secretaria de Estado da Saúde de São Paulo`;
                 >
                   {!sentSuccess ? (
                     <div className="space-y-6">
-                      {/* BLOCO: Orientação SAES — 5 Critérios */}
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-5">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-full flex-shrink-0">
-                            <FileCheck className="w-5 h-5 text-white" />
+                      {/* GUIA: 5 Critérios SAES como norteadores */}
+                      <div className="bg-gradient-to-br from-slate-50 to-blue-50 border border-blue-200 rounded-2xl overflow-hidden">
+                        <div className="flex items-center gap-3 px-5 py-4 bg-blue-700">
+                          <div className="flex items-center justify-center w-8 h-8 bg-white/20 rounded-lg flex-shrink-0">
+                            <BookOpen className="w-4 h-4 text-white" />
                           </div>
                           <div>
-                            <h3 className="text-sm font-black text-blue-900 uppercase tracking-wide">Orientação Técnica — Justificativa SAES</h3>
-                            <p className="text-xs text-blue-700 mt-0.5">A análise é técnica, criteriosa e orientada à qualidade do gasto público. Preencha os 5 critérios abaixo.</p>
+                            <h3 className="text-sm font-black text-white uppercase tracking-wide">Orientação Técnica SAES — Como a justificativa será analisada</h3>
+                            <p className="text-[11px] text-blue-200 mt-0.5">Sua justificativa deve contemplar os 5 elementos abaixo. Use-os como guia ao redigir o texto.</p>
                           </div>
                         </div>
-
-                        <div className="space-y-4">
-                          {/* Critério 01 */}
-                          <div className="bg-white rounded-xl border-2 border-blue-200 overflow-hidden">
-                            <div className="bg-blue-600 px-4 py-2 flex items-center gap-2">
-                              <span className="text-[10px] font-black text-white bg-blue-800 px-2 py-0.5 rounded">01</span>
-                              <span className="text-xs font-black text-white uppercase tracking-wider">O QUE SERÁ REALIZADO</span>
-                            </div>
-                            <div className="p-3">
-                              <p className="text-[11px] text-blue-700 mb-2">Descrição clara e objetiva do objeto/ação a ser executada, especificando as atividades previstas.</p>
-                              <TextArea
-                                label=""
-                                value={formData.justificativa.oQueSeraRealizado}
-                                onChange={(e) => updateFormData('justificativa', { ...formData.justificativa, oQueSeraRealizado: e.target.value })}
-                                placeholder="Descreva de forma clara e objetiva o que será realizado com os recursos desta emenda..."
-                                rows={4}
-                                required
-                              />
-                              <div className={`mt-1 text-[10px] font-bold ${formData.justificativa.oQueSeraRealizado?.trim() ? 'text-green-600' : 'text-red-500'}`}>
-                                {formData.justificativa.oQueSeraRealizado?.trim() ? `✓ ${formData.justificativa.oQueSeraRealizado.trim().length} caracteres` : '⚠ Campo obrigatório'}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Critério 02 */}
-                          <div className="bg-white rounded-xl border-2 border-green-200 overflow-hidden">
-                            <div className="bg-green-600 px-4 py-2 flex items-center gap-2">
-                              <span className="text-[10px] font-black text-white bg-green-800 px-2 py-0.5 rounded">02</span>
-                              <span className="text-xs font-black text-white uppercase tracking-wider">ONDE SERÁ EXECUTADO (CNES)</span>
-                            </div>
-                            <div className="p-3">
-                              <p className="text-[11px] text-green-700 mb-2">Identificação completa do estabelecimento de saúde onde as atividades serão realizadas, por meio do CNES.</p>
-                              <TextArea
-                                label=""
-                                value={formData.justificativa.ondeSeraExecutado}
-                                onChange={(e) => updateFormData('justificativa', { ...formData.justificativa, ondeSeraExecutado: e.target.value })}
-                                placeholder={`Informe o CNES ${formData.beneficiario.cnes ? `(${formData.beneficiario.cnes}) ` : ''}e o estabelecimento de saúde onde as ações serão executadas...`}
-                                rows={3}
-                                required
-                              />
-                              <div className={`mt-1 text-[10px] font-bold ${formData.justificativa.ondeSeraExecutado?.trim() ? 'text-green-600' : 'text-red-500'}`}>
-                                {formData.justificativa.ondeSeraExecutado?.trim() ? `✓ ${formData.justificativa.ondeSeraExecutado.trim().length} caracteres` : '⚠ Campo obrigatório'}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Critério 03 */}
-                          <div className="bg-white rounded-xl border-2 border-red-200 overflow-hidden">
-                            <div className="bg-red-600 px-4 py-2 flex items-center gap-2">
-                              <span className="text-[10px] font-black text-white bg-red-800 px-2 py-0.5 rounded">03</span>
-                              <span className="text-xs font-black text-white uppercase tracking-wider">POR QUE SERÁ REALIZADO (Justificativa)</span>
-                            </div>
-                            <div className="p-3">
-                              <p className="text-[11px] text-red-700 mb-2">Apresentação da justificativa técnica que fundamenta a necessidade da ação e sua relevância para a população e para o SUS.</p>
-                              <TextArea
-                                label=""
-                                value={formData.justificativa.porQueSeraRealizado}
-                                onChange={(e) => updateFormData('justificativa', { ...formData.justificativa, porQueSeraRealizado: e.target.value })}
-                                placeholder="Justificativa técnica baseada em dados epidemiológicos, demanda reprimida, déficit de infraestrutura ou estudos de viabilidade..."
-                                rows={5}
-                                required
-                              />
-                              <div className={`mt-1 text-[10px] font-bold ${formData.justificativa.porQueSeraRealizado?.trim() ? 'text-green-600' : 'text-red-500'}`}>
-                                {formData.justificativa.porQueSeraRealizado?.trim() ? `✓ ${formData.justificativa.porQueSeraRealizado.trim().length} caracteres` : '⚠ Campo obrigatório'}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Critério 04 */}
-                          <div className="bg-white rounded-xl border-2 border-amber-200 overflow-hidden">
-                            <div className="bg-amber-500 px-4 py-2 flex items-center gap-2">
-                              <span className="text-[10px] font-black text-white bg-amber-700 px-2 py-0.5 rounded">04</span>
-                              <span className="text-xs font-black text-white uppercase tracking-wider">COM QUAIS RECURSOS (Custeio)</span>
-                            </div>
-                            <div className="p-3">
-                              <p className="text-[11px] text-amber-700 mb-2">Detalhamento dos recursos financeiros necessários, com justificativa dos itens de despesa e valores.</p>
-                              <TextArea
-                                label=""
-                                value={formData.justificativa.comQuaisRecursos}
-                                onChange={(e) => updateFormData('justificativa', { ...formData.justificativa, comQuaisRecursos: e.target.value })}
-                                placeholder="Descreva como os recursos serão utilizados, justificando os itens de despesa e suas naturezas conforme informado nas seções anteriores..."
-                                rows={4}
-                                required
-                              />
-                              <div className={`mt-1 text-[10px] font-bold ${formData.justificativa.comQuaisRecursos?.trim() ? 'text-green-600' : 'text-red-500'}`}>
-                                {formData.justificativa.comQuaisRecursos?.trim() ? `✓ ${formData.justificativa.comQuaisRecursos.trim().length} caracteres` : '⚠ Campo obrigatório'}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Critério 05 */}
-                          <div className="bg-white rounded-xl border-2 border-purple-200 overflow-hidden">
-                            <div className="bg-purple-600 px-4 py-2 flex items-center gap-2">
-                              <span className="text-[10px] font-black text-white bg-purple-800 px-2 py-0.5 rounded">05</span>
-                              <span className="text-xs font-black text-white uppercase tracking-wider">QUAL A META A SER ALCANÇADA (Meta)</span>
-                            </div>
-                            <div className="p-3">
-                              <p className="text-[11px] text-purple-700 mb-2">Definição das metas quantitativas e/ou qualitativas, bem como dos resultados esperados com a execução do Plano de Trabalho.</p>
-                              <TextArea
-                                label=""
-                                value={formData.justificativa.qualAMeta}
-                                onChange={(e) => updateFormData('justificativa', { ...formData.justificativa, qualAMeta: e.target.value })}
-                                placeholder="Descreva as metas quantitativas e qualitativas esperadas com a execução deste plano de trabalho..."
-                                rows={4}
-                                required
-                              />
-                              <div className={`mt-1 text-[10px] font-bold ${formData.justificativa.qualAMeta?.trim() ? 'text-green-600' : 'text-red-500'}`}>
-                                {formData.justificativa.qualAMeta?.trim() ? `✓ ${formData.justificativa.qualAMeta.trim().length} caracteres` : '⚠ Campo obrigatório'}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Barra de progresso dos 5 critérios */}
-                        {(() => {
-                          const filled = [
-                            formData.justificativa.oQueSeraRealizado?.trim(),
-                            formData.justificativa.ondeSeraExecutado?.trim(),
-                            formData.justificativa.porQueSeraRealizado?.trim(),
-                            formData.justificativa.comQuaisRecursos?.trim(),
-                            formData.justificativa.qualAMeta?.trim(),
-                          ].filter(Boolean).length;
-                          return (
-                            <div className="mt-4 flex items-center gap-3">
-                              <div className="flex gap-1 flex-1">
-                                {[1,2,3,4,5].map(i => (
-                                  <div key={i} className={`h-2 flex-1 rounded-full transition-all ${i <= filled ? 'bg-green-500' : 'bg-gray-200'}`} />
-                                ))}
-                              </div>
-                              <span className={`text-xs font-black ${filled === 5 ? 'text-green-600' : 'text-gray-500'}`}>
-                                {filled}/5 critérios {filled === 5 ? '✓ Completo' : 'preenchidos'}
+                        <div className="grid grid-cols-1 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-blue-100">
+                          {CRITERIOS_SAES.map(({ num, label, desc, color, badge }) => (
+                            <div key={num} className="px-3 py-3 flex flex-col gap-1">
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded w-fit ${badge}`}>
+                                {num}
                               </span>
+                              <p className="text-[11px] font-black text-gray-800 leading-tight">{label}</p>
+                              <p className="text-[10px] text-gray-500 leading-snug">{desc}</p>
                             </div>
-                          );
-                        })()}
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* CAMPO: Justificativa Técnica (texto livre) */}
+                      <div>
+                        <TextArea
+                          label="Justificativa Técnica"
+                          value={formData.justificativa}
+                          onChange={(e) => updateFormData('justificativa', e.target.value)}
+                          placeholder={`Redija a justificativa técnica contemplando os 5 critérios SAES acima:\n\n• O QUE será realizado (ações e atividades previstas)\n• ONDE será executado (CNES ${formData.beneficiario.cnes ? `– ${formData.beneficiario.cnes} ` : ''}e estabelecimento)\n• POR QUE é necessário (contexto epidemiológico, demanda reprimida)\n• COM QUAIS RECURSOS (itens de despesa e valores)\n• QUAL A META esperada (resultados quantitativos e qualitativos)`}
+                          rows={12}
+                          required
+                        />
+                        <div className={`mt-2 text-xs font-bold tracking-wider flex items-center gap-2 ${formData.justificativa?.trim() ? 'text-green-600' : 'text-red-500'}`}>
+                          {formData.justificativa?.trim()
+                            ? <><CheckCircle2 className="w-3.5 h-3.5" /> {formData.justificativa.trim().length.toLocaleString('pt-BR')} caracteres</>
+                            : <><AlertCircle className="w-3.5 h-3.5" /> Campo obrigatório — redija a justificativa técnica</>
+                          }
+                        </div>
                       </div>
 
                       <InputField

@@ -8788,17 +8788,51 @@ Secretaria de Estado da Saúde de São Paulo`;
                 </Section>
 
                 {/* SECTION 7: FINALIZAÇÃO */}
+                {(() => {
+                  const secoesPendentes = [
+                    { id: 'info-emenda', label: '1. Identificação da Emenda' },
+                    { id: 'beneficiario', label: '2. Dados do Beneficiário' },
+                    { id: 'alinhamento', label: '3. Alinhamento Estratégico' },
+                    { id: 'metas-quantitativas', label: '4. Metas Quantitativas' },
+                  ].filter(s => !sectionStatus[s.id as keyof typeof sectionStatus]);
+                  const finalizacaoUnlocked = secoesPendentes.length === 0;
+                  return (
                 <Section
                   id="finalizacao"
                   title="Finalização"
-                  description="Revise, gere PDF, assine e envie para a SES-SP"
+                  description={finalizacaoUnlocked ? "Revise, gere PDF, assine e envie para a SES-SP" : "Complete as seções obrigatórias para liberar esta etapa"}
                   icon={<FileCheck className="w-6 h-6" />}
                   step={7}
                   totalSteps={7}
                   isComplete={sectionStatus['finalizacao']}
                   onHelpClick={() => openHelpModal('finalizacao')}
                 >
-                  {!sentSuccess ? (
+                  {!finalizacaoUnlocked ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-5">
+                      <div className="flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full">
+                        <Lock className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-base font-black text-gray-700 mb-1">Seção bloqueada</p>
+                        <p className="text-sm text-gray-500">Preencha as seções obrigatórias abaixo para liberar a Finalização:</p>
+                      </div>
+                      <div className="flex flex-col gap-2 w-full max-w-sm">
+                        {secoesPendentes.map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => scrollToSection(s.id)}
+                            className="flex items-center gap-3 px-4 py-3 bg-white border-2 border-red-200 rounded-xl hover:border-red-400 hover:bg-red-50 transition-all group"
+                          >
+                            <span className="flex items-center justify-center w-6 h-6 bg-red-100 rounded-full flex-shrink-0">
+                              <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                            </span>
+                            <span className="text-sm font-semibold text-red-700 group-hover:text-red-800">{s.label}</span>
+                            <ChevronRight className="w-4 h-4 text-red-400 ml-auto" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (!sentSuccess ? (
                     <div className="space-y-6">
                       {/* GUIA: 5 Critérios SAES como norteadores */}
                       <div className="bg-gradient-to-br from-slate-50 to-blue-50 border border-blue-200 rounded-2xl overflow-hidden">
@@ -9010,8 +9044,10 @@ Secretaria de Estado da Saúde de São Paulo`;
                         variant="secondary"
                       />
                     </div>
-                  )}
+                  ))}
                 </Section>
+                  );
+                })()}
 
                 {/* STICKY BACK TO TOP BUTTON */}
                 {activeSection !== 'info-emenda' && (

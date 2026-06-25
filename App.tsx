@@ -4796,11 +4796,6 @@ Secretaria de Estado da Saúde de São Paulo`;
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900 print:text-[13px]">Justificativa Técnica</h2>
               </div>
               <div className="border-t border-gray-300 pt-4 pl-11">
-                <p className="text-xs text-gray-500 mb-3 flex flex-wrap gap-x-3 gap-y-1">
-                  {CRITERIOS_SAES.map(({ num, label, badge }) => (
-                    <span key={num} className={`inline-block text-[9px] font-black px-1.5 py-0.5 rounded ${badge}`}>{num} | {label}</span>
-                  ))}
-                </p>
                 <div className="border-l-4 border-red-700 bg-gray-50 print:bg-white pl-4 pr-3 py-3 text-xs leading-relaxed text-gray-900 text-justify whitespace-pre-wrap break-words">
                   {formData.justificativa || '—'}
                 </div>

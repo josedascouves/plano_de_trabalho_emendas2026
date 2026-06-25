@@ -78,8 +78,42 @@ const CRITERIOS_SAES = [
   { num: '04', label: 'COM QUAIS RECURSOS (Custeio)', desc: 'Detalhamento dos recursos financeiros necessários, com justificativa dos itens de despesa e valores.', color: 'bg-amber-500', badge: 'bg-amber-100 text-amber-800', border: 'border-amber-300' },
   { num: '05', label: 'QUAL A META A SER ALCANÇADA (Meta)', desc: 'Definição das metas quantitativas e/ou qualitativas, bem como os resultados esperados com a execução.', color: 'bg-purple-600', badge: 'bg-purple-100 text-purple-800', border: 'border-purple-300' },
 ] as const;
-import { 
-  DIRETRIZES, 
+
+// ─── Helpers para justificativa com 5 critérios SAES ─────────────────────────
+const SAES_LABELS_SHORT = [
+  'O QUE SERÁ REALIZADO',
+  'ONDE SERÁ EXECUTADO (CNES)',
+  'POR QUE SERÁ REALIZADO',
+  'COM QUAIS RECURSOS',
+  'QUAL A META A SER ALCANÇADA',
+];
+function parseJustCriterios(raw: string): string[] {
+  if (!raw) return ['', '', '', '', ''];
+  try {
+    const p = JSON.parse(raw);
+    if (p?._saes === 2 && Array.isArray(p.c) && p.c.length === 5) return p.c as string[];
+  } catch {}
+  return [raw, '', '', '', ''];
+}
+function serializeJustCriterios(fields: string[]): string {
+  return JSON.stringify({ _saes: 2, c: fields });
+}
+function justDisplayText(raw: string): string {
+  if (!raw) return '';
+  try {
+    const p = JSON.parse(raw);
+    if (p?._saes === 2 && Array.isArray(p.c)) {
+      return p.c
+        .map((t: string, i: number) => t?.trim() ? `${SAES_LABELS_SHORT[i]}:\n${t}` : '')
+        .filter(Boolean)
+        .join('\n\n');
+    }
+  } catch {}
+  return raw;
+}
+
+import {
+  DIRETRIZES,
   PROGRAMAS,
   ACOES_SERVICOS_POR_PROGRAMA,
   PROGRAMA_EMENDA_COLETIVA_10352_CUSTEIO,
@@ -353,6 +387,9 @@ const App: React.FC = () => {
   const [minJustificativa, setMinJustificativa] = useState<number>(() => {
     try { return Number(localStorage.getItem('min_justificativa') ?? 0); } catch { return 0; }
   });
+  // Estado dos 5 critérios SAES da justificativa
+  const [justCriterios, setJustCriterios] = useState<string[]>(['', '', '', '', '']);
+  const justFromUserRef = useRef(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>({ id: '', email: '', name: '', cnes: '', password: '' });
   const [csvUploading, setCsvUploading] = useState(false);
@@ -2399,10 +2436,24 @@ const App: React.FC = () => {
       'metas-qualitativas': formData.metasQualitativas.length > 0,
       // Seção 6: Execução Financeira - OPCIONAL (só completa se houver itens)
       'execucao-financeira': formData.naturezasDespesa.length > 0,
-      // Seção 7: Finalização - completa se justificativa preenchida e responsável informado
-      'finalizacao': !!(formData.justificativa?.trim() && formData.responsavelAssinatura?.trim())
+      // Seção 7: Finalização - completa se todos os 5 critérios SAES >= mínimo e responsável informado
+      'finalizacao': (() => {
+        if (!formData.responsavelAssinatura?.trim()) return false;
+        const criterios = parseJustCriterios(formData.justificativa);
+        const minChars = minJustificativa > 0 ? minJustificativa : 100;
+        return criterios.every(f => f.trim().length >= minChars);
+      })()
     }));
-  }, [formData]);
+  }, [formData, minJustificativa]);
+
+  // Sincronizar justCriterios quando formData.justificativa muda externamente (ex: carga do banco)
+  useEffect(() => {
+    if (justFromUserRef.current) {
+      justFromUserRef.current = false;
+      return;
+    }
+    setJustCriterios(parseJustCriterios(formData.justificativa));
+  }, [formData.justificativa]);
 
   const loadPlanForEditing = async (planoId: string) => {
     // Validar planoId
@@ -3706,9 +3757,15 @@ const App: React.FC = () => {
       });
     }
 
-    // JUSTIFICATIVA TÉCNICA - obrigatório
-    if (!formData.justificativa?.trim())
-      missingFields.push('Justificativa Técnica (Seção 7)');
+    // JUSTIFICATIVA TÉCNICA - 5 critérios SAES, mínimo de 100 caracteres cada
+    {
+      const criterios = parseJustCriterios(formData.justificativa);
+      const minChars = minJustificativa > 0 ? minJustificativa : 100;
+      criterios.forEach((f, i) => {
+        if (f.trim().length < minChars)
+          missingFields.push(`Justificativa — ${SAES_LABELS_SHORT[i]}: mínimo ${minChars} caracteres (atual: ${f.trim().length})`);
+      });
+    }
 
     // RESPONSÁVEL PELA ASSINATURA - obrigatório
     if (!formData.responsavelAssinatura?.trim()) missingFields.push('Responsável pela Assinatura');
@@ -4337,6 +4394,14 @@ const App: React.FC = () => {
     setFormData(prev => ({ ...prev, [section]: value }));
   };
 
+  const updateJustCriterio = (index: number, value: string) => {
+    justFromUserRef.current = true;
+    const newFields = [...justCriterios];
+    newFields[index] = value;
+    setJustCriterios(newFields);
+    updateFormData('justificativa', serializeJustCriterios(newFields));
+  };
+
   // Scroll to section
   const scrollToSection = (sectionId: string) => {
     setActiveSection(sectionId);
@@ -4797,7 +4862,7 @@ Secretaria de Estado da Saúde de São Paulo`;
               </div>
               <div className="border-t border-gray-300 pt-4 pl-11">
                 <div className="border-l-4 border-red-700 bg-gray-50 print:bg-white pl-4 pr-3 py-3 text-xs leading-relaxed text-gray-900 text-justify whitespace-pre-wrap break-words">
-                  {formData.justificativa || '—'}
+                  {justDisplayText(formData.justificativa) || '—'}
                 </div>
                 {justificativaAlteradaEm && (
                   <p className="mt-2 text-[10px] text-gray-400 italic text-right">
@@ -5449,10 +5514,10 @@ Secretaria de Estado da Saúde de São Paulo`;
                           </div>
                           <div className="p-5 space-y-4">
                             <div className="border-l-4 border-red-600 bg-gray-50 pl-4 pr-3 py-3 text-sm leading-relaxed text-gray-900 whitespace-pre-wrap break-words rounded-r-lg max-h-64 overflow-y-auto">
-                              {plano.justificativa || '—'}
+                              {justDisplayText(plano.justificativa) || '—'}
                             </div>
                             <div className="flex items-center justify-between text-xs text-gray-500">
-                              <span>{(plano.justificativa || '').length.toLocaleString('pt-BR')} caracteres</span>
+                              <span>{justDisplayText(plano.justificativa || '').length.toLocaleString('pt-BR')} caracteres</span>
                               <span>Responsável: <strong className="text-gray-700">{plano.responsavel_assinatura || '—'}</strong></span>
                             </div>
                           </div>
@@ -8818,22 +8883,67 @@ Secretaria de Estado da Saúde de São Paulo`;
                         </div>
                       </div>
 
-                      {/* CAMPO: Justificativa Técnica (texto livre) */}
-                      <div>
-                        <TextArea
-                          label="Justificativa Técnica"
-                          value={formData.justificativa}
-                          onChange={(e) => updateFormData('justificativa', e.target.value)}
-                          placeholder={`Redija a justificativa técnica contemplando os 5 critérios SAES acima:\n\n• O QUE será realizado (ações e atividades previstas)\n• ONDE será executado (CNES ${formData.beneficiario.cnes ? `– ${formData.beneficiario.cnes} ` : ''}e estabelecimento)\n• POR QUE é necessário (contexto epidemiológico, demanda reprimida)\n• COM QUAIS RECURSOS (itens de despesa e valores)\n• QUAL A META esperada (resultados quantitativos e qualitativos)`}
-                          rows={12}
-                          required
-                        />
-                        <div className={`mt-2 text-xs font-bold tracking-wider flex items-center gap-2 ${formData.justificativa?.trim() ? 'text-green-600' : 'text-red-500'}`}>
-                          {formData.justificativa?.trim()
-                            ? <><CheckCircle2 className="w-3.5 h-3.5" /> {formData.justificativa.trim().length.toLocaleString('pt-BR')} caracteres</>
-                            : <><AlertCircle className="w-3.5 h-3.5" /> Campo obrigatório — redija a justificativa técnica</>
-                          }
-                        </div>
+                      {/* CAMPOS: 5 critérios SAES com mínimo de 100 caracteres cada */}
+                      <div className="space-y-4">
+                        {CRITERIOS_SAES.map(({ num, label, desc, badge, border }, index) => {
+                          const val = justCriterios[index] || '';
+                          const charCount = val.trim().length;
+                          const minChars = minJustificativa > 0 ? minJustificativa : 100;
+                          const isValid = charCount >= minChars;
+                          const hasContent = charCount > 0;
+                          return (
+                            <div key={num} className={`border-2 rounded-xl overflow-hidden ${isValid ? 'border-green-300' : hasContent ? 'border-amber-300' : 'border-red-200'}`}>
+                              <div className={`flex items-start gap-3 px-4 py-3 ${isValid ? 'bg-green-50' : hasContent ? 'bg-amber-50' : 'bg-red-50'}`}>
+                                <span className={`inline-flex items-center text-[10px] font-black px-2 py-0.5 rounded flex-shrink-0 mt-0.5 ${badge}`}>
+                                  {num}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-gray-800">{label} <span className="text-red-500">*</span></p>
+                                  <p className="text-[10px] text-gray-500 mt-0.5">{desc}</p>
+                                </div>
+                                <div className={`flex items-center gap-1 text-[10px] font-bold flex-shrink-0 ${isValid ? 'text-green-600' : hasContent ? 'text-amber-600' : 'text-red-400'}`}>
+                                  {isValid
+                                    ? <><CheckCircle2 className="w-3 h-3" /> {charCount}</>
+                                    : <><AlertCircle className="w-3 h-3" /> {charCount}/{minChars}</>
+                                  }
+                                </div>
+                              </div>
+                              <div className="px-4 pb-4 pt-2 bg-white">
+                                <TextArea
+                                  label=""
+                                  value={val}
+                                  onChange={(e) => updateJustCriterio(index, e.target.value)}
+                                  placeholder={`Descreva ${label.toLowerCase()}...`}
+                                  rows={4}
+                                  required
+                                />
+                                {!isValid && hasContent && (
+                                  <p className="mt-1 text-[10px] text-amber-600 font-semibold">
+                                    Faltam {minChars - charCount} caracteres para atingir o mínimo obrigatório.
+                                  </p>
+                                )}
+                                {!isValid && !hasContent && (
+                                  <p className="mt-1 text-[10px] text-red-500 font-semibold">
+                                    Campo obrigatório — mínimo {minChars} caracteres.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {/* Resumo geral */}
+                        {(() => {
+                          const minChars = minJustificativa > 0 ? minJustificativa : 100;
+                          const validCount = justCriterios.filter(f => f.trim().length >= minChars).length;
+                          return (
+                            <div className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-lg ${validCount === 5 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                              {validCount === 5
+                                ? <><CheckCircle2 className="w-4 h-4" /> Todos os 5 critérios preenchidos — justificativa completa</>
+                                : <><AlertCircle className="w-4 h-4" /> {validCount}/5 critérios com mínimo de {minChars} caracteres</>
+                              }
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <InputField

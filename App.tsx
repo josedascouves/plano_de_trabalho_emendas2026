@@ -2440,8 +2440,7 @@ const App: React.FC = () => {
       'finalizacao': (() => {
         if (!formData.responsavelAssinatura?.trim()) return false;
         const criterios = parseJustCriterios(formData.justificativa);
-        const minChars = minJustificativa > 0 ? minJustificativa : 100;
-        return criterios.every(f => f.trim().length >= minChars);
+        return criterios.every(f => f.trim().length >= 100);
       })()
     }));
   }, [formData, minJustificativa]);
@@ -3760,10 +3759,9 @@ const App: React.FC = () => {
     // JUSTIFICATIVA TÉCNICA - 5 critérios SAES, mínimo de 100 caracteres cada
     {
       const criterios = parseJustCriterios(formData.justificativa);
-      const minChars = minJustificativa > 0 ? minJustificativa : 100;
       criterios.forEach((f, i) => {
-        if (f.trim().length < minChars)
-          missingFields.push(`Justificativa — ${SAES_LABELS_SHORT[i]}: mínimo ${minChars} caracteres (atual: ${f.trim().length})`);
+        if (f.trim().length < 100)
+          missingFields.push(`Justificativa — ${SAES_LABELS_SHORT[i]}: mínimo 100 caracteres (atual: ${f.trim().length})`);
       });
     }
 
@@ -8847,10 +8845,10 @@ Secretaria de Estado da Saúde de São Paulo`;
                   </div>
                 </Section>
 
-                {/* SECTION 7: FINALIZAÇÃO */}
+                {/* SECTION 7: JUSTIFICATIVA */}
                 <Section
                   id="finalizacao"
-                  title="Finalização"
+                  title="Justificativa"
                   icon={<FileCheck className="w-6 h-6" />}
                   step={7}
                   totalSteps={7}
@@ -8859,28 +8857,10 @@ Secretaria de Estado da Saúde de São Paulo`;
                 >
                   {!sentSuccess ? (
                     <div className="space-y-6">
-                      {/* GUIA: 5 Critérios SAES como norteadores */}
-                      <div className="bg-gradient-to-br from-slate-50 to-blue-50 border border-blue-200 rounded-2xl overflow-hidden">
-                        <div className="flex items-center gap-3 px-5 py-4 bg-blue-700">
-                          <div className="flex items-center justify-center w-8 h-8 bg-white/20 rounded-lg flex-shrink-0">
-                            <BookOpen className="w-4 h-4 text-white" />
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-black text-white uppercase tracking-wide">Orientação Técnica SAES — Como a justificativa será analisada</h3>
-                            <p className="text-[11px] text-blue-200 mt-0.5">Sua justificativa deve contemplar os 5 elementos abaixo. Use-os como guia ao redigir o texto.</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-blue-100">
-                          {CRITERIOS_SAES.map(({ num, label, desc, color, badge }) => (
-                            <div key={num} className="px-3 py-3 flex flex-col gap-1">
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded w-fit ${badge}`}>
-                                {num}
-                              </span>
-                              <p className="text-[11px] font-black text-gray-800 leading-tight">{label}</p>
-                              <p className="text-[10px] text-gray-500 leading-snug">{desc}</p>
-                            </div>
-                          ))}
-                        </div>
+                      {/* ORIENTAÇÃO TÉCNICA SAES — texto simples */}
+                      <div>
+                        <p className="text-sm font-black text-gray-800 uppercase tracking-wide">Orientação Técnica SAES — Como a justificativa será analisada</p>
+                        <p className="text-xs text-gray-500 mt-1">Sua justificativa deve contemplar os 5 elementos abaixo. Use-os como guia ao redigir o texto.</p>
                       </div>
 
                       {/* CAMPOS: 5 critérios SAES com mínimo de 100 caracteres cada */}
@@ -8888,7 +8868,7 @@ Secretaria de Estado da Saúde de São Paulo`;
                         {CRITERIOS_SAES.map(({ num, label, desc, badge, border }, index) => {
                           const val = justCriterios[index] || '';
                           const charCount = val.trim().length;
-                          const minChars = minJustificativa > 0 ? minJustificativa : 100;
+                          const minChars = 100;
                           const isValid = charCount >= minChars;
                           const hasContent = charCount > 0;
                           return (
@@ -8933,13 +8913,12 @@ Secretaria de Estado da Saúde de São Paulo`;
                         })}
                         {/* Resumo geral */}
                         {(() => {
-                          const minChars = minJustificativa > 0 ? minJustificativa : 100;
-                          const validCount = justCriterios.filter(f => f.trim().length >= minChars).length;
+                          const validCount = justCriterios.filter(f => f.trim().length >= 100).length;
                           return (
                             <div className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-lg ${validCount === 5 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                               {validCount === 5
                                 ? <><CheckCircle2 className="w-4 h-4" /> Todos os 5 critérios preenchidos — justificativa completa</>
-                                : <><AlertCircle className="w-4 h-4" /> {validCount}/5 critérios com mínimo de {minChars} caracteres</>
+                                : <><AlertCircle className="w-4 h-4" /> {validCount}/5 critérios com mínimo de 100 caracteres</>
                               }
                             </div>
                           );

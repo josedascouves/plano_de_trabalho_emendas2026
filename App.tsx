@@ -4685,7 +4685,7 @@ Secretaria de Estado da Saúde de São Paulo`;
     
     return (
       <div className="min-h-screen bg-gray-100 p-8 print:p-0 print:bg-white">
-        <div id="pdf-document" className="max-w-[210mm] mx-auto bg-white min-h-[297mm] print:min-h-screen print:max-w-full shadow-2xl print:shadow-none">
+        <div id="pdf-document" className="max-w-[210mm] mx-auto bg-white min-h-[297mm] print:min-h-[297mm] print:max-w-[210mm] print:w-[210mm] shadow-2xl print:shadow-none overflow-hidden">
           
           {/* ======== CABEÇALHO INSTITUCIONAL ======== */}
           <div className="border-b-4 border-red-700 pt-12 px-16 pb-8 print:pt-10 print:px-12 print:pb-6">

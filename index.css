@@ -607,6 +607,48 @@ button:disabled,
   }
 }
 
+/* =========================================================
+   IMPRESSÃO — PADRÃO A4 COM MARGENS CORRETAS
+========================================================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html, body {
+    width: 210mm;
+    height: auto;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  #pdf-document {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+  }
+
+  /* Garante quebra de palavras longas sem espaço */
+  #pdf-document * {
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+    max-width: 100% !important;
+  }
+
+  /* Remove elementos da UI que não devem ir para o PDF */
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
 @media (max-width: 640px) {
   .page-container {
     padding: 1.5rem 1rem 3.5rem;

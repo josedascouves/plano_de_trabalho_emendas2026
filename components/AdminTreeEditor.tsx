@@ -4,7 +4,7 @@ import {
   X, Plus, Pencil, ChevronRight, ChevronDown,
   Eye, EyeOff, Check, Loader2, RefreshCw,
   BarChart3, DollarSign, Target, Database,
-  AlertCircle, CheckCircle2, Save, XCircle
+  AlertCircle, CheckCircle2, Save, XCircle, Trash2
 } from 'lucide-react';
 import {
   PROGRAMAS as DEFAULT_PROGRAMAS,
@@ -296,6 +296,18 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
     showToast('success', 'Programa adicionado!');
   };
 
+  const deletePrograma = async (id: string, nome: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o programa "${nome}"? Todas as ações/serviços e naturezas vinculadas a ele também serão excluídas. Esta ação não pode ser desfeita.`)) return;
+    const { error } = await supabaseClient
+      .from('programas_orcamentarios')
+      .delete()
+      .eq('id', id);
+    if (error) { showToast('error', error.message); return; }
+    await loadAll();
+    onDataChanged?.();
+    showToast('success', 'Programa excluído!');
+  };
+
   // ─── ACOES operations (categoria-level) ──────────────────────────────────
 
   const saveCategoriaAcao = async (programaId: string, oldCat: string) => {
@@ -391,6 +403,31 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
     showToast('success', 'Item adicionado!');
   };
 
+  const deleteCategoriaAcao = async (programaId: string, categoria: string) => {
+    if (!confirm(`Tem certeza que deseja excluir a categoria "${categoria}" e todos os seus itens? Esta ação não pode ser desfeita.`)) return;
+    const { error } = await supabaseClient
+      .from('acoes_servicos_catalogo')
+      .delete()
+      .eq('programa_id', programaId)
+      .eq('categoria', categoria);
+    if (error) { showToast('error', error.message); return; }
+    await loadAll();
+    onDataChanged?.();
+    showToast('success', 'Categoria excluída!');
+  };
+
+  const deleteAcaoItem = async (id: string, item: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o item "${item}"? Esta ação não pode ser desfeita.`)) return;
+    const { error } = await supabaseClient
+      .from('acoes_servicos_catalogo')
+      .delete()
+      .eq('id', id);
+    if (error) { showToast('error', error.message); return; }
+    await loadAll();
+    onDataChanged?.();
+    showToast('success', 'Item excluído!');
+  };
+
   // ─── METAS operations ────────────────────────────────────────────────────
 
   const saveCategoriaMeta = async (oldCat: string) => {
@@ -475,6 +512,30 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
     await loadAll();
     onDataChanged?.();
     showToast('success', 'Item adicionado!');
+  };
+
+  const deleteCategoriaMeta = async (categoria: string) => {
+    if (!confirm(`Tem certeza que deseja excluir a categoria "${categoria}" e todos os seus itens? Esta ação não pode ser desfeita.`)) return;
+    const { error } = await supabaseClient
+      .from('metas_quantitativas_catalogo')
+      .delete()
+      .eq('categoria', categoria);
+    if (error) { showToast('error', error.message); return; }
+    await loadAll();
+    onDataChanged?.();
+    showToast('success', 'Categoria excluída!');
+  };
+
+  const deleteMetaItem = async (id: string, item: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o item "${item}"? Esta ação não pode ser desfeita.`)) return;
+    const { error } = await supabaseClient
+      .from('metas_quantitativas_catalogo')
+      .delete()
+      .eq('id', id);
+    if (error) { showToast('error', error.message); return; }
+    await loadAll();
+    onDataChanged?.();
+    showToast('success', 'Item excluído!');
   };
 
   // ─── PROGRAMA NATUREZAS operations (per-program) ──────────────────────────
@@ -624,6 +685,18 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
     showToast('success', 'Natureza adicionada!');
   };
 
+  const deleteNatureza = async (id: string, descricao: string) => {
+    if (!confirm(`Tem certeza que deseja excluir a natureza "${descricao}"? Esta ação não pode ser desfeita.`)) return;
+    const { error } = await supabaseClient
+      .from('naturezas_despesa')
+      .delete()
+      .eq('id', id);
+    if (error) { showToast('error', error.message); return; }
+    await loadAll();
+    onDataChanged?.();
+    showToast('success', 'Natureza excluída!');
+  };
+
   // ─── Render helpers ───────────────────────────────────────────────────────
 
   const InlineInput: React.FC<{
@@ -655,7 +728,8 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
     onToggle: () => void;
     addLabel?: string;
     onAdd?: () => void;
-  }> = ({ onEdit, ativo, onToggle, addLabel, onAdd }) => (
+    onDelete?: () => void;
+  }> = ({ onEdit, ativo, onToggle, addLabel, onAdd, onDelete }) => (
     <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
       <button onClick={onEdit} className="p-1 text-gray-400 hover:text-blue-600 rounded" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
       <button onClick={onToggle} className={`p-1 rounded ${ativo ? 'text-gray-400 hover:text-orange-500' : 'text-orange-400 hover:text-orange-600'}`} title={ativo ? 'Desativar' : 'Ativar'}>
@@ -664,6 +738,11 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
       {onAdd && (
         <button onClick={onAdd} className="p-1 text-gray-400 hover:text-green-600 rounded" title={addLabel || 'Adicionar'}>
           <Plus className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {onDelete && (
+        <button onClick={onDelete} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Excluir">
+          <Trash2 className="w-3.5 h-3.5" />
         </button>
       )}
     </div>
@@ -723,6 +802,7 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
                     onToggle={() => togglePrograma(prog.id, prog.ativo)}
                     addLabel="Nova categoria"
                     onAdd={() => { setExpandedProgramas(prev => new Set(prev).add(prog.id)); startAdd(`cat_acao:${prog.id}`); }}
+                    onDelete={() => deletePrograma(prog.id, prog.nome)}
                   />
                 )}
               </div>
@@ -778,6 +858,7 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
                                 onToggle={() => toggleCategoriaAcao(prog.id, categoria, allInactive)}
                                 addLabel="Novo item"
                                 onAdd={() => { setExpandedCatAcoes(prev => new Set(prev).add(catKey)); startAdd(`acao_item:${prog.id}:${categoria}`); }}
+                                onDelete={() => deleteCategoriaAcao(prog.id, categoria)}
                               />
                             )}
                           </div>
@@ -807,6 +888,7 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
                                         onEdit={() => startEdit(`acao_item:${acao.id}`, acao.item)}
                                         ativo={acao.ativo}
                                         onToggle={() => toggleAcaoItem(acao.id, acao.ativo)}
+                                        onDelete={() => deleteAcaoItem(acao.id, acao.item)}
                                       />
                                     )}
                                   </div>
@@ -1089,6 +1171,7 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
                     onToggle={() => toggleCategoriaMeta(categoria, allInactive)}
                     addLabel="Novo item"
                     onAdd={() => { setExpandedCatMetas(prev => new Set(prev).add(categoria)); startAdd(`meta_item:${categoria}`); }}
+                    onDelete={() => deleteCategoriaMeta(categoria)}
                   />
                 )}
               </div>
@@ -1117,6 +1200,7 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
                             onEdit={() => startEdit(`meta_item:${meta.id}`, meta.item)}
                             ativo={meta.ativo}
                             onToggle={() => toggleMetaItem(meta.id, meta.ativo)}
+                            onDelete={() => deleteMetaItem(meta.id, meta.item)}
                           />
                         )}
                       </div>
@@ -1178,7 +1262,7 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
               <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-500 uppercase w-32">Código</th>
               <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-500 uppercase">Descrição</th>
               <th className="px-4 py-2.5 text-center text-xs font-bold text-gray-500 uppercase w-20">Status</th>
-              <th className="px-4 py-2.5 text-center text-xs font-bold text-gray-500 uppercase w-20">Ações</th>
+              <th className="px-4 py-2.5 text-center text-xs font-bold text-gray-500 uppercase w-28">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -1240,6 +1324,13 @@ export const AdminTreeEditor: React.FC<Props> = ({ supabaseClient, onClose, onDa
                         title={nat.ativo ? 'Desativar' : 'Ativar'}
                       >
                         {nat.ativo ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      </button>
+                      <button
+                        onClick={() => deleteNatureza(nat.id, nat.descricao)}
+                        className="p-1 text-gray-400 hover:text-red-600 rounded"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </td>
